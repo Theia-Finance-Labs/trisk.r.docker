@@ -35,7 +35,8 @@ ARG TRISK_MODEL_SHA
 ARG TRISK_ANALYSIS_SHA
 
 # Lock CRAN to a point-in-time snapshot via Posit Public Package Manager
-ENV CRAN_REPO=https://packagemanager.posit.co/cran/${CRAN_SNAPSHOT}
+# Use __linux__/jammy path for pre-compiled binaries (avoids compiling from source)
+ENV CRAN_REPO=https://packagemanager.posit.co/cran/__linux__/jammy/${CRAN_SNAPSHOT}
 
 # System build dependencies (dev headers, compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -130,8 +131,9 @@ COPY scripts/test_portfolio_pd.R /opt/trisk/scripts/
 COPY scripts/test_debug.R /opt/trisk/scripts/
 COPY scripts/run_tests.R /opt/trisk/scripts/
 
-# Startup script
-RUN printf '#!/bin/bash\nR -e "shiny::runApp(\"/opt/trisk/app\", host=\"0.0.0.0\", port=3838)"\n' > /usr/local/bin/run-shiny.sh && \
+# Startup script (Rscript avoids interactive-session banner in logs)
+RUN echo '#!/bin/bash' > /usr/local/bin/run-shiny.sh && \
+    echo "Rscript -e \"shiny::runApp('/opt/trisk/app', host='0.0.0.0', port=3838)\"" >> /usr/local/bin/run-shiny.sh && \
     chmod +x /usr/local/bin/run-shiny.sh
 
 # Create non-root user for runtime

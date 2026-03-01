@@ -5,6 +5,8 @@ networks:
   trisk-internal:
     driver: bridge
     internal: true  # No outbound internet access from containers
+  trisk-host:
+    driver: bridge  # Non-internal network allows host port publishing
 
 services:
   # Main Shiny application
@@ -29,6 +31,7 @@ services:
     stop_grace_period: 30s
     networks:
       - trisk-internal
+      - trisk-host
     # ── Runtime resource limits (compose v2, non-Swarm) ──
     mem_limit: 4g
     mem_reservation: 2g

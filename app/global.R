@@ -654,6 +654,19 @@ sanitize_export <- function(df) {
   df[, keep, drop = FALSE]
 }
 
+# Auto-source all server modules (alphabetical order for determinism)
+# Placed in global.R so modules are available regardless of entry point (app.R vs server.R+ui.R)
+local({
+  module_dir <- file.path(getwd(), "modules")
+  if (dir.exists(module_dir)) {
+    module_files <- sort(list.files(module_dir, pattern = "^mod_.*\\.R$", full.names = TRUE))
+    for (f in module_files) {
+      source(f, local = FALSE)
+    }
+    message(sprintf("Loaded %d server modules from %s", length(module_files), module_dir))
+  }
+})
+
 message("\n========================================")
 message("TRISK Shiny App Initialized (1in1000)")
 message("========================================\n")

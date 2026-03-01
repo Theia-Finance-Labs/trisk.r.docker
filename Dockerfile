@@ -99,10 +99,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfontconfig1 \
     libfreetype6 \
     libpng16-16 \
-    libtiff6 \
-    libjpeg62-turbo \
+    libtiff5 \
+    libjpeg8 \
     libharfbuzz0b \
     libfribidi0 \
+    libpq5 \
     curl \
     pandoc \
     && rm -rf /var/lib/apt/lists/*

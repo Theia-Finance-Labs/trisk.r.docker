@@ -53,15 +53,8 @@ ui <- dashboardPage(
       tags$link(rel = "stylesheet", href = "fonts.css"),
       tags$link(rel = "stylesheet", href = "trisk.css"),
 
-      # JavaScript for collapsible guidance boxes
-      tags$script(HTML("
-        $(document).on('click', '.guidance-toggle-btn', function() {
-          var wrapper = $(this).closest('.guidance-wrapper');
-          var content = wrapper.find('.guidance-content');
-          $(this).toggleClass('open');
-          content.toggleClass('open');
-        });
-      "))
+      # UI interaction handlers (extracted to file for strict CSP)
+      tags$script(src = "trisk.js")
     ),
 
     tabItems(

@@ -121,8 +121,14 @@ server <- function(input, output, session) {
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
-      rv$portfolio <- read_csv(input$portfolio_file$datapath, show_col_types = FALSE)
-      showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
+      df <- read_csv(input$portfolio_file$datapath, show_col_types = FALSE)
+      err <- validate_portfolio(df)
+      if (!is.null(err)) {
+        showNotification(paste("Portfolio rejected:", err), type = "error", duration = 8)
+        return()
+      }
+      rv$portfolio <- df
+      showNotification(paste("Portfolio loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading portfolio:", e$message), type = "error")
     })
@@ -131,8 +137,14 @@ server <- function(input, output, session) {
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
-      rv$assets <- read_csv(input$assets_file$datapath, show_col_types = FALSE)
-      showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
+      df <- read_csv(input$assets_file$datapath, show_col_types = FALSE)
+      err <- validate_assets(df)
+      if (!is.null(err)) {
+        showNotification(paste("Assets rejected:", err), type = "error", duration = 8)
+        return()
+      }
+      rv$assets <- df
+      showNotification(paste("Assets loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading assets:", e$message), type = "error")
     })
@@ -141,8 +153,14 @@ server <- function(input, output, session) {
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
-      rv$financial <- read_csv(input$financial_file$datapath, show_col_types = FALSE)
-      showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
+      df <- read_csv(input$financial_file$datapath, show_col_types = FALSE)
+      err <- validate_financial(df)
+      if (!is.null(err)) {
+        showNotification(paste("Financial data rejected:", err), type = "error", duration = 8)
+        return()
+      }
+      rv$financial <- df
+      showNotification(paste("Financial data loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading financial data:", e$message), type = "error")
     })
@@ -151,9 +169,15 @@ server <- function(input, output, session) {
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      rv$scenarios <- read_csv(input$scenarios_file$datapath, show_col_types = FALSE)
+      df <- read_csv(input$scenarios_file$datapath, show_col_types = FALSE)
+      # Minimal schema check: must have 'scenario' column at minimum
+      if (!"scenario" %in% names(df)) {
+        showNotification("Scenarios rejected: missing required column 'scenario'", type = "error", duration = 8)
+        return()
+      }
+      rv$scenarios <- df
       showNotification(
-        paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
+        paste("Scenarios loaded:", length(unique(df$scenario)), "scenarios"),
         type = "message"
       )
     }, error = function(e) {
@@ -2184,7 +2208,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results_by_year)
-      combined <- bind_rows(rv$results_by_year, .id = "shock_year")
+      combined <- sanitize_export(bind_rows(rv$results_by_year, .id = "shock_year"))
       write.csv(combined, file, row.names = FALSE)
     }
   )
@@ -2741,7 +2765,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       scd <- scenario_comparison_data()
-      if (!is.null(scd)) write.csv(scd, file, row.names = FALSE)
+      if (!is.null(scd)) write.csv(sanitize_export(scd), file, row.names = FALSE)
     }
   )
 
@@ -5136,12 +5160,12 @@ server <- function(input, output, session) {
 
       sheets <- list(
         "Summary" = summary_df,
-        "Full Results" = df
+        "Full Results" = sanitize_export(df)
       )
 
       # Add multi-horizon results if available
       if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
-        sheets[["Multi-Horizon"]] <- bind_rows(rv$results_by_year, .id = "shock_year")
+        sheets[["Multi-Horizon"]] <- sanitize_export(bind_rows(rv$results_by_year, .id = "shock_year"))
       }
 
       # Add multi-scenario comparison if available
@@ -5155,7 +5179,7 @@ server <- function(input, output, session) {
             all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
           }
         }
-        sheets[["Scenario Comparison"]] <- bind_rows(all_scen_rows)
+        sheets[["Scenario Comparison"]] <- sanitize_export(bind_rows(all_scen_rows))
       }
 
       # Add integration results if available
@@ -5176,7 +5200,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
-      write_csv(rv$results, file)
+      write_csv(sanitize_export(rv$results), file)
     }
   )
 
@@ -5186,7 +5210,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
-      jsonlite::write_json(rv$results, file, pretty = TRUE)
+      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
     }
   )
 
@@ -5216,8 +5240,7 @@ server <- function(input, output, session) {
         ),
         versions = list(
           trisk_model = as.character(packageVersion("trisk.model")),
-          trisk_analysis = as.character(packageVersion("trisk.analysis")),
-          R = R.version$version.string
+          trisk_analysis = as.character(packageVersion("trisk.analysis"))
         )
       )
       jsonlite::write_json(config, file, pretty = TRUE, auto_unbox = TRUE)
@@ -5244,12 +5267,10 @@ server <- function(input, output, session) {
   })
 
   output$version_info <- renderText({
+    # Only expose package versions — no R version, OS, env vars, or build metadata
     paste(
       "trisk.model:", as.character(packageVersion("trisk.model")),
-      "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis")),
-      "\nR:", R.version$version.string,
-      "\nShiny:", as.character(packageVersion("shiny")),
-      "\nContainer build:", Sys.getenv("BUILD_DATE", "unknown")
+      "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis"))
     )
   })
 }

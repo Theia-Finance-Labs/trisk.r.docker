@@ -66,6 +66,9 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
+# Cap upload size to 50 MB (Shiny default is 5 MB)
+options(shiny.maxRequestSize = 50 * 1024^2)
+
 SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
 INPUT_DIR <- "/data/input"
 OUTPUT_DIR <- "/data/output"
@@ -616,6 +619,39 @@ compute_el_columns <- function(df) {
     }
   }
   return(df)
+}
+
+# ============================================
+# Export column allowlist
+# ============================================
+# Only these columns are included in CSV/JSON/Excel downloads.
+# Keeps internal columns (raw upload fields, intermediate calcs) out of exports.
+# Add columns here to make them available in exports.
+EXPORT_COLUMNS <- c(
+  # Identifiers
+  "company_id", "company_name", "company_label",
+  "sector", "technology", "country_iso2",
+  # Scenario / run context
+  "target_scenario", "baseline_scenario", "shock_year",
+  "scenario_geography",
+  # Exposure
+  "exposure_value_usd", "loss_given_default", "exposure_at_default", "weight",
+  # PD metrics
+  "pd_baseline", "pd_shock",
+  # NPV metrics
+  "net_present_value_baseline", "net_present_value_shock",
+  "net_present_value_difference", "crispy_perc_value_change", "crispy_value_loss",
+  # EL metrics
+  "expected_loss_baseline", "expected_loss_shock", "expected_loss_difference",
+  # Attribution
+  "pd_change", "pd_contribution", "el_change", "npv_change_pct"
+)
+
+#' Filter a data.frame to only the allowed export columns.
+#' Columns not in the allowlist are silently dropped.
+sanitize_export <- function(df) {
+  keep <- intersect(EXPORT_COLUMNS, names(df))
+  df[, keep, drop = FALSE]
 }
 
 message("\n========================================")

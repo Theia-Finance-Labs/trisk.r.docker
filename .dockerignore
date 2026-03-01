@@ -1,0 +1,35 @@
+# Dependencies
+.git
+.gitignore
+.Rproj.user
+.Rhistory
+.RData
+*.Rproj
+
+# Documentation
+README.md
+LICENSE
+docs/
+
+# Test data (not needed in production image)
+tests/
+*.test.R
+
+# Local data (mounted at runtime)
+data/input/*
+data/output/*
+
+# Keep scenarios directory structure but ignore contents if any
+!data/scenarios/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

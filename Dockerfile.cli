@@ -1,0 +1,39 @@
+# TRISK CLI-only container (lighter weight, no Shiny UI)
+# Use this for automated pipelines or command-line usage
+
+FROM rocker/r-ver:4.4.1
+
+LABEL maintainer="Theia Finance Labs <info@theia-finance-labs.com>"
+LABEL description="TRISK CLI - Command Line Interface for Climate Stress Testing"
+LABEL version="1.0.0"
+
+# Minimal system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pak
+RUN R -e "install.packages('pak', repos = 'https://cloud.r-project.org')"
+
+# Copy and run package installation
+COPY scripts/install_packages.R /tmp/install_packages.R
+RUN Rscript /tmp/install_packages.R
+
+# Pre-download scenarios
+COPY scripts/download_scenarios.R /tmp/download_scenarios.R
+RUN mkdir -p /opt/trisk/data/scenarios && \
+    Rscript /tmp/download_scenarios.R /opt/trisk/data/scenarios
+
+# Copy CLI script
+COPY scripts/run_analysis.R /opt/trisk/run_analysis.R
+
+# Create data directory
+RUN mkdir -p /data/input /data/output
+
+WORKDIR /data
+
+ENTRYPOINT ["Rscript", "/opt/trisk/run_analysis.R"]
+CMD ["--help"]

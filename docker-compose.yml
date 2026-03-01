@@ -1,0 +1,43 @@
+services:
+  # Main Shiny application
+  trisk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: theia-finance-labs/trisk:latest
+    container_name: trisk-app
+    ports:
+      - "3838:3838"
+    volumes:
+      # Mount bank's private data directory (read-only for input)
+      - ./data/input:/data/input:ro
+      - ./data/output:/data/output
+    environment:
+      - SHINY_LOG_LEVEL=TRACE
+    restart: unless-stopped
+    # Resource limits (adjust based on portfolio size)
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # CLI version for batch processing (optional)
+  trisk-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli
+    image: theia-finance-labs/trisk-cli:latest
+    container_name: trisk-cli
+    volumes:
+      - ./data/input:/data/input:ro
+      - ./data/output:/data/output
+    profiles:
+      - cli  # Only starts when explicitly requested: docker-compose --profile cli run trisk-cli
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G

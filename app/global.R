@@ -25,30 +25,43 @@ library(tidyr)
 # 1in1000 Color Palette (from 1in1000.com)
 # ============================================
 
-# Primary brand colors
+# Primary brand colors (unified to single red, aligned with 1in1000.com 2026-03)
 BRAND_RED       <- "#F53D3F"   # Primary brand red (hsl 359 90% 60%)
-BRAND_CORAL     <- "#E84B4D"   # Coral accent (hsl 4 85% 60%)
-BRAND_CORAL_LT  <- "#EF7173"   # Coral light (hsl 4 85% 70%)
-BRAND_CORAL_DK  <- "#C0393B"   # Coral dark (hsl 4 85% 50%)
+BRAND_CORAL     <- "#F53D3F"   # Unified — matches BRAND_RED (was #E84B4D)
+BRAND_CORAL_LT  <- "#EF6C82"   # Salmon accent (hsl 350 80% 68%)
+BRAND_CORAL_DK  <- "#D93235"   # Dark coral for hover states
 
 # Background / UI (matching CSS tokens in www/trisk.css)
-BG_PINK         <- "#F5F0F2"   # Light warm page background
-BG_CARD         <- "#FFFFFF"   # Pure white cards
+BG_PINK         <- "#F6EBEF"   # Warm pink page background (hsl 334 38% 93%)
+BG_CARD         <- "#F5F5F5"   # Off-white card surface (hsl 0 0% 96%)
 BG_SIDEBAR      <- "#FAFAFA"   # Neutral near-white sidebar
-FG_TEXT          <- "#1A1A1A"  # Near-black text
+FG_TEXT          <- "#1A1A1A"   # Near-black text
 FG_MUTED         <- "#555555"  # Medium gray text
-BORDER_PINK      <- "#E5E0E2"  # Light warm border
+BORDER_PINK      <- "#C8CEDA"  # Cool gray border (hsl 220 20% 82%)
 SECONDARY_PINK   <- "#F0EAED"  # Sidebar active highlight
 
-# Status / data colors (matching CSS tokens in www/trisk.css)
-STATUS_GREEN     <- "#3D8B5E"  # Darker green for better contrast
-STATUS_RED       <- "#C44245"  # Muted red for negative
+# Status / data colors (aligned with 1in1000.com website)
+STATUS_GREEN     <- "#6AAF95"  # Sage green from website (hsl 158 30% 55%)
+STATUS_RED       <- "#F53D3F"  # Unified brand red
 STATUS_BLUE      <- "#4A7FA5"  # Muted blue for neutral
 
-# Legacy TRISK colors (kept for chart compatibility)
+# Legacy TRISK colors (updated for consistency)
 TRISK_HEX_RED   <- "#F53D3F"
-TRISK_HEX_GREEN <- "#5D9324"
+TRISK_HEX_GREEN <- "#6AAF95"  # Aligned to website sage (was #5D9324)
 TRISK_HEX_GREY  <- "#BAB6B5"
+
+# Derived UI colors for server.R inline styles (avoid hardcoding hex)
+FG_SECONDARY     <- "#666666"  # Neutral gray (replacing inconsistent #666)
+FG_TERTIARY      <- "#999999"  # Light gray (replacing #999)
+BG_HIGHLIGHT     <- "#F0E6EA"  # Section highlight background
+BG_COMPARE       <- "#F8F4F6"  # Comparison panel background
+BG_COMPARE_ALT   <- "#FBF5F2"  # Light warm comparison row
+BG_ALERT_WARM    <- "#FFFDE7"  # Warm yellow alert background
+BORDER_HIGHLIGHT <- "#DDD0D4"  # Highlight border
+COLOR_NEUTRAL    <- "#5A8EAE"  # Neutral blue for 'different' indicators
+COLOR_SUCCESS_INLINE <- "#6AAF95"  # Inline success (aligned to STATUS_GREEN)
+COLOR_DANGER_INLINE  <- "#F53D3F"  # Inline danger (aligned to unified red)
+WARNING_AMBER    <- "#FF4D00"  # Warning indicator (aligned to website orange)
 
 #' TRISK ggplot2 theme using 1in1000 fonts
 trisk_plot_theme <- function() {

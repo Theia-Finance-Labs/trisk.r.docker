@@ -299,7 +299,7 @@ server <- function(input, output, session) {
       stats_rows <- tagList(stats_rows,
         tags$tr(tags$td("Distinct company_id"), tags$td(tags$b(format(audit$n_distinct_id, big.mark = ",")))),
         tags$tr(tags$td("Duplicate company_id"), tags$td(tags$b(
-          if (audit$n_duplicate_id > 0) tags$span(style = "color: #C44245;", audit$n_duplicate_id) else "0"
+          if (audit$n_duplicate_id > 0) tags$span(style = paste0("color: ", STATUS_RED, ";"), audit$n_duplicate_id) else "0"
         )))
       )
     }
@@ -311,7 +311,7 @@ server <- function(input, output, session) {
         tags$li(paste0(col, ": ", audit$null_rates[col], "% missing"))
       })
       null_info <- tagList(
-        tags$small(tags$b("Columns with missing values:"), style = "color: #C44245;"),
+        tags$small(tags$b("Columns with missing values:"), style = paste0("color: ", STATUS_RED, ";")),
         tags$ul(style = "font-size: 12px; margin: 4px 0;", null_items)
       )
     }
@@ -736,7 +736,7 @@ server <- function(input, output, session) {
           tags$li("Replace current TRISK results with new ones"),
           tags$li("Reset PD/EL integration results (must re-calculate)"),
           if (!is.null(rv$internal_pd) || !is.null(rv$internal_el))
-            tags$li(tags$span(style = "color: #6B9F3B;",
+            tags$li(tags$span(style = paste0("color: ", COLOR_SUCCESS_INLINE, ";"),
                               icon("check-circle"),
                               " Your uploaded Internal PD/EL values will be ", tags$b("preserved")))
         ),
@@ -1066,26 +1066,26 @@ server <- function(input, output, session) {
 
       tags$div(style = row_style,
         fluidRow(
-          column(1, tags$span(style = "font-weight: 700; color: #666; font-size: 16px;", paste0("#", i))),
+          column(1, tags$span(style = paste0("font-weight: 700; color: ", FG_SECONDARY, "; font-size: 16px;"), paste0("#", i))),
           column(3,
-            tags$div(style = "font-size: 12px; color: #666;", ts),
+            tags$div(style = paste0("font-size: 12px; color: ", FG_SECONDARY, ";"), ts),
             tags$div(style = "font-size: 12px;",
               tags$b(target_lbl), " vs ", baseline_lbl)
           ),
           column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "Geography: "), cfg$scenario_geography,
+            tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "Geography: "), cfg$scenario_geography,
             tags$br(),
-            tags$span(style = "color: #666;", "Shock: "), cfg$shock_year
+            tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "Shock: "), cfg$shock_year
           )),
           column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "NPV: "), tags$b(avg_npv),
+            tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "NPV: "), tags$b(avg_npv),
             tags$br(),
-            tags$span(style = "color: #666;", "PD: "), tags$b(avg_pd)
+            tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "PD: "), tags$b(avg_pd)
           )),
           column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "Companies: "), run$n_companies,
+            tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "Companies: "), run$n_companies,
             tags$br(),
-            tags$span(style = "color: #666;", "Run: "), run$run_id
+            tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "Run: "), run$run_id
           )),
           column(2,
             actionButton(paste0("compare_run_", i), "Compare",
@@ -1111,7 +1111,7 @@ server <- function(input, output, session) {
                                  if (length(rv$run_history) != 1) "s" else "", ")")),
         status = "info",
         solidHeader = FALSE,
-        tags$div(style = "margin-bottom: 8px; font-size: 12px; color: #666;",
+        tags$div(style = paste0("margin-bottom: 8px; font-size: 12px; color: ", FG_SECONDARY, ";"),
           icon("info-circle"),
           " Click ", tags$b("Compare"), " to see a side-by-side comparison with the current run.
             Internal PD/EL values are preserved across re-runs."
@@ -1223,7 +1223,7 @@ server <- function(input, output, session) {
       if (is.na(curr_val) || is.na(prev_val)) return(tags$span("N/A"))
       d <- curr_val - prev_val
       is_worse <- if (invert) d < 0 else d > 0
-      color <- if (abs(d) < 0.001) "#666" else if (is_worse) "#C44245" else "#6B9F3B"
+      color <- if (abs(d) < 0.001) FG_SECONDARY else if (is_worse) STATUS_RED else COLOR_SUCCESS_INLINE
       arrow <- if (abs(d) < 0.001) "\u2194" else if (d > 0) "\u2191" else "\u2193"
       val_str <- switch(fmt,
         "round2" = paste0(round(d, 2), "%"),
@@ -1257,7 +1257,7 @@ server <- function(input, output, session) {
         tags$b(curr_cfg$discount_rate))))
 
     tags$div(
-      style = "margin-top: 15px; padding: 15px; background: #F8F4F6; border: 1px solid #DDD0D4; border-radius: 6px;",
+      style = paste0("margin-top: 15px; padding: 15px; background: ", BG_COMPARE, "; border: 1px solid ", BORDER_HIGHLIGHT, "; border-radius: 6px;"),
       h4(icon("code-compare"), " Comparison: Current Run vs Run #", idx,
          style = "margin-top: 0; margin-bottom: 12px; font-weight: 600;"),
 
@@ -1268,7 +1268,7 @@ server <- function(input, output, session) {
           tags$ul(style = "font-size: 13px; margin-top: 4px;", config_diffs)
         )
       } else {
-        tags$div(style = "margin-bottom: 12px; font-size: 13px; color: #666;",
+        tags$div(style = paste0("margin-bottom: 12px; font-size: 13px; color: ", FG_SECONDARY, ";"),
                  icon("equals"), " Same parameters — re-run with identical configuration")
       },
 
@@ -1277,7 +1277,7 @@ server <- function(input, output, session) {
         class = "table table-bordered",
         style = "font-size: 13px; margin-bottom: 0; background: white;",
         tags$thead(
-          tags$tr(style = "background: #F0E6EA;",
+          tags$tr(style = paste0("background: ", BG_HIGHLIGHT, ";"),
             tags$th("Metric"),
             tags$th(style = "text-align: right;", paste0("Run #", idx, " (Previous)")),
             tags$th(style = "text-align: right;", "Current Run"),
@@ -1308,7 +1308,7 @@ server <- function(input, output, session) {
             tags$td(style = "text-align: right;", prev$n_companies),
             tags$td(style = "text-align: right;", nrow(curr)),
             tags$td(style = "text-align: center;",
-                    if (nrow(curr) == prev$n_companies) tags$span(style = "color: #666;", "=")
+                    if (nrow(curr) == prev$n_companies) tags$span(style = paste0("color: ", FG_SECONDARY, ";"), "=")
                     else tags$span(style = "color: #5A8EAE;", paste0(nrow(curr) - prev$n_companies)))
           )
         )
@@ -1763,7 +1763,7 @@ server <- function(input, output, session) {
   output$horizon_analysis_ui <- renderUI({
     if (is.null(rv$results_by_year) || length(rv$results_by_year) < 2) {
       return(tags$div(
-        style = "text-align: center; padding: 40px; color: #666;",
+        style = paste0("text-align: center; padding: 40px; color: ", FG_SECONDARY, ";"),
         icon("clock", style = "font-size: 48px; color: #DDD0D4;"),
         tags$h4("Horizon Analysis requires 2+ shock years"),
         tags$p("Select 2 or more shock years on the Configure tab, then re-run."),
@@ -1778,12 +1778,12 @@ server <- function(input, output, session) {
 
     tagList(
       # Header with summary
-      tags$div(style = "margin-bottom: 15px; padding: 12px; background: #F0E6EA; border-radius: 8px;",
+      tags$div(style = paste0("margin-bottom: 15px; padding: 12px; background: ", BG_HIGHLIGHT, "; border-radius: 8px;"),
         fluidRow(
           column(8,
             tags$h4(style = "margin: 0 0 4px 0; font-weight: 700;",
                     icon("chart-area"), " Multi-Horizon Risk Analysis"),
-            tags$p(style = "margin: 0; font-size: 13px; color: #666;",
+            tags$p(style = paste0("margin: 0; font-size: 13px; color: ", FG_SECONDARY, ";"),
                    paste0(length(years), " shock years analyzed: ",
                           paste(years, collapse = ", "),
                           " | ", nrow(rv$results_by_year[[1]]), " companies"))
@@ -1819,7 +1819,7 @@ server <- function(input, output, session) {
             plotlyOutput("horizon_company_trajectories", height = "400px")),
         box(width = 5, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
-            tags$p(style = "font-size: 12px; color: #666;",
+            tags$p(style = paste0("font-size: 12px; color: ", FG_SECONDARY, ";"),
                    "How companies move between PD risk buckets from earliest to latest horizon."),
             plotlyOutput("horizon_migration_heatmap", height = "350px"))
       ),
@@ -1831,7 +1831,7 @@ server <- function(input, output, session) {
             plotlyOutput("horizon_animated", height = "400px")),
         box(width = 5, title = "PD Term Structure", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
-            tags$p(style = "font-size: 12px; color: #666;",
+            tags$p(style = paste0("font-size: 12px; color: ", FG_SECONDARY, ";"),
                    "PD curve across shock years — analogous to a credit term structure."),
             plotlyOutput("horizon_term_structure", height = "350px"))
       ),
@@ -2829,7 +2829,7 @@ server <- function(input, output, session) {
             h5(icon("exchange-alt"), " PD Waterfall: Baseline \u2192 Sector Contributions \u2192 Shocked PD",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each bar shows how much each sector contributes to the total portfolio PD change (exposure-weighted).",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("attr_waterfall", height = "400px")
           )
         )
@@ -2842,7 +2842,7 @@ server <- function(input, output, session) {
             h5(icon("sort-amount-down"), " Top Risk Movers (Companies)",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Companies with the largest marginal contribution to portfolio PD change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("attr_company_movers", height = "380px")
           )
         ),
@@ -2851,7 +2851,7 @@ server <- function(input, output, session) {
             h5(icon("chart-pie"), " Marginal Contribution to Portfolio Risk",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each company's share of the total portfolio PD change (absolute).",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("attr_marginal_contribution", height = "380px")
           )
         )
@@ -2864,7 +2864,7 @@ server <- function(input, output, session) {
             h5(icon("th"), " Sector \u00D7 Technology Attribution",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("PD contribution by sector and technology combination.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("attr_sector_tech_heatmap", height = "380px")
           )
         ),
@@ -2873,7 +2873,7 @@ server <- function(input, output, session) {
             h5(icon("money-bill-wave"), " Expected Loss Attribution by Sector",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Change in expected loss (EL) decomposed by sector.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("attr_el_waterfall", height = "380px")
           )
         )
@@ -2933,7 +2933,7 @@ server <- function(input, output, session) {
       measure = wf_measure,
       text = wf_text,
       hoverinfo = "text",
-      connector = list(line = list(color = "#DDD0D4", width = 1, dash = "dot")),
+      connector = list(line = list(color = BORDER_HIGHLIGHT, width = 1, dash = "dot")),
       increasing = list(marker = list(color = BRAND_CORAL)),
       decreasing = list(marker = list(color = STATUS_GREEN)),
       totals = list(marker = list(color = "#1A1A1A")),
@@ -2988,7 +2988,7 @@ server <- function(input, output, session) {
     ) %>%
       layout(
         xaxis = list(title = "Contribution to Portfolio PD Change (pp)", zeroline = TRUE,
-                     zerolinecolor = "#999", zerolinewidth = 1),
+                     zerolinecolor = FG_TERTIARY, zerolinewidth = 1),
         yaxis = list(title = "", tickfont = list(size = 10)),
         margin = list(l = 120, r = 50, t = 10, b = 50),
         showlegend = FALSE
@@ -3144,7 +3144,7 @@ server <- function(input, output, session) {
       measure = wf_measure,
       text = hover_text,
       hoverinfo = "text",
-      connector = list(line = list(color = "#DDD0D4", width = 1, dash = "dot")),
+      connector = list(line = list(color = BORDER_HIGHLIGHT, width = 1, dash = "dot")),
       # For EL: negative change (more loss) = bad = red, positive = green
       increasing = list(marker = list(color = STATUS_GREEN)),
       decreasing = list(marker = list(color = BRAND_CORAL)),
@@ -3406,10 +3406,10 @@ server <- function(input, output, session) {
     }
 
     # HHI traffic light
-    hhi_color <- if (cd$hhi < 1500) STATUS_GREEN else if (cd$hhi < 2500) "#D4A017" else BRAND_CORAL
+    hhi_color <- if (cd$hhi < 1500) STATUS_GREEN else if (cd$hhi < 2500) WARNING_AMBER else BRAND_CORAL
     hhi_label <- if (cd$hhi < 1500) "Low" else if (cd$hhi < 2500) "Moderate" else "High"
-    gini_color <- if (cd$gini < 0.4) STATUS_GREEN else if (cd$gini < 0.6) "#D4A017" else BRAND_CORAL
-    cr5_color <- if (cd$cr5 < 50) STATUS_GREEN else if (cd$cr5 < 75) "#D4A017" else BRAND_CORAL
+    gini_color <- if (cd$gini < 0.4) STATUS_GREEN else if (cd$gini < 0.6) WARNING_AMBER else BRAND_CORAL
+    cr5_color <- if (cd$cr5 < 50) STATUS_GREEN else if (cd$cr5 < 75) WARNING_AMBER else BRAND_CORAL
 
     tagList(
       # Header
@@ -3436,7 +3436,7 @@ server <- function(input, output, session) {
         column(3,
           div(style = paste0("background: white; border-left: 4px solid ", hhi_color,
                             "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("HHI Index", style = "color: #666; display: block; margin-bottom: 4px;"),
+            tags$small("HHI Index", style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 4px;")),
             h3(format(round(cd$hhi), big.mark = ","), style = paste0("margin: 0; color: ", hhi_color, "; font-weight: 700;")),
             tags$span(hhi_label, style = paste0("font-size: 12px; font-weight: 600; color: ", hhi_color, ";"))
           )
@@ -3444,7 +3444,7 @@ server <- function(input, output, session) {
         column(3,
           div(style = paste0("background: white; border-left: 4px solid ", cr5_color,
                             "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Top-5 Concentration (CR5)", style = "color: #666; display: block; margin-bottom: 4px;"),
+            tags$small("Top-5 Concentration (CR5)", style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 4px;")),
             h3(paste0(round(cd$cr5, 1), "%"), style = paste0("margin: 0; color: ", cr5_color, "; font-weight: 700;")),
             tags$small(paste0("Top-10: ", round(cd$cr10, 1), "%"), style = "color: #888;")
           )
@@ -3452,7 +3452,7 @@ server <- function(input, output, session) {
         column(3,
           div(style = paste0("background: white; border-left: 4px solid ", gini_color,
                             "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Gini Coefficient", style = "color: #666; display: block; margin-bottom: 4px;"),
+            tags$small("Gini Coefficient", style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 4px;")),
             h3(round(cd$gini, 3), style = paste0("margin: 0; color: ", gini_color, "; font-weight: 700;")),
             tags$span(if (cd$gini < 0.4) "Even" else if (cd$gini < 0.6) "Moderate" else "Concentrated",
                      style = paste0("font-size: 12px; font-weight: 600; color: ", gini_color, ";"))
@@ -3461,7 +3461,7 @@ server <- function(input, output, session) {
         column(3,
           div(style = paste0("background: white; border-left: 4px solid ", STATUS_BLUE,
                             "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Max Single-Name Weight", style = "color: #666; display: block; margin-bottom: 4px;"),
+            tags$small("Max Single-Name Weight", style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 4px;")),
             h3(paste0(round(cd$max_single, 1), "%"), style = paste0("margin: 0; color: ", STATUS_BLUE, "; font-weight: 700;")),
             tags$small(paste0(cd$n_companies, " companies total"), style = "color: #888;")
           )
@@ -3503,7 +3503,7 @@ server <- function(input, output, session) {
             h5(icon("chart-pie"), " Top-10 Exposure Concentration",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Largest single-name exposures as % of portfolio.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("conc_donut", height = "370px")
           )
         )
@@ -3516,7 +3516,7 @@ server <- function(input, output, session) {
             h5(icon("project-diagram"), " Exposure Treemap (Sector \u2192 Company)",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Size = exposure weight, color = PD change magnitude.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("conc_treemap", height = "400px")
           )
         ),
@@ -3526,7 +3526,7 @@ server <- function(input, output, session) {
                style = "font-weight: 600; margin-top: 0;"),
             tags$small(paste0("Gini = ", round(cd$gini, 3),
                              " | Perfect equality = 0, maximum concentration = 1."),
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("conc_lorenz", height = "400px")
           )
         )
@@ -3539,7 +3539,7 @@ server <- function(input, output, session) {
             h5(icon("bullseye"), " Risk-Return Scatter",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each bubble = one company. x = PD change, y = exposure weight, size = abs EL change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("conc_scatter", height = "400px")
           )
         ),
@@ -3548,7 +3548,7 @@ server <- function(input, output, session) {
             h5(icon("globe"), " Geographic Concentration",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Country-level exposure and PD change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("conc_geo_map", height = "400px")
           )
         )
@@ -3561,7 +3561,7 @@ server <- function(input, output, session) {
             h5(icon("columns"), " Concentration Shift: Baseline vs Shocked",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Side-by-side sector concentration before and after the transition shock.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      style = paste0("color: ", FG_SECONDARY, "; display: block; margin-bottom: 10px;")),
             plotlyOutput("conc_dual_bar", height = "380px")
           )
         )
@@ -3582,7 +3582,7 @@ server <- function(input, output, session) {
       if (!isTRUE(cd$has_geo) || is.null(cd$cross)) {
         return(plotly_empty() %>%
           layout(title = list(text = "No geography data — try Sector \u00D7 Technology or Sector \u00D7 Company",
-                             font = list(size = 13, color = "#999"))))
+                             font = list(size = 13, color = FG_TERTIARY))))
       }
       cross <- cd$cross
       row_col <- "country_iso2"
@@ -3591,7 +3591,7 @@ server <- function(input, output, session) {
       if (!isTRUE(cd$has_tech) || is.null(cd$cross_tech)) {
         return(plotly_empty() %>%
           layout(title = list(text = "No technology data — try Sector \u00D7 Geography or Sector \u00D7 Company",
-                             font = list(size = 13, color = "#999"))))
+                             font = list(size = 13, color = FG_TERTIARY))))
       }
       cross <- cd$cross_tech
       row_col <- "technology"
@@ -3734,8 +3734,8 @@ server <- function(input, output, session) {
       values <- company_df$weight * 100
     }
 
-    palette <- c(BRAND_CORAL, BRAND_CORAL_LT, STATUS_BLUE, "#5A8EAE", "#7BADC4",
-                 STATUS_GREEN, "#8BB85F", "#A8C97B", "#D4A017", "#E8C547")
+    palette <- c(BRAND_CORAL, BRAND_CORAL_LT, STATUS_BLUE, COLOR_NEUTRAL, "#7BADC4",
+                 STATUS_GREEN, "#8BB85F", "#A8C97B", WARNING_AMBER, "#E8C547")
     colors <- if (n_others > 0 && other_weight > 0.001) {
       c(rep(palette, length.out = n_top), "#CCCCCC")
     } else {
@@ -3958,7 +3958,7 @@ server <- function(input, output, session) {
     ) %>%
       layout(
         xaxis = list(title = "PD Change (pp)", zeroline = TRUE,
-                     zerolinecolor = "#999", zerolinewidth = 1),
+                     zerolinecolor = FG_TERTIARY, zerolinewidth = 1),
         yaxis = list(title = "Exposure Weight (%)", zeroline = FALSE),
         margin = list(l = 60, r = 20, t = 10, b = 60),
         showlegend = FALSE,
@@ -4071,7 +4071,7 @@ server <- function(input, output, session) {
           annotations = list(
             list(text = paste0(nrow(geo_df), " countries in portfolio"),
                  xref = "paper", yref = "paper", x = 0.5, y = -0.15,
-                 showarrow = FALSE, font = list(size = 11, color = "#999"))
+                 showarrow = FALSE, font = list(size = 11, color = FG_TERTIARY))
           )
         ) %>%
         config(displayModeBar = FALSE)
@@ -4093,10 +4093,10 @@ server <- function(input, output, session) {
           geo = list(
             showframe = FALSE,
             showcoastlines = TRUE,
-            coastlinecolor = "#DDD0D4",
+            coastlinecolor = BORDER_HIGHLIGHT,
             projection = list(type = "natural earth"),
             fitbounds = "locations",
-            bgcolor = "#FAFAFA"
+            bgcolor = BG_SIDEBAR
           ),
           margin = list(l = 0, r = 0, t = 10, b = 0)
         ) %>%
@@ -4452,7 +4452,7 @@ server <- function(input, output, session) {
       rownames = FALSE
     ) %>%
       formatStyle("Adjusted PD",
-                  backgroundColor = "#FFFDE7",
+                  backgroundColor = BG_ALERT_WARM,
                   fontWeight = "bold") %>%
       formatStyle("PD Adjustment",
                   backgroundColor = styleInterval(brks_pd, clrs_pd),
@@ -4773,7 +4773,7 @@ server <- function(input, output, session) {
       rownames = FALSE
     ) %>%
       formatStyle("Adjusted EL",
-                  backgroundColor = "#FFFDE7",
+                  backgroundColor = BG_ALERT_WARM,
                   fontWeight = "bold") %>%
       formatStyle("EL Adjustment",
                   backgroundColor = styleInterval(brks_adj, clrs_adj),
@@ -4898,11 +4898,11 @@ server <- function(input, output, session) {
 
       # Direction indicator
       dir_icon <- if (el_adj < -0.01) {
-        tags$span(style = "color: #C44245;", icon("arrow-down"), " ")
+        tags$span(style = paste0("color: ", STATUS_RED, ";"), icon("arrow-down"), " ")
       } else if (el_adj > 0.01) {
-        tags$span(style = "color: #6B9F3B;", icon("arrow-up"), " ")
+        tags$span(style = paste0("color: ", COLOR_SUCCESS_INLINE, ";"), icon("arrow-up"), " ")
       } else {
-        tags$span(style = "color: #666;", icon("minus"), " ")
+        tags$span(style = paste0("color: ", FG_SECONDARY, ";"), icon("minus"), " ")
       }
 
       tags$tr(
@@ -4932,7 +4932,7 @@ server <- function(input, output, session) {
               style = "width: 100%; font-size: 13px; border-collapse: collapse;",
               tags$thead(
                 tags$tr(
-                  style = "background: #F0E6EA; border-bottom: 2px solid #DDD0D4;",
+                  style = paste0("background: ", BG_HIGHLIGHT, "; border-bottom: 2px solid ", BORDER_HIGHLIGHT, ";"),
                   tags$th(style = "padding: 8px 12px;", "Sector"),
                   tags$th(style = "padding: 8px 12px; text-align: right;", "Count"),
                   tags$th(style = "padding: 8px 12px; text-align: right;", "Exposure"),
@@ -4990,10 +4990,10 @@ server <- function(input, output, session) {
         layout(
           title = list(text = "EL Adjustment by Sector", font = list(size = 14)),
           xaxis = list(title = "EL Adjustment", zeroline = TRUE,
-                       zerolinecolor = "#999", zerolinewidth = 1.5),
+                       zerolinecolor = FG_TERTIARY, zerolinewidth = 1.5),
           yaxis = list(title = ""),
-          plot_bgcolor = "#FEFEFE",
-          paper_bgcolor = "#FEFEFE",
+          plot_bgcolor = BG_CARD,
+          paper_bgcolor = BG_CARD,
           margin = list(l = 120, r = 20, t = 40, b = 40),
           showlegend = FALSE
         )
@@ -5021,10 +5021,10 @@ server <- function(input, output, session) {
         layout(
           title = list(text = "Top 15 Counterparties by EL Adjustment", font = list(size = 14)),
           xaxis = list(title = "EL Adjustment", zeroline = TRUE,
-                       zerolinecolor = "#999", zerolinewidth = 1.5),
+                       zerolinecolor = FG_TERTIARY, zerolinewidth = 1.5),
           yaxis = list(title = ""),
-          plot_bgcolor = "#FEFEFE",
-          paper_bgcolor = "#FEFEFE",
+          plot_bgcolor = BG_CARD,
+          paper_bgcolor = BG_CARD,
           margin = list(l = 150, r = 20, t = 40, b = 40),
           showlegend = FALSE
         )
@@ -5046,8 +5046,8 @@ server <- function(input, output, session) {
           title = list(text = "EL Adjustment by Counterparty", font = list(size = 14)),
           xaxis = list(title = "EL Adjustment"),
           yaxis = list(title = ""),
-          plot_bgcolor = "#FEFEFE",
-          paper_bgcolor = "#FEFEFE",
+          plot_bgcolor = BG_CARD,
+          paper_bgcolor = BG_CARD,
           showlegend = FALSE
         )
     }

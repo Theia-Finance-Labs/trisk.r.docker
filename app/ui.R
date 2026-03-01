@@ -49,8 +49,8 @@ ui <- dashboardPage(
     # ---- Google Fonts + Custom CSS using 1in1000 palette ----
     tags$head(
       tags$link(rel = "stylesheet",
-        href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"),
-      tags$link(rel = "stylesheet", href = "trisk.css"),
+        href = "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"),
+      tags$link(rel = "stylesheet", href = "trisk.css?v=2026-03-01"),
 
       # JavaScript for collapsible guidance boxes
       tags$script(HTML("

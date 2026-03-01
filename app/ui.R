@@ -319,15 +319,15 @@ ui <- dashboardPage(
             div(style = "margin-bottom: 12px;",
               tags$small(tags$b("Quick select:"), style = "margin-right: 6px;"),
               actionButton("sel_orderly", HTML("&#x1F7E2; Orderly"),
-                           class = "btn btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px; border-radius: 4px; background: #e8f5e9; border: 1px solid #a5d6a7; color: #2e7d32;"),
+                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
               actionButton("sel_disorderly", HTML("&#x1F7E1; Disorderly"),
-                           class = "btn btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px; border-radius: 4px; background: #fff8e1; border: 1px solid #ffe082; color: #f57f17;"),
+                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
               actionButton("sel_hotthouse", HTML("&#x1F534; Hot House"),
-                           class = "btn btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px; border-radius: 4px; background: #ffebee; border: 1px solid #ef9a9a; color: #c62828;"),
+                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
               actionButton("sel_all_targets", "All",
-                           class = "btn btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px; border-radius: 4px; background: #f3e5f5; border: 1px solid #ce93d8; color: #6a1b9a;"),
+                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
               actionButton("sel_clear_targets", "Clear",
-                           class = "btn btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px; border-radius: 4px; background: #f5f5f5; border: 1px solid #bdbdbd; color: #616161;")
+                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;")
             ),
 
             selectInput("scenario_geography", "Scenario Geography",
@@ -457,7 +457,7 @@ ui <- dashboardPage(
             width = 12,
             div(style = "text-align: center; padding: 20px;",
               actionButton("run_analysis", "Run TRISK Analysis",
-                          class = "btn-success btn-lg btn-run",
+                          class = "btn-primary btn-lg btn-run",
                           icon = icon("play-circle")),
               br(), br(),
               helpText("This may take a few minutes depending on portfolio size.")

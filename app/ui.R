@@ -46,10 +46,11 @@ ui <- dashboardPage(
   dashboardBody(
     useShinyjs(),
 
-    # ---- Google Fonts + Custom CSS using 1in1000 palette ----
+    # ---- Vendored Fonts + Custom CSS using 1in1000 palette ----
+    # Fonts are bundled locally (app/www/fonts/) for offline/air-gapped deployment.
+    # No runtime network dependency on fonts.googleapis.com.
     tags$head(
-      tags$link(rel = "stylesheet",
-        href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"),
+      tags$link(rel = "stylesheet", href = "fonts.css"),
       tags$link(rel = "stylesheet", href = "trisk.css"),
 
       # JavaScript for collapsible guidance boxes

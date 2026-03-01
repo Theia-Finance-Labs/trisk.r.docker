@@ -30,10 +30,17 @@ RUN mkdir -p /opt/trisk/data/scenarios && \
 # Copy CLI script
 COPY scripts/run_analysis.R /opt/trisk/run_analysis.R
 
+# Create non-root user for runtime
+RUN groupadd -r trisk && useradd -r -g trisk -d /home/trisk -s /sbin/nologin trisk
+
 # Create data directory
-RUN mkdir -p /data/input /data/output
+RUN mkdir -p /data/input /data/output && \
+    chown -R trisk:trisk /data/output
 
 WORKDIR /data
+
+# Run as non-root
+USER trisk
 
 ENTRYPOINT ["Rscript", "/opt/trisk/run_analysis.R"]
 CMD ["--help"]

@@ -58,11 +58,18 @@ COPY scripts/run_tests.R /opt/trisk/scripts/
 RUN printf '#!/bin/bash\nR -e "shiny::runApp(\"/srv/shiny-server/trisk\", host=\"0.0.0.0\", port=3838)"\n' > /usr/local/bin/run-shiny.sh && \
     chmod +x /usr/local/bin/run-shiny.sh
 
+# Create non-root user for runtime
+RUN groupadd -r trisk && useradd -r -g trisk -d /home/trisk -s /sbin/nologin trisk
+
 # Create data mount point for bank's private data
-RUN mkdir -p /data/input /data/output
+RUN mkdir -p /data/input /data/output && \
+    chown -R trisk:trisk /data/output /srv/shiny-server/trisk
 
 # Set working directory
 WORKDIR /srv/shiny-server/trisk
+
+# Run as non-root
+USER trisk
 
 # Expose Shiny port
 EXPOSE 3838

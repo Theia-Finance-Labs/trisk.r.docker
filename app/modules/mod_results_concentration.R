@@ -160,21 +160,21 @@ setup_results_concentration <- function(input, output, session, rv) {
   output$concentration_ui <- renderUI({
     cd <- concentration_data()
     if (is.null(cd)) {
-      return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
-        icon("th-large", style = "font-size: 48px; margin-bottom: 15px;"),
+      return(div(class = "empty-state",
+        icon("th-large", class = "empty-state-icon"),
         h4("Run analysis to view concentration risk"),
         p("Results are needed to assess portfolio concentration by sector, geography, and company.",
-          style = "font-size: 14px;"),
+          class = "fs-14"),
         actionLink("goto_run_concentration", "Go to Run Analysis",
-                    icon = icon("play"), style = "font-size: 14px;")
+                    icon = icon("play"), class = "fs-14")
       ))
     }
 
-    # HHI traffic light
-    hhi_color <- if (cd$hhi < 1500) STATUS_GREEN else if (cd$hhi < 2500) "#D4A017" else BRAND_CORAL
+    # HHI traffic light — use CSS status classes instead of inline colors
+    hhi_status <- if (cd$hhi < 1500) "metric-good" else if (cd$hhi < 2500) "metric-warning" else "metric-danger"
     hhi_label <- if (cd$hhi < 1500) "Low" else if (cd$hhi < 2500) "Moderate" else "High"
-    gini_color <- if (cd$gini < 0.4) STATUS_GREEN else if (cd$gini < 0.6) "#D4A017" else BRAND_CORAL
-    cr5_color <- if (cd$cr5 < 50) STATUS_GREEN else if (cd$cr5 < 75) "#D4A017" else BRAND_CORAL
+    gini_status <- if (cd$gini < 0.4) "metric-good" else if (cd$gini < 0.6) "metric-warning" else "metric-danger"
+    cr5_status <- if (cd$cr5 < 50) "metric-good" else if (cd$cr5 < 75) "metric-warning" else "metric-danger"
 
     tagList(
       # Header
@@ -182,13 +182,13 @@ setup_results_concentration <- function(input, output, session, rv) {
         fluidRow(
           column(8,
             h4(icon("th-large"), " Concentration Risk Center",
-               style = "margin: 0; font-weight: 700;"),
+               class = "section-title"),
             tags$small(paste0(cd$n_companies, " companies | ",
                              nrow(cd$sector), " sectors | ",
                              "Total exposure: $", format_number(cd$total_exposure)),
-                      style = "opacity: 0.85;")
+                      class = "opacity-85")
           ),
-          column(4, style = "text-align: right;",
+          column(4, class = "text-right",
             downloadButton("download_concentration_csv", "Export CSV",
                           class = "btn-sm btn-export")
           )
@@ -196,38 +196,41 @@ setup_results_concentration <- function(input, output, session, rv) {
       ),
 
       # Row 1: Concentration Scorecard
+      # NOTE: needs CSS classes:
+      # .metric-card { background: white; padding: 12px; border-radius: 8px; text-align: center; border-left: 4px solid transparent; margin-bottom: 16px; }
+      # .metric-good { border-left-color: <green>; color: <green>; } (for h3 and status spans)
+      # .metric-warning { border-left-color: <amber>; color: <amber>; }
+      # .metric-danger { border-left-color: <red>; color: <red>; }
+      # .metric-info { border-left-color: <blue>; color: <blue>; }
+      # .metric-status-label { font-size: 12px; font-weight: 600; }
       fluidRow(
         column(3,
-          div(style = paste0("background: white; border-left: 4px solid ", hhi_color,
-                            "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("HHI Index", style = "color: #666; display: block; margin-bottom: 4px;"),
-            h3(format(round(cd$hhi), big.mark = ","), style = paste0("margin: 0; color: ", hhi_color, "; font-weight: 700;")),
-            tags$span(hhi_label, style = paste0("font-size: 12px; font-weight: 600; color: ", hhi_color, ";"))
+          div(class = paste("metric-card", hhi_status),
+            tags$small("HHI Index", class = "card-subtitle"),
+            h3(format(round(cd$hhi), big.mark = ","), class = "section-title"),
+            tags$span(hhi_label, class = "metric-status-label")
           )
         ),
         column(3,
-          div(style = paste0("background: white; border-left: 4px solid ", cr5_color,
-                            "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Top-5 Concentration (CR5)", style = "color: #666; display: block; margin-bottom: 4px;"),
-            h3(paste0(round(cd$cr5, 1), "%"), style = paste0("margin: 0; color: ", cr5_color, "; font-weight: 700;")),
-            tags$small(paste0("Top-10: ", round(cd$cr10, 1), "%"), style = "color: #888;")
+          div(class = paste("metric-card", cr5_status),
+            tags$small("Top-5 Concentration (CR5)", class = "card-subtitle"),
+            h3(paste0(round(cd$cr5, 1), "%"), class = "section-title"),
+            tags$small(paste0("Top-10: ", round(cd$cr10, 1), "%"), class = "fg-muted")
           )
         ),
         column(3,
-          div(style = paste0("background: white; border-left: 4px solid ", gini_color,
-                            "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Gini Coefficient", style = "color: #666; display: block; margin-bottom: 4px;"),
-            h3(round(cd$gini, 3), style = paste0("margin: 0; color: ", gini_color, "; font-weight: 700;")),
+          div(class = paste("metric-card", gini_status),
+            tags$small("Gini Coefficient", class = "card-subtitle"),
+            h3(round(cd$gini, 3), class = "section-title"),
             tags$span(if (cd$gini < 0.4) "Even" else if (cd$gini < 0.6) "Moderate" else "Concentrated",
-                     style = paste0("font-size: 12px; font-weight: 600; color: ", gini_color, ";"))
+                     class = "metric-status-label")
           )
         ),
         column(3,
-          div(style = paste0("background: white; border-left: 4px solid ", STATUS_BLUE,
-                            "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Max Single-Name Weight", style = "color: #666; display: block; margin-bottom: 4px;"),
-            h3(paste0(round(cd$max_single, 1), "%"), style = paste0("margin: 0; color: ", STATUS_BLUE, "; font-weight: 700;")),
-            tags$small(paste0(cd$n_companies, " companies total"), style = "color: #888;")
+          div(class = "metric-card metric-info",
+            tags$small("Max Single-Name Weight", class = "card-subtitle"),
+            h3(paste0(round(cd$max_single, 1), "%"), class = "section-title"),
+            tags$small(paste0(cd$n_companies, " companies total"), class = "fg-muted")
           )
         )
       ),
@@ -235,11 +238,11 @@ setup_results_concentration <- function(input, output, session, rv) {
       # Row 2: Primary heatmap with controls + Top-10 donut
       fluidRow(
         column(8,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             fluidRow(
               column(6,
                 h5(icon("th"), " Concentration Heatmap",
-                   style = "font-weight: 600; margin-top: 0;")
+                   class = "fw-600 mt-0")
               ),
               column(3,
                 selectInput("conc_heatmap_metric", NULL,
@@ -263,11 +266,11 @@ setup_results_concentration <- function(input, output, session, rv) {
           )
         ),
         column(4,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("chart-pie"), " Top-10 Exposure Concentration",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Largest single-name exposures as % of portfolio.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("conc_donut", height = "370px")
           )
         )
@@ -276,21 +279,21 @@ setup_results_concentration <- function(input, output, session, rv) {
       # Row 3: Treemap + Lorenz curve
       fluidRow(
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("project-diagram"), " Exposure Treemap (Sector \u2192 Company)",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Size = exposure weight, color = PD change magnitude.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("conc_treemap", height = "400px")
           )
         ),
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("chart-area"), " Lorenz Curve (Exposure Concentration)",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small(paste0("Gini = ", round(cd$gini, 3),
                              " | Perfect equality = 0, maximum concentration = 1."),
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("conc_lorenz", height = "400px")
           )
         )
@@ -299,20 +302,20 @@ setup_results_concentration <- function(input, output, session, rv) {
       # Row 4: Risk-return scatter + Geographic choropleth
       fluidRow(
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("bullseye"), " Risk-Return Scatter",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Each bubble = one company. x = PD change, y = exposure weight, size = abs EL change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("conc_scatter", height = "400px")
           )
         ),
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("globe"), " Geographic Concentration",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Country-level exposure and PD change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("conc_geo_map", height = "400px")
           )
         )
@@ -321,11 +324,11 @@ setup_results_concentration <- function(input, output, session, rv) {
       # Row 5: Dual-axis baseline vs shocked concentration
       fluidRow(
         column(12,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("columns"), " Concentration Shift: Baseline vs Shocked",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Side-by-side sector concentration before and after the transition shock.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("conc_dual_bar", height = "380px")
           )
         )

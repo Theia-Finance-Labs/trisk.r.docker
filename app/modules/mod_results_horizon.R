@@ -45,13 +45,13 @@ setup_results_horizon <- function(input, output, session, rv) {
   output$horizon_analysis_ui <- renderUI({
     if (is.null(rv$results_by_year) || length(rv$results_by_year) < 2) {
       return(tags$div(
-        style = "text-align: center; padding: 40px; color: #666;",
-        icon("clock", style = "font-size: 48px; color: #DDD0D4;"),
+        class = "empty-state-40",
+        icon("clock", class = "empty-state-icon-muted"),
         tags$h4("Horizon Analysis requires 2+ shock years"),
         tags$p("Select 2 or more shock years on the Configure tab, then re-run."),
         actionLink("goto_config_horizon", "Configure shock years",
-                    icon = icon("cog"), style = "font-size: 14px;"),
-        tags$p(style = "font-size: 13px; color: #999; margin-top: 8px;",
+                    icon = icon("cog"), class = "fs-14"),
+        tags$p(class = "fs-13 fg-muted mt-8",
                "Tip: select years like 2030, 2035, 2040, 2045, 2050 for a full term structure.")
       ))
     }
@@ -60,19 +60,19 @@ setup_results_horizon <- function(input, output, session, rv) {
 
     tagList(
       # Header with summary
-      tags$div(style = "margin-bottom: 15px; padding: 12px; background: #F0E6EA; border-radius: 8px;",
+      tags$div(class = "horizon-header",
         fluidRow(
           column(8,
-            tags$h4(style = "margin: 0 0 4px 0; font-weight: 700;",
+            tags$h4(class = "section-title mb-4",
                     icon("chart-area"), " Multi-Horizon Risk Analysis"),
-            tags$p(style = "margin: 0; font-size: 13px; color: #666;",
+            tags$p(class = "m-0 fs-13 fg-secondary",
                    paste0(length(years), " shock years analyzed: ",
                           paste(years, collapse = ", "),
                           " | ", nrow(rv$results_by_year[[1]]), " companies"))
           ),
-          column(4, style = "text-align: right; padding-top: 8px;",
+          column(4, class = "text-right pt-8",
             downloadButton("download_horizon_csv", "Export Multi-Horizon CSV",
-                          class = "btn-sm", style = paste0("background:", BRAND_CORAL, "; color: white; border: none;"))
+                          class = "btn-sm btn-export")
           )
         )
       ),
@@ -101,7 +101,7 @@ setup_results_horizon <- function(input, output, session, rv) {
             plotlyOutput("horizon_company_trajectories", height = "400px")),
         box(width = 5, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
-            tags$p(style = "font-size: 12px; color: #666;",
+            tags$p(class = "history-meta",
                    "How companies move between PD risk buckets from earliest to latest horizon."),
             plotlyOutput("horizon_migration_heatmap", height = "350px"))
       ),
@@ -113,7 +113,7 @@ setup_results_horizon <- function(input, output, session, rv) {
             plotlyOutput("horizon_animated", height = "400px")),
         box(width = 5, title = "PD Term Structure", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
-            tags$p(style = "font-size: 12px; color: #666;",
+            tags$p(class = "history-meta",
                    "PD curve across shock years — analogous to a credit term structure."),
             plotlyOutput("horizon_term_structure", height = "350px"))
       ),

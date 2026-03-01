@@ -185,7 +185,7 @@ setup_config <- function(input, output, session, rv) {
     # No baseline selected
     if (is.null(input$baseline_scenario) || length(input$baseline_scenario) == 0) {
       warnings <- c(warnings, list(
-        div(class = "alert alert-danger", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+        div(class = "alert alert-danger alert-compact",
             icon("exclamation-triangle"), " No baseline scenario selected. Analysis requires at least one baseline.")
       ))
     }
@@ -193,7 +193,7 @@ setup_config <- function(input, output, session, rv) {
     # No target selected
     if (is.null(input$target_scenarios) || length(input$target_scenarios) == 0) {
       warnings <- c(warnings, list(
-        div(class = "alert alert-danger", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+        div(class = "alert alert-danger alert-compact",
             icon("exclamation-triangle"), " No target scenario selected. Select at least one target.")
       ))
     }
@@ -203,7 +203,7 @@ setup_config <- function(input, output, session, rv) {
         !is.null(input$target_scenarios) && any(input$baseline_scenario %in% input$target_scenarios)) {
       overlap <- intersect(input$baseline_scenario, input$target_scenarios)
       warnings <- c(warnings, list(
-        div(class = "alert alert-warning", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+        div(class = "alert alert-warning alert-compact",
             icon("exclamation-circle"), paste0(" Baseline also selected as target: ",
                                               paste(overlap, collapse = ", "),
                                               ". Results will show zero change for those scenarios."))
@@ -218,13 +218,13 @@ setup_config <- function(input, output, session, rv) {
       unique_baselines <- unique(unname(bmap))
       if (length(unique_baselines) > 1) {
         mapping_lines <- sapply(names(bmap), function(tgt) {
-          tags$li(style = "font-size: 12px;",
+          tags$li(class = "fs-12",
                   tags$code(scenario_label(tgt)), " \u2192 baseline: ", tags$code(scenario_label(bmap[tgt])))
         }, USE.NAMES = FALSE)
         warnings <- c(warnings, list(
-          div(class = "alert alert-info", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+          div(class = "alert alert-info alert-compact",
               icon("info-circle"), " Multiple baselines active. Mapping:",
-              tags$ul(style = "margin: 4px 0 0 0; padding-left: 20px;", mapping_lines))
+              tags$ul(class = "compact-list", mapping_lines))
         ))
       }
     }
@@ -232,7 +232,7 @@ setup_config <- function(input, output, session, rv) {
     # Performance warning: >5 targets
     if (!is.null(input$target_scenarios) && length(input$target_scenarios) > 5) {
       warnings <- c(warnings, list(
-        div(class = "alert alert-info", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+        div(class = "alert alert-info alert-compact",
             icon("info-circle"), paste0(" ", length(input$target_scenarios), " target scenarios selected. Runs with >5 targets may be slow."))
       ))
     }

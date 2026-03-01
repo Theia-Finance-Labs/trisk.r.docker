@@ -47,6 +47,14 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    # ── Log rotation (prevent disk fill on long-running workstations) ──
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Cap swap to match mem_limit — prevents silent OOM-swap spiral
+    memswap_limit: 4g
     # Shiny / R need writable tmp & run dirs; provide via tmpfs
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m
@@ -83,6 +91,13 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    # ── Log rotation ──
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    memswap_limit: 4g
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m
       - /run:rw,noexec,nosuid,size=8m

@@ -666,3 +666,233 @@ table.dataTable th { font-size: var(--fs-xs) !important; }
 hr { border-color: var(--border-light); }
 .info-box-icon { height: 90px; line-height: 90px; }
 .info-box-content { padding-top: 10px; padding-bottom: 10px; }
+
+
+/* ============================================
+   CSP-compliant utility classes
+   (replacing inline style= attributes in ui.R)
+   ============================================ */
+
+/* --- Typography utilities --- */
+.font-heading { font-family: var(--font-heading) !important; }
+.fw-400 { font-weight: 400 !important; }
+.fw-500 { font-weight: 500 !important; }
+.fw-600 { font-weight: 600 !important; }
+.fw-700 { font-weight: 700 !important; }
+.fs-10 { font-size: 10px !important; }
+.fs-11 { font-size: 11px !important; }
+.fs-12 { font-size: 12px !important; }
+.fs-13 { font-size: 13px !important; }
+.fs-14 { font-size: 14px !important; }
+.fs-16 { font-size: 16px !important; }
+
+/* --- Spacing utilities --- */
+.m-0 { margin: 0 !important; }
+.mt-0 { margin-top: 0 !important; }
+.mt-8 { margin-top: 8px !important; }
+.mt-16 { margin-top: 16px !important; }
+.mb-4 { margin-bottom: 4px !important; }
+.mb-6 { margin-bottom: 6px !important; }
+.mb-8 { margin-bottom: 8px !important; }
+.mb-10 { margin-bottom: 10px !important; }
+.mb-12 { margin-bottom: 12px !important; }
+.mr-6 { margin-right: 6px !important; }
+.p-20 { padding: 20px !important; }
+.pt-20 { padding-top: 20px !important; }
+
+/* --- Layout utilities --- */
+.d-flex { display: flex !important; }
+.align-center { align-items: center !important; }
+.gap-8 { gap: 8px !important; }
+.w-100 { width: 100% !important; }
+.text-center { text-align: center !important; }
+.text-right { text-align: right !important; }
+
+/* --- Visual utilities --- */
+.opacity-60 { opacity: 0.6 !important; }
+.opacity-75 { opacity: 0.75 !important; }
+.opacity-85 { opacity: 0.85 !important; }
+.cursor-help { cursor: help !important; }
+.cursor-pointer { cursor: pointer !important; }
+
+/* --- Color utilities (using CSS custom properties) --- */
+.fg-brand-coral { color: var(--brand-coral-dk) !important; }
+.fg-brand-red { color: var(--brand-red) !important; }
+.fg-muted { color: var(--fg-secondary) !important; }
+
+
+/* ============================================
+   CSP-compliant semantic classes
+   (replacing compound inline styles in ui.R)
+   ============================================ */
+
+/* Header title: "TRISK Docker" in the dark header bar */
+.header-title {
+  vertical-align: middle;
+  font-family: var(--font-heading);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-base);
+}
+
+/* Header subtitle: "Climate Transition Risk..." line under title */
+.header-subtitle {
+  vertical-align: middle;
+  font-family: var(--font-body);
+  font-weight: var(--fw-normal);
+  font-size: var(--fs-xs);
+  opacity: 0.75;
+}
+
+/* Sidebar logo at bottom of sidebar */
+.sidebar-logo-wrap {
+  text-align: center;
+  padding: 15px 10px 20px 10px;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+}
+
+/* Quick-select tag buttons (Orderly / Disorderly / Hot House / All / Clear) */
+.btn-tag {
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  margin: 1px !important;
+}
+
+/* PD/EL info toggle help buttons */
+.btn-help-toggle {
+  background: #d9edf7;
+  border: 1px solid #bce8f1;
+}
+
+/* Collapsible info boxes (PD/EL help text), hidden by default */
+.info-box-hidden {
+  font-size: 13px;
+  padding: 10px;
+  margin-bottom: 10px;
+  display: none;
+}
+
+/* Run analysis center-aligned action area */
+.run-action-wrap {
+  text-align: center;
+  padding: 20px;
+}
+
+/* Integration guidance table styling */
+.integration-guidance-table {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* Small upload hint text below guidance content */
+.upload-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 8px;
+}
+
+/* About page: "Why 1in1000" feature cards */
+.about-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 8px 0;
+  min-height: 140px;
+}
+
+/* About page: contact / business-details cards */
+.contact-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+/* About page: mission statement callout */
+.mission-statement {
+  font-size: 16px;
+  color: var(--brand-coral-dk);
+  font-weight: var(--fw-medium);
+}
+
+
+/* ============================================
+   CSP-compliant classes — module inline-style replacements
+   ============================================ */
+
+/* --- Additional spacing utilities --- */
+.pt-8 { padding-top: 8px !important; }
+.mt-20 { margin-top: 20px !important; }
+
+/* --- Text color utilities --- */
+.fg-secondary { color: #666 !important; }
+
+/* --- Semantic: section title (h4 inside headers) --- */
+.section-title { margin: 0 !important; font-weight: 700 !important; }
+
+/* --- Semantic: small meta text (font-size 12px, muted color) --- */
+.history-meta { font-size: 12px !important; color: #666 !important; }
+
+/* --- Empty states (no-data placeholders) --- */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+
+.empty-state-40 {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.empty-state-icon-muted {
+  font-size: 48px;
+  color: #DDD0D4;
+  display: block;
+}
+
+/* --- Horizon analysis header bar --- */
+.horizon-header {
+  margin-bottom: 15px;
+  padding: 12px;
+  background: #F0E6EA;
+  border-radius: var(--radius-md);
+}
+
+/* --- Compact alert (config warnings) --- */
+.alert-compact {
+  padding: 8px 12px !important;
+  margin-bottom: 6px !important;
+  font-size: 13px !important;
+}
+
+/* --- Compact UL inside alerts --- */
+.compact-list {
+  margin: 4px 0 0 0;
+  padding-left: 20px;
+}
+
+/* --- Data quality audit card --- */
+.audit-card {
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 8px 0;
+}
+
+/* --- Audit null-rate list --- */
+.audit-list {
+  font-size: 12px;
+  margin: 4px 0;
+}

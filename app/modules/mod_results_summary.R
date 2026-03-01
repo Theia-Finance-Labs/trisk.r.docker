@@ -96,7 +96,7 @@ setup_results_summary <- function(input, output, session, rv) {
     }
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
-                       style = "cursor: help;"),
+                       class = "cursor-help"),
              "Average NPV Change (%)",
              icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
              color = if (val < 0) "red" else "blue")
@@ -112,7 +112,7 @@ setup_results_summary <- function(input, output, session, rv) {
     }
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
-                       style = "cursor: help;"),
+                       class = "cursor-help"),
              "Maximum PD Shock (%)",
              icon = if (val > 5) icon("exclamation-triangle") else icon("arrow-up"),
              color = if (val > 5) "red" else "blue")
@@ -134,7 +134,7 @@ setup_results_summary <- function(input, output, session, rv) {
     }
     valueBox(tags$span(paste0(display_round(val), " pp"),
                        title = paste0("Full precision: ", smart_round(val), " pp"),
-                       style = "cursor: help;"),
+                       class = "cursor-help"),
              "PD Change, Exposure-Weighted (percentage points)",
              icon = if (val > 0) icon("arrow-up") else icon("arrow-down"),
              color = if (val > 0.01) "red" else if (val < -0.01) "green" else "blue")
@@ -152,7 +152,7 @@ setup_results_summary <- function(input, output, session, rv) {
     }
     valueBox(tags$span(format_number(val),
                        title = paste0("Full precision: ", round(val, 4)),
-                       style = "cursor: help;"),
+                       class = "cursor-help"),
              "EL Change (USD)",
              icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
              color = if (val > 0) "green" else if (val < 0) "red" else "blue")

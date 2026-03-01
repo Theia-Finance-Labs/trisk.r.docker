@@ -99,13 +99,13 @@ setup_results_attribution <- function(input, output, session, rv) {
   output$attribution_ui <- renderUI({
     ad <- attribution_data()
     if (is.null(ad)) {
-      return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
-        icon("chart-bar", style = "font-size: 48px; margin-bottom: 15px;"),
+      return(div(class = "empty-state",
+        icon("chart-bar", class = "empty-state-icon"),
         h4("Run analysis to view attribution breakdown"),
         p("Results are needed to decompose risk changes by sector, technology, and company.",
-          style = "font-size: 14px;"),
+          class = "fs-14"),
         actionLink("goto_run_attribution", "Go to Run Analysis",
-                    icon = icon("play"), style = "font-size: 14px;")
+                    icon = icon("play"), class = "fs-14")
       ))
     }
 
@@ -118,12 +118,12 @@ setup_results_attribution <- function(input, output, session, rv) {
         fluidRow(
           column(8,
             h4(icon("chart-bar"), " Risk Attribution Dashboard",
-               style = "margin: 0; font-weight: 700;"),
+               class = "section-title"),
             tags$small(paste0(n_sectors, " sectors | ", n_co, " companies | ",
                              "Portfolio PD change: ", round(ad$portfolio_pd_change * 100, 4), " pp"),
-                      style = "opacity: 0.85;")
+                      class = "opacity-85")
           ),
-          column(4, style = "text-align: right;",
+          column(4, class = "text-right",
             downloadButton("download_attribution_csv", "Export CSV",
                           class = "btn-sm btn-export")
           )
@@ -133,11 +133,11 @@ setup_results_attribution <- function(input, output, session, rv) {
       # Row 1: Waterfall chart (top-down PD decomposition)
       fluidRow(
         column(12,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("exchange-alt"), " PD Waterfall: Baseline \u2192 Sector Contributions \u2192 Shocked PD",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Each bar shows how much each sector contributes to the total portfolio PD change (exposure-weighted).",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("attr_waterfall", height = "400px")
           )
         )
@@ -146,20 +146,20 @@ setup_results_attribution <- function(input, output, session, rv) {
       # Row 2: Company movers + Sector×Driver heatmap
       fluidRow(
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("sort-amount-down"), " Top Risk Movers (Companies)",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Companies with the largest marginal contribution to portfolio PD change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("attr_company_movers", height = "380px")
           )
         ),
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("chart-pie"), " Marginal Contribution to Portfolio Risk",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Each company's share of the total portfolio PD change (absolute).",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("attr_marginal_contribution", height = "380px")
           )
         )
@@ -168,20 +168,20 @@ setup_results_attribution <- function(input, output, session, rv) {
       # Row 3: Sector×Technology heatmap + EL waterfall
       fluidRow(
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("th"), " Sector \u00D7 Technology Attribution",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("PD contribution by sector and technology combination.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("attr_sector_tech_heatmap", height = "380px")
           )
         ),
         column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("money-bill-wave"), " Expected Loss Attribution by Sector",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             tags$small("Change in expected loss (EL) decomposed by sector.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+                      class = "card-subtitle"),
             plotlyOutput("attr_el_waterfall", height = "380px")
           )
         )
@@ -190,9 +190,9 @@ setup_results_attribution <- function(input, output, session, rv) {
       # Row 4: Attribution summary table
       fluidRow(
         column(12,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
+          div(class = "card-surface mb-16",
             h5(icon("table"), " Detailed Attribution Table",
-               style = "font-weight: 600; margin-top: 0;"),
+               class = "fw-600 mt-0"),
             DTOutput("attr_detail_table")
           )
         )

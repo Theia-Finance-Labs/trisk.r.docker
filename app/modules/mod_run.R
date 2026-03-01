@@ -99,11 +99,11 @@ setup_run <- function(input, output, session, rv, log_message) {
           tags$li("Replace current TRISK results with new ones"),
           tags$li("Reset PD/EL integration results (must re-calculate)"),
           if (!is.null(rv$internal_pd) || !is.null(rv$internal_el))
-            tags$li(tags$span(style = "color: #6B9F3B;",
+            tags$li(tags$span(class = "text-success",
                               icon("check-circle"),
                               " Your uploaded Internal PD/EL values will be ", tags$b("preserved")))
         ),
-        tags$p(style = "margin-top: 10px;",
+        tags$p(class = "mt-10",
                tags$em("Tip: You can compare previous runs from the Portfolio Results tab.")),
         footer = tagList(
           modalButton("Cancel"),
@@ -159,6 +159,7 @@ setup_run <- function(input, output, session, rv, log_message) {
       rv$run_history <- c(list(history_entry), rv$run_history)
       if (length(rv$run_history) > 5) {
         rv$run_history <- rv$run_history[1:5]
+        gc()
       }
       rv$compare_run_idx <- NULL
 
@@ -315,6 +316,7 @@ setup_run <- function(input, output, session, rv, log_message) {
           }
 
           all_scenario_results[[target_scen]] <- all_year_results
+          rm(all_year_results); gc()
         }
 
         # Primary results = first scenario, first year (backward compatibility)
@@ -373,6 +375,9 @@ setup_run <- function(input, output, session, rv, log_message) {
         n_yr_label <- if (n_years > 1) paste0(" across ", n_years, " shock years") else ""
         showNotification(paste0("Analysis completed successfully!", n_yr_label), type = "message", duration = 5)
 
+        # Reclaim memory after large analysis
+        gc()
+
         # Switch to results tab
         updateTabsetPanel(session, "tabs", selected = "results")
 
@@ -394,8 +399,9 @@ setup_run <- function(input, output, session, rv, log_message) {
   # ---- Run ID display (Step 3) ----
   output$run_id_display <- renderUI({
     if (is.null(rv$run_id)) return(NULL)
-    div(style = "margin-top: 10px;",
-      tags$span(class = "label label-info", style = "font-size: 13px; padding: 4px 10px;",
+    # NOTE: needs CSS class .run-id-label { font-size: 13px; padding: 4px 10px; }
+    div(class = "mt-10",
+      tags$span(class = "label label-info run-id-label",
                 icon("fingerprint"), paste(" Run ID:", rv$run_id))
     )
   })
@@ -403,8 +409,8 @@ setup_run <- function(input, output, session, rv, log_message) {
   # ---- Run ID display (Step 6) ----
   output$run_id_step6 <- renderUI({
     if (is.null(rv$run_id)) return(NULL)
-    div(style = "margin-bottom: 10px;",
-      tags$span(class = "label label-info", style = "font-size: 13px; padding: 4px 10px;",
+    div(class = "mb-10",
+      tags$span(class = "label label-info run-id-label",
                 icon("fingerprint"), paste(" Run ID:", rv$run_id))
     )
   })
@@ -439,44 +445,44 @@ setup_run <- function(input, output, session, rv, log_message) {
       } else "N/A"
 
       is_selected <- !is.null(rv$compare_run_idx) && rv$compare_run_idx == i
-      row_style <- if (is_selected) {
-        "background: #FFFDE7; border-left: 3px solid #F53D3F; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px;"
-      } else {
-        "background: #FBF5F2; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; border-left: 3px solid #DDD0D4;"
-      }
+      # NOTE: needs CSS classes:
+      # .history-row { padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; }
+      # .history-row--default { background: #FBF5F2; border-left: 3px solid #DDD0D4; }
+      # .history-row--selected { background: #FFFDE7; border-left: 3px solid #F53D3F; }
+      row_class <- if (is_selected) "history-row history-row--selected" else "history-row history-row--default"
 
-      tags$div(style = row_style,
+      tags$div(class = row_class,
         fluidRow(
-          column(1, tags$span(style = "font-weight: 700; color: #666; font-size: 16px;", paste0("#", i))),
+          # NOTE: needs CSS class .history-index { font-weight: 700; color: #666; font-size: 16px; }
+          column(1, tags$span(class = "history-index", paste0("#", i))),
           column(3,
-            tags$div(style = "font-size: 12px; color: #666;", ts),
-            tags$div(style = "font-size: 12px;",
+            tags$div(class = "history-meta", ts),
+            tags$div(class = "fs-12",
               tags$b(target_lbl), " vs ", baseline_lbl)
           ),
-          column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "Geography: "), cfg$scenario_geography,
+          column(2, tags$div(class = "fs-12",
+            tags$span(class = "fg-secondary", "Geography: "), cfg$scenario_geography,
             tags$br(),
-            tags$span(style = "color: #666;", "Shock: "), cfg$shock_year
+            tags$span(class = "fg-secondary", "Shock: "), cfg$shock_year
           )),
-          column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "NPV: "), tags$b(avg_npv),
+          column(2, tags$div(class = "fs-12",
+            tags$span(class = "fg-secondary", "NPV: "), tags$b(avg_npv),
             tags$br(),
-            tags$span(style = "color: #666;", "PD: "), tags$b(avg_pd)
+            tags$span(class = "fg-secondary", "PD: "), tags$b(avg_pd)
           )),
-          column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "Companies: "), run$n_companies,
+          column(2, tags$div(class = "fs-12",
+            tags$span(class = "fg-secondary", "Companies: "), run$n_companies,
             tags$br(),
-            tags$span(style = "color: #666;", "Run: "), run$run_id
+            tags$span(class = "fg-secondary", "Run: "), run$run_id
           )),
           column(2,
+            # NOTE: needs CSS class .btn-history { width: 100%; margin-bottom: 4px; }
             actionButton(paste0("compare_run_", i), "Compare",
-                        class = if (is_selected) "btn-warning btn-sm" else "btn-default btn-sm",
-                        icon = icon(if (is_selected) "eye-slash" else "exchange-alt"),
-                        style = "width: 100%; margin-bottom: 4px;"),
+                        class = if (is_selected) "btn-warning btn-sm btn-history" else "btn-default btn-sm btn-history",
+                        icon = icon(if (is_selected) "eye-slash" else "exchange-alt")),
             actionButton(paste0("dup_run_", i), "Duplicate",
-                        class = "btn-info btn-sm",
-                        icon = icon("copy"),
-                        style = "width: 100%;")
+                        class = "btn-info btn-sm w-100",
+                        icon = icon("copy"))
           )
         )
       )
@@ -492,7 +498,7 @@ setup_run <- function(input, output, session, rv, log_message) {
                                  if (length(rv$run_history) != 1) "s" else "", ")")),
         status = "info",
         solidHeader = FALSE,
-        tags$div(style = "margin-bottom: 8px; font-size: 12px; color: #666;",
+        tags$div(class = "history-meta mb-8",
           icon("info-circle"),
           " Click ", tags$b("Compare"), " to see a side-by-side comparison with the current run.
             Internal PD/EL values are preserved across re-runs."
@@ -611,7 +617,7 @@ setup_run <- function(input, output, session, rv, log_message) {
         "round4" = paste0(round(d, 4), "%"),
         "number" = format_number(d)
       )
-      tags$span(style = paste0("color:", color, "; font-weight: 600;"), paste0(arrow, " ", val_str))
+      tags$span(class = "fw-600", style = paste0("color:", color, ";"), paste0(arrow, " ", val_str))
     }
 
     # Config diff
@@ -638,59 +644,63 @@ setup_run <- function(input, output, session, rv, log_message) {
         tags$b(curr_cfg$discount_rate))))
 
     tags$div(
-      style = "margin-top: 15px; padding: 15px; background: #F8F4F6; border: 1px solid #DDD0D4; border-radius: 6px;",
+      class = "compare-panel",
+      # NOTE: needs CSS class .compare-heading { margin-top: 0; margin-bottom: 12px; font-weight: 600; }
       h4(icon("code-compare"), " Comparison: Current Run vs Run #", idx,
-         style = "margin-top: 0; margin-bottom: 12px; font-weight: 600;"),
+         class = "compare-heading"),
 
       # Config changes
+      # NOTE: needs CSS class .compare-config-list { font-size: 13px; margin-top: 4px; }
       if (length(config_diffs) > 0) {
-        tags$div(style = "margin-bottom: 12px;",
-          tags$span(style = "font-weight: 600; font-size: 13px;", icon("sliders"), " Parameter Changes:"),
-          tags$ul(style = "font-size: 13px; margin-top: 4px;", config_diffs)
+        tags$div(class = "mb-12",
+          tags$span(class = "fw-600 fs-13", icon("sliders"), " Parameter Changes:"),
+          tags$ul(class = "compare-config-list", config_diffs)
         )
       } else {
-        tags$div(style = "margin-bottom: 12px; font-size: 13px; color: #666;",
+        tags$div(class = "mb-12 fs-13 fg-secondary",
                  icon("equals"), " Same parameters — re-run with identical configuration")
       },
 
-      # Metrics comparison table
+      # NOTE: needs CSS classes:
+      # .compare-table { font-size: 13px; margin-bottom: 0; background: white; }
+      # .compare-table-header { background: #F0E6EA; }
+      # .fg-info { color: #5A8EAE; }
       tags$table(
-        class = "table table-bordered",
-        style = "font-size: 13px; margin-bottom: 0; background: white;",
+        class = "table table-bordered compare-table",
         tags$thead(
-          tags$tr(style = "background: #F0E6EA;",
+          tags$tr(class = "compare-table-header",
             tags$th("Metric"),
-            tags$th(style = "text-align: right;", paste0("Run #", idx, " (Previous)")),
-            tags$th(style = "text-align: right;", "Current Run"),
-            tags$th(style = "text-align: center;", "Delta")
+            tags$th(class = "th-right", paste0("Run #", idx, " (Previous)")),
+            tags$th(class = "th-right", "Current Run"),
+            tags$th(class = "th-center", "Delta")
           )
         ),
         tags$tbody(
           tags$tr(
             tags$td("Average NPV Change"),
-            tags$td(style = "text-align: right;", if (!is.na(prev_npv)) paste0(round(prev_npv, 2), "%") else "N/A"),
-            tags$td(style = "text-align: right;", if (!is.na(curr_npv)) paste0(round(curr_npv, 2), "%") else "N/A"),
-            tags$td(style = "text-align: center;", delta_span(curr_npv, prev_npv, "round2", invert = TRUE))
+            tags$td(class = "td-right", if (!is.na(prev_npv)) paste0(round(prev_npv, 2), "%") else "N/A"),
+            tags$td(class = "td-right", if (!is.na(curr_npv)) paste0(round(curr_npv, 2), "%") else "N/A"),
+            tags$td(class = "td-center", delta_span(curr_npv, prev_npv, "round2", invert = TRUE))
           ),
           tags$tr(
             tags$td("Average PD Shock"),
-            tags$td(style = "text-align: right;", if (!is.na(prev_pd)) paste0(round(prev_pd, 4), "%") else "N/A"),
-            tags$td(style = "text-align: right;", if (!is.na(curr_pd)) paste0(round(curr_pd, 4), "%") else "N/A"),
-            tags$td(style = "text-align: center;", delta_span(curr_pd, prev_pd, "round4"))
+            tags$td(class = "td-right", if (!is.na(prev_pd)) paste0(round(prev_pd, 4), "%") else "N/A"),
+            tags$td(class = "td-right", if (!is.na(curr_pd)) paste0(round(curr_pd, 4), "%") else "N/A"),
+            tags$td(class = "td-center", delta_span(curr_pd, prev_pd, "round4"))
           ),
           tags$tr(
             tags$td("Total EL Shock"),
-            tags$td(style = "text-align: right;", if (!is.na(prev_el)) format_number(prev_el) else "N/A"),
-            tags$td(style = "text-align: right;", if (!is.na(curr_el)) format_number(curr_el) else "N/A"),
-            tags$td(style = "text-align: center;", delta_span(curr_el, prev_el, "number", invert = TRUE))
+            tags$td(class = "td-right", if (!is.na(prev_el)) format_number(prev_el) else "N/A"),
+            tags$td(class = "td-right", if (!is.na(curr_el)) format_number(curr_el) else "N/A"),
+            tags$td(class = "td-center", delta_span(curr_el, prev_el, "number", invert = TRUE))
           ),
           tags$tr(
             tags$td("Companies"),
-            tags$td(style = "text-align: right;", prev$n_companies),
-            tags$td(style = "text-align: right;", nrow(curr)),
-            tags$td(style = "text-align: center;",
-                    if (nrow(curr) == prev$n_companies) tags$span(style = "color: #666;", "=")
-                    else tags$span(style = "color: #5A8EAE;", paste0(nrow(curr) - prev$n_companies)))
+            tags$td(class = "td-right", prev$n_companies),
+            tags$td(class = "td-right", nrow(curr)),
+            tags$td(class = "td-center",
+                    if (nrow(curr) == prev$n_companies) tags$span(class = "fg-secondary", "=")
+                    else tags$span(class = "fg-info", paste0(nrow(curr) - prev$n_companies)))
           )
         )
       )

@@ -285,7 +285,7 @@ setup_upload <- function(input, output, session, rv, log_message) {
       stats_rows <- tagList(stats_rows,
         tags$tr(tags$td("Distinct company_id"), tags$td(tags$b(format(audit$n_distinct_id, big.mark = ",")))),
         tags$tr(tags$td("Duplicate company_id"), tags$td(tags$b(
-          if (audit$n_duplicate_id > 0) tags$span(style = "color: #C44245;", audit$n_duplicate_id) else "0"
+          if (audit$n_duplicate_id > 0) tags$span(class = "status-missing", audit$n_duplicate_id) else "0"
         )))
       )
     }
@@ -297,14 +297,14 @@ setup_upload <- function(input, output, session, rv, log_message) {
         tags$li(paste0(col, ": ", audit$null_rates[col], "% missing"))
       })
       null_info <- tagList(
-        tags$small(tags$b("Columns with missing values:"), style = "color: #C44245;"),
-        tags$ul(style = "font-size: 12px; margin: 4px 0;", null_items)
+        tags$small(tags$b("Columns with missing values:"), class = "status-missing"),
+        tags$ul(class = "audit-list", null_items)
       )
     }
 
-    div(style = "background: #f9f9f9; border: 1px solid #eee; border-radius: 4px; padding: 10px; margin: 8px 0;",
-      div(style = "margin-bottom: 6px;", schema_badge),
-      tags$table(class = "table table-condensed", style = "font-size: 12px; margin-bottom: 4px;",
+    div(class = "audit-card",
+      div(class = "mb-6", schema_badge),
+      tags$table(class = "table table-condensed fs-12 mb-4",
         stats_rows
       ),
       null_info

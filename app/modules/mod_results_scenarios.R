@@ -55,13 +55,13 @@ setup_results_scenarios <- function(input, output, session, rv) {
   output$scenario_comparison_ui <- renderUI({
     scd <- scenario_comparison_data()
     if (is.null(scd)) {
-      return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
-        icon("layer-group", style = "font-size: 48px; margin-bottom: 15px;"),
+      return(div(class = "empty-state",
+        icon("layer-group", class = "empty-state-icon"),
         h4("Scenario Comparison requires 2+ target scenarios"),
         p("Select multiple target scenarios on the Configure tab to enable cross-scenario analysis.",
-          style = "font-size: 14px;"),
+          class = "fs-14"),
         actionLink("goto_config_scenario", "Configure target scenarios",
-                    icon = icon("cog"), style = "font-size: 14px;")
+                    icon = icon("cog"), class = "fs-14")
       ))
     }
 
@@ -75,11 +75,11 @@ setup_results_scenarios <- function(input, output, session, rv) {
         fluidRow(
           column(8,
             h4(icon("layer-group"), paste0(" Scenario Comparison: ", n_scen, " scenarios"),
-               style = "margin: 0; font-weight: 700;"),
+               class = "section-title"),
             tags$small(paste0(n_yrs, " shock year(s) | ", n_co, " companies | ",
                              n_scen * n_yrs, " total runs"))
           ),
-          column(4, style = "text-align: right;",
+          column(4, class = "text-right",
             downloadButton("download_scenario_csv", "Export CSV",
                           class = "btn btn-xs btn-export")
           )
@@ -123,9 +123,9 @@ setup_results_scenarios <- function(input, output, session, rv) {
       ),
 
       # ---- SCENARIO DISTRIBUTION (Probabilistic) ----
-      div(class = "section-header section-header--purple", style = "margin: 20px 0 16px 0;",
+      div(class = "section-header section-header--purple mt-20",
         h4(icon("chart-area"), " Scenario Distribution \u2014 Probabilistic Analysis",
-           style = "margin: 0; font-weight: 700;"),
+           class = "section-title"),
         tags$small("Treating selected scenarios as a distribution of plausible outcomes. ",
                    "Confidence bands show the range of uncertainty across scenario pathways.")
       ),

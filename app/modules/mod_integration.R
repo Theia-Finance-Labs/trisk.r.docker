@@ -155,7 +155,7 @@ setup_integration <- function(input, output, session, rv) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom PD values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
+            tags$br(), tags$span(class = "text-muted fs-11",
                                 icon("clock-rotate-left"), " Preserved from previous run")
         )
       } else {
@@ -318,8 +318,9 @@ setup_integration <- function(input, output, session, rv) {
     adj_color <- if (w_pd_adjustment > 0.0001) "red" else if (w_pd_adjustment < -0.0001) "green" else "navy"
 
     tagList(
+      # NOTE: needs CSS class .portfolio-summary-heading { margin-top: 15px; margin-bottom: 10px; font-weight: 600; }
       h4(icon("chart-bar"), "Portfolio-Level PD Aggregates",
-         style = "margin-top: 15px; margin-bottom: 10px; font-weight: 600;"),
+         class = "portfolio-summary-heading"),
       fluidRow(
         valueBox(
           value = paste0(smart_round(w_internal_pd * 100), "%"),
@@ -492,7 +493,7 @@ setup_integration <- function(input, output, session, rv) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom EL values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
+            tags$br(), tags$span(class = "text-muted fs-11",
                                 icon("clock-rotate-left"), " Preserved from previous run")
         )
       } else {
@@ -653,7 +654,7 @@ setup_integration <- function(input, output, session, rv) {
 
     tagList(
       h4(icon("chart-bar"), "Portfolio-Level EL Aggregates",
-         style = "margin-top: 15px; margin-bottom: 10px; font-weight: 600;"),
+         class = "portfolio-summary-heading"),
       fluidRow(
         valueBox(
           value = format_number(total_internal_el),
@@ -689,7 +690,7 @@ setup_integration <- function(input, output, session, rv) {
         valueBox(
           value = tags$span(bps_label,
                             title = "Adjusted EL as basis points of total exposure (|EL| / Exposure * 10,000)",
-                            style = "cursor: help;"),
+                            class = "cursor-help"),
           subtitle = "Adjusted EL / Exposure",
           icon = icon("percent"),
           color = if (!is.na(el_bps) && el_bps > 50) "red" else if (!is.na(el_bps) && el_bps > 20) "yellow" else "green",
@@ -723,49 +724,55 @@ setup_integration <- function(input, output, session, rv) {
       el_bps <- if (exp_val > 0) abs(adj_el) / exp_val * 10000 else NA_real_
 
       # Direction indicator
+      # NOTE: needs CSS class .dir-danger { color: #C44245; } .dir-success { color: #6B9F3B; }
       dir_icon <- if (el_adj < -0.01) {
-        tags$span(style = "color: #C44245;", icon("arrow-down"), " ")
+        tags$span(class = "text-danger", icon("arrow-down"), " ")
       } else if (el_adj > 0.01) {
-        tags$span(style = "color: #6B9F3B;", icon("arrow-up"), " ")
+        tags$span(class = "text-success", icon("arrow-up"), " ")
       } else {
-        tags$span(style = "color: #666;", icon("minus"), " ")
+        tags$span(class = "fg-secondary", icon("minus"), " ")
       }
 
       tags$tr(
-        tags$td(style = "padding: 6px 12px; font-weight: 600;", s),
-        tags$td(style = "padding: 6px 12px; text-align: right;", n),
-        tags$td(style = "padding: 6px 12px; text-align: right;", format_number(exp_val)),
-        tags$td(style = "padding: 6px 12px; text-align: right;", format_number(int_el)),
-        tags$td(style = "padding: 6px 12px; text-align: right;", format_number(adj_el)),
-        tags$td(style = "padding: 6px 12px; text-align: right;", dir_icon, format_number(el_adj)),
-        tags$td(style = "padding: 6px 12px; text-align: right;",
+        tags$td(class = "td-pad fw-600", s),
+        tags$td(class = "td-right", n),
+        tags$td(class = "td-right", format_number(exp_val)),
+        tags$td(class = "td-right", format_number(int_el)),
+        tags$td(class = "td-right", format_number(adj_el)),
+        tags$td(class = "td-right", dir_icon, format_number(el_adj)),
+        tags$td(class = "td-right",
                 if (!is.na(el_bps)) paste0(round(el_bps, 1), " bps") else "N/A")
       )
     })
 
+    # NOTE: needs CSS classes:
+    # .breakdown-summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 8px 0; color: #1A1A1A; }
+    # .breakdown-body { margin-top: 8px; overflow-x: auto; }
+    # .breakdown-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+    # .breakdown-thead { background: #F0E6EA; border-bottom: 2px solid #DDD0D4; }
+    # .th-pad { padding: 8px 12px; }
     tagList(
       tags$div(
-        style = "margin-bottom: 15px;",
+        class = "mb-15",
         tags$details(
           tags$summary(
-            style = "cursor: pointer; font-weight: 600; font-size: 15px; padding: 8px 0; color: #1A1A1A;",
+            class = "breakdown-summary",
             icon("layer-group"), " EL Breakdown by Sector"
           ),
           tags$div(
-            style = "margin-top: 8px; overflow-x: auto;",
+            class = "breakdown-body",
             tags$table(
-              class = "table table-striped table-hover",
-              style = "width: 100%; font-size: 13px; border-collapse: collapse;",
+              class = "table table-striped table-hover breakdown-table",
               tags$thead(
                 tags$tr(
-                  style = "background: #F0E6EA; border-bottom: 2px solid #DDD0D4;",
-                  tags$th(style = "padding: 8px 12px;", "Sector"),
-                  tags$th(style = "padding: 8px 12px; text-align: right;", "Count"),
-                  tags$th(style = "padding: 8px 12px; text-align: right;", "Exposure"),
-                  tags$th(style = "padding: 8px 12px; text-align: right;", "Internal EL"),
-                  tags$th(style = "padding: 8px 12px; text-align: right;", "Adjusted EL"),
-                  tags$th(style = "padding: 8px 12px; text-align: right;", "EL Adj."),
-                  tags$th(style = "padding: 8px 12px; text-align: right;", "EL/Exposure")
+                  class = "breakdown-thead",
+                  tags$th(class = "th-pad", "Sector"),
+                  tags$th(class = "th-right", "Count"),
+                  tags$th(class = "th-right", "Exposure"),
+                  tags$th(class = "th-right", "Internal EL"),
+                  tags$th(class = "th-right", "Adjusted EL"),
+                  tags$th(class = "th-right", "EL Adj."),
+                  tags$th(class = "th-right", "EL/Exposure")
                 )
               ),
               tags$tbody(breakdown_rows)

@@ -1286,13 +1286,13 @@ server <- function(input, output, session) {
         ),
         tags$tbody(
           tags$tr(
-            tags$td("Avg NPV Change"),
+            tags$td("Average NPV Change"),
             tags$td(style = "text-align: right;", if (!is.na(prev_npv)) paste0(round(prev_npv, 2), "%") else "N/A"),
             tags$td(style = "text-align: right;", if (!is.na(curr_npv)) paste0(round(curr_npv, 2), "%") else "N/A"),
             tags$td(style = "text-align: center;", delta_span(curr_npv, prev_npv, "round2", invert = TRUE))
           ),
           tags$tr(
-            tags$td("Avg PD Shock"),
+            tags$td("Average PD Shock"),
             tags$td(style = "text-align: right;", if (!is.na(prev_pd)) paste0(round(prev_pd, 4), "%") else "N/A"),
             tags$td(style = "text-align: right;", if (!is.na(curr_pd)) paste0(round(curr_pd, 4), "%") else "N/A"),
             tags$td(style = "text-align: center;", delta_span(curr_pd, prev_pd, "round4"))
@@ -1352,7 +1352,7 @@ server <- function(input, output, session) {
 
   output$vb_avg_npv_change <- renderValueBox({
     if (is.null(rv$results)) {
-      return(valueBox("---", "Avg NPV Change (%)", icon = icon("chart-line"), color = "blue"))
+      return(valueBox("---", "Average NPV Change (%)", icon = icon("chart-line"), color = "blue"))
     }
     val <- {
       col <- safe_col(rv$results, "crispy_perc_value_change", "net_present_value_change", "npv_change")
@@ -1361,14 +1361,14 @@ server <- function(input, output, session) {
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
                        style = "cursor: help;"),
-             "Avg NPV Change (%)",
+             "Average NPV Change (%)",
              icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
              color = if (val < 0) "red" else "blue")
   })
 
   output$vb_max_pd_shock <- renderValueBox({
     if (is.null(rv$results)) {
-      return(valueBox("---", "Max PD Shock (%)", icon = icon("chart-bar"), color = "blue"))
+      return(valueBox("---", "Maximum PD Shock (%)", icon = icon("chart-bar"), color = "blue"))
     }
     val <- {
       col <- safe_col(rv$results, "pd_shock", "crispy_pd_shock")
@@ -1377,7 +1377,7 @@ server <- function(input, output, session) {
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
                        style = "cursor: help;"),
-             "Max PD Shock (%)",
+             "Maximum PD Shock (%)",
              icon = if (val > 5) icon("exclamation-triangle") else icon("arrow-up"),
              color = if (val > 5) "red" else "blue")
   })
@@ -1385,7 +1385,7 @@ server <- function(input, output, session) {
   # Portfolio-level PD Change value box
   output$vb_pd_change <- renderValueBox({
     if (is.null(rv$results)) {
-      return(valueBox("---", "PD Change, exposure-weighted (pp)", icon = icon("balance-scale"), color = "blue"))
+      return(valueBox("---", "PD Change, Exposure-Weighted (percentage points)", icon = icon("balance-scale"), color = "blue"))
     }
     val <- 0
     df <- rv$results
@@ -1399,7 +1399,7 @@ server <- function(input, output, session) {
     valueBox(tags$span(paste0(display_round(val), " pp"),
                        title = paste0("Full precision: ", smart_round(val), " pp"),
                        style = "cursor: help;"),
-             "PD Change, exposure-weighted (pp)",
+             "PD Change, Exposure-Weighted (percentage points)",
              icon = if (val > 0) icon("arrow-up") else icon("arrow-down"),
              color = if (val > 0.01) "red" else if (val < -0.01) "green" else "blue")
   })
@@ -1715,7 +1715,7 @@ server <- function(input, output, session) {
       geom_bar(stat = "identity") +
       coord_flip() +
       scale_fill_manual(values = c("TRUE" = TRISK_HEX_RED, "FALSE" = TRISK_HEX_GREEN), guide = "none") +
-      labs(title = "NPV Change by Sector", x = "", y = "Avg NPV Change (%)") +
+      labs(title = "NPV Change by Sector", x = "", y = "Average NPV Change (%)") +
       trisk_plot_theme()
 
     ggplotly(p)
@@ -1797,9 +1797,9 @@ server <- function(input, output, session) {
 
       # Row 1: Portfolio-level time-series line charts
       fluidRow(
-        box(width = 4, title = "Avg PD (Shock) Over Time", status = "danger", solidHeader = FALSE,
+        box(width = 4, title = "Average PD (Shock) Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_pd_line", height = "300px")),
-        box(width = 4, title = "Avg NPV Change Over Time", status = "danger", solidHeader = FALSE,
+        box(width = 4, title = "Average NPV Change Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_npv_line", height = "300px")),
         box(width = 4, title = "Total EL (Shock) Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_el_line", height = "300px"))
@@ -2117,7 +2117,7 @@ server <- function(input, output, session) {
                   background = styleColorBar(range(yoy_df$`Avg PD (%)`, na.rm = TRUE), BRAND_CORAL_LT),
                   backgroundSize = "98% 60%", backgroundRepeat = "no-repeat",
                   backgroundPosition = "center") %>%
-      formatStyle("Avg NPV Change (%)",
+      formatStyle("Average NPV Change (%)",
                   color = styleInterval(0, c(STATUS_RED, STATUS_GREEN)),
                   fontWeight = "bold")
   })
@@ -2202,8 +2202,7 @@ server <- function(input, output, session) {
 
     tagList(
       # Header
-      div(style = paste0("background: linear-gradient(135deg, #1A1A1A, #333); color: #fff; ",
-                         "padding: 16px 20px; border-radius: 10px; margin-bottom: 16px;"),
+      div(class = "section-header section-header--dark",
         fluidRow(
           column(8,
             h4(icon("layer-group"), paste0(" Scenario Comparison: ", n_scen, " scenarios"),
@@ -2213,7 +2212,7 @@ server <- function(input, output, session) {
           ),
           column(4, style = "text-align: right;",
             downloadButton("download_scenario_csv", "Export CSV",
-                          class = "btn btn-xs", style = "background: #666; border: none; color: #fff;")
+                          class = "btn btn-xs btn-export")
           )
         )
       ),
@@ -2255,8 +2254,7 @@ server <- function(input, output, session) {
       ),
 
       # ---- SCENARIO DISTRIBUTION (Probabilistic) ----
-      div(style = paste0("background: linear-gradient(135deg, #4A148C, #7B1FA2); color: #fff; ",
-                         "padding: 16px 20px; border-radius: 10px; margin: 20px 0 16px 0;"),
+      div(class = "section-header section-header--purple", style = "margin: 20px 0 16px 0;",
         h4(icon("chart-area"), " Scenario Distribution \u2014 Probabilistic Analysis",
            style = "margin: 0; font-weight: 700;"),
         tags$small("Treating selected scenarios as a distribution of plausible outcomes. ",
@@ -2642,7 +2640,7 @@ server <- function(input, output, session) {
 
     p %>% layout(
       xaxis = list(title = "Shock Year", dtick = 5),
-      yaxis = list(title = "Avg NPV Change (%)"),
+      yaxis = list(title = "Average NPV Change (%)"),
       legend = list(orientation = "h", y = -0.2, font = list(size = 9)),
       hovermode = "x unified"
     )
@@ -2807,8 +2805,7 @@ server <- function(input, output, session) {
 
     tagList(
       # Header
-      div(style = paste0("background: linear-gradient(135deg, #1A4D2E, #2D8B57); color: #fff; ",
-                         "padding: 16px 20px; border-radius: 10px; margin-bottom: 16px;"),
+      div(class = "section-header section-header--green",
         fluidRow(
           column(8,
             h4(icon("chart-bar"), " Risk Attribution Dashboard",
@@ -2820,7 +2817,7 @@ server <- function(input, output, session) {
           column(4, style = "text-align: right;",
             downloadButton("download_attribution_csv", "Export CSV",
                           class = "btn-sm",
-                          style = "background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;")
+                          class = "btn-export")
           )
         )
       ),
@@ -2828,7 +2825,7 @@ server <- function(input, output, session) {
       # Row 1: Waterfall chart (top-down PD decomposition)
       fluidRow(
         column(12,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("exchange-alt"), " PD Waterfall: Baseline \u2192 Sector Contributions \u2192 Shocked PD",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each bar shows how much each sector contributes to the total portfolio PD change (exposure-weighted).",
@@ -2841,7 +2838,7 @@ server <- function(input, output, session) {
       # Row 2: Company movers + Sector×Driver heatmap
       fluidRow(
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("sort-amount-down"), " Top Risk Movers (Companies)",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Companies with the largest marginal contribution to portfolio PD change.",
@@ -2850,7 +2847,7 @@ server <- function(input, output, session) {
           )
         ),
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("chart-pie"), " Marginal Contribution to Portfolio Risk",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each company's share of the total portfolio PD change (absolute).",
@@ -2863,7 +2860,7 @@ server <- function(input, output, session) {
       # Row 3: Sector×Technology heatmap + EL waterfall
       fluidRow(
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("th"), " Sector \u00D7 Technology Attribution",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("PD contribution by sector and technology combination.",
@@ -2872,7 +2869,7 @@ server <- function(input, output, session) {
           )
         ),
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("money-bill-wave"), " Expected Loss Attribution by Sector",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Change in expected loss (EL) decomposed by sector.",
@@ -2885,7 +2882,7 @@ server <- function(input, output, session) {
       # Row 4: Attribution summary table
       fluidRow(
         column(12,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("table"), " Detailed Attribution Table",
                style = "font-weight: 600; margin-top: 0;"),
             DTOutput("attr_detail_table")
@@ -3416,8 +3413,7 @@ server <- function(input, output, session) {
 
     tagList(
       # Header
-      div(style = paste0("background: linear-gradient(135deg, #2C3E50, #3498DB); color: #fff; ",
-                         "padding: 16px 20px; border-radius: 10px; margin-bottom: 16px;"),
+      div(class = "section-header section-header--blue",
         fluidRow(
           column(8,
             h4(icon("th-large"), " Concentration Risk Center",
@@ -3430,7 +3426,7 @@ server <- function(input, output, session) {
           column(4, style = "text-align: right;",
             downloadButton("download_concentration_csv", "Export CSV",
                           class = "btn-sm",
-                          style = "background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;")
+                          class = "btn-export")
           )
         )
       ),
@@ -3475,7 +3471,7 @@ server <- function(input, output, session) {
       # Row 2: Primary heatmap with controls + Top-10 donut
       fluidRow(
         column(8,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             fluidRow(
               column(6,
                 h5(icon("th"), " Concentration Heatmap",
@@ -3503,7 +3499,7 @@ server <- function(input, output, session) {
           )
         ),
         column(4,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("chart-pie"), " Top-10 Exposure Concentration",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Largest single-name exposures as % of portfolio.",
@@ -3516,7 +3512,7 @@ server <- function(input, output, session) {
       # Row 3: Treemap + Lorenz curve
       fluidRow(
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("project-diagram"), " Exposure Treemap (Sector \u2192 Company)",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Size = exposure weight, color = PD change magnitude.",
@@ -3525,7 +3521,7 @@ server <- function(input, output, session) {
           )
         ),
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("chart-area"), " Lorenz Curve (Exposure Concentration)",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small(paste0("Gini = ", round(cd$gini, 3),
@@ -3539,7 +3535,7 @@ server <- function(input, output, session) {
       # Row 4: Risk-return scatter + Geographic choropleth
       fluidRow(
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("bullseye"), " Risk-Return Scatter",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each bubble = one company. x = PD change, y = exposure weight, size = abs EL change.",
@@ -3548,7 +3544,7 @@ server <- function(input, output, session) {
           )
         ),
         column(6,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("globe"), " Geographic Concentration",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Country-level exposure and PD change.",
@@ -3561,7 +3557,7 @@ server <- function(input, output, session) {
       # Row 5: Dual-axis baseline vs shocked concentration
       fluidRow(
         column(12,
-          div(style = "background: white; border: 1px solid #DDD0D4; border-radius: 8px; padding: 16px; margin-bottom: 16px;",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("columns"), " Concentration Shift: Baseline vs Shocked",
                style = "font-weight: 600; margin-top: 0;"),
             tags$small("Side-by-side sector concentration before and after the transition shock.",
@@ -4515,7 +4511,7 @@ server <- function(input, output, session) {
         ),
         valueBox(
           value = paste0(smart_round(w_pd_adjustment * 100), " pp", adj_pct),
-          subtitle = "Wtd Avg PD Adjustment",
+          subtitle = "Weighted Average PD Adjustment",
           icon = icon("arrow-trend-up"),
           color = adj_color,
           width = 3

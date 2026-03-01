@@ -611,11 +611,11 @@ table.dataTable th { font-size: var(--fs-xs) !important; }
   color: var(--fg-on-dark);
   font-family: var(--font-heading);
   font-weight: var(--fw-semibold);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: var(--sp-4);
 }
+
+.section-header h4 { color: var(--fg-on-dark); }
+.section-header small { color: rgba(255,255,255,0.85); }
 
 .section-header--dark { background: linear-gradient(135deg, #1A1A1A, #333); }
 .section-header--purple { background: linear-gradient(135deg, #4A148C, #7B1FA2); }

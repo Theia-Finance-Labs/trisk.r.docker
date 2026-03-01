@@ -300,9 +300,16 @@ ui <- dashboardPage(
             status = "warning",
             solidHeader = TRUE,
             width = 6,
-            selectInput("baseline_scenario", "Baseline Scenario",
-                        choices = NULL, selected = NULL),
-            helpText("The baseline scenario represents business-as-usual (e.g. Current Policies)."),
+            selectizeInput("baseline_scenario", "Baseline Scenario(s)",
+                           choices = NULL, selected = NULL,
+                           multiple = TRUE,
+                           options = list(
+                             plugins = list("remove_button"),
+                             placeholder = "Select one or more baseline scenarios..."
+                           )),
+            helpText("Select the baseline(s) for your analysis. Each target scenario is matched to its ",
+                     "family baseline (e.g. GECO targets use GECO baseline, Mission Possible uses its own). ",
+                     "The first selected baseline is the default for unmatched targets."),
 
             h5("Target (Shock) Scenario(s)",
                style = "font-family: 'Space Grotesk', sans-serif; font-weight: 600; margin-bottom: 4px;"),

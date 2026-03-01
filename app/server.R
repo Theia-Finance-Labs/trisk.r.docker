@@ -429,13 +429,21 @@ server <- function(input, output, session) {
 
     geographies <- sort(unique(rv$scenarios$scenario_geography))
 
-    baseline_default <- if ("NGFS2023GCAM_CP" %in% baseline_scenarios) {
+    # Determine the primary default baseline (NGFS GCAM 2024 CP preferred)
+    ngfs_gcam_cp_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?CP$", baseline_scenarios, value = TRUE)
+    baseline_default <- if (length(ngfs_gcam_cp_candidates) > 0) {
+      # Pick the most recent year
+      ngfs_gcam_cp_candidates[length(ngfs_gcam_cp_candidates)]
+    } else if ("NGFS2023GCAM_CP" %in% baseline_scenarios) {
       "NGFS2023GCAM_CP"
     } else {
       baseline_scenarios[1]
     }
 
-    target_default <- if ("NGFS2023GCAM_NZ2050" %in% target_scenarios) {
+    ngfs_gcam_nz_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?NZ2050$", target_scenarios, value = TRUE)
+    target_default <- if (length(ngfs_gcam_nz_candidates) > 0) {
+      ngfs_gcam_nz_candidates[length(ngfs_gcam_nz_candidates)]
+    } else if ("NGFS2023GCAM_NZ2050" %in% target_scenarios) {
       "NGFS2023GCAM_NZ2050"
     } else {
       target_scenarios[1]
@@ -443,16 +451,21 @@ server <- function(input, output, session) {
 
     geo_default <- if ("Global" %in% geographies) "Global" else geographies[1]
 
-    # Build grouped, labeled choices for scenario dropdowns
-    baseline_choices <- build_scenario_choices(baseline_scenarios)
-    # For multi-select target, we need a flat named vector (selectize doesn't do optgroups well in multi mode)
+    # Build flat labeled choices for baseline multi-select (selectize doesn't do optgroups well in multi mode)
+    baseline_labels <- sapply(baseline_scenarios, function(s) {
+      paste0(scenario_label(s), "  [", s, "]")
+    }, USE.NAMES = FALSE)
+    baseline_choices_flat <- setNames(baseline_scenarios, baseline_labels)
+
+    # For multi-select target, we need a flat named vector
     target_labels <- sapply(target_scenarios, function(s) {
       paste0(scenario_label(s), "  [", s, "]")
     }, USE.NAMES = FALSE)
     target_choices_flat <- setNames(target_scenarios, target_labels)
 
-    updateSelectInput(session, "baseline_scenario",
-                      choices = baseline_choices, selected = baseline_default)
+    updateSelectizeInput(session, "baseline_scenario",
+                         choices = baseline_choices_flat, selected = baseline_default,
+                         server = FALSE)
     updateSelectizeInput(session, "target_scenarios",
                          choices = target_choices_flat, selected = target_default,
                          server = FALSE)
@@ -462,6 +475,8 @@ server <- function(input, output, session) {
     # Store target scenarios by category for quick-select buttons
     rv$target_scenarios_all <- target_scenarios
     rv$target_scenario_categories <- sapply(target_scenarios, scenario_category, USE.NAMES = TRUE)
+    # Store all available baseline scenario codes for baseline matching
+    rv$available_baselines <- baseline_scenarios
   })
 
   # ---- Quick-select buttons for target scenarios ----
@@ -569,10 +584,10 @@ server <- function(input, output, session) {
     warnings <- list()
 
     # No baseline selected
-    if (is.null(input$baseline_scenario) || !nzchar(input$baseline_scenario)) {
+    if (is.null(input$baseline_scenario) || length(input$baseline_scenario) == 0) {
       warnings <- c(warnings, list(
         div(class = "alert alert-danger", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-            icon("exclamation-triangle"), " No baseline scenario selected. Analysis requires a baseline.")
+            icon("exclamation-triangle"), " No baseline scenario selected. Analysis requires at least one baseline.")
       ))
     }
 
@@ -585,12 +600,34 @@ server <- function(input, output, session) {
     }
 
     # Baseline == one of the targets
-    if (!is.null(input$baseline_scenario) && nzchar(input$baseline_scenario) &&
-        !is.null(input$target_scenarios) && input$baseline_scenario %in% input$target_scenarios) {
+    if (!is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0 &&
+        !is.null(input$target_scenarios) && any(input$baseline_scenario %in% input$target_scenarios)) {
+      overlap <- intersect(input$baseline_scenario, input$target_scenarios)
       warnings <- c(warnings, list(
         div(class = "alert alert-warning", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-            icon("exclamation-circle"), " Baseline scenario is also selected as a target. Results will show zero change for that scenario.")
+            icon("exclamation-circle"), paste0(" Baseline also selected as target: ",
+                                              paste(overlap, collapse = ", "),
+                                              ". Results will show zero change for those scenarios."))
       ))
+    }
+
+    # Show baseline mapping info when targets are selected
+    if (!is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0 &&
+        !is.null(input$target_scenarios) && length(input$target_scenarios) > 0) {
+      bmap <- build_baseline_map(input$target_scenarios, input$baseline_scenario, input$baseline_scenario[1])
+      # Show mapping if multiple distinct baselines are used
+      unique_baselines <- unique(unname(bmap))
+      if (length(unique_baselines) > 1) {
+        mapping_lines <- sapply(names(bmap), function(tgt) {
+          tags$li(style = "font-size: 12px;",
+                  tags$code(scenario_label(tgt)), " \u2192 baseline: ", tags$code(scenario_label(bmap[tgt])))
+        }, USE.NAMES = FALSE)
+        warnings <- c(warnings, list(
+          div(class = "alert alert-info", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+              icon("info-circle"), " Multiple baselines active. Mapping:",
+              tags$ul(style = "margin: 4px 0 0 0; padding-left: 20px;", mapping_lines))
+        ))
+      }
     }
 
     # Performance warning: >5 targets
@@ -650,7 +687,7 @@ server <- function(input, output, session) {
       financial = !is.null(rv$financial) && is.null(validate_financial(rv$financial)),
       scenarios = !is.null(rv$scenarios),
       carbon = !is.null(rv$carbon),
-      baseline = !is.null(input$baseline_scenario) && nzchar(input$baseline_scenario),
+      baseline = !is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0,
       target = !is.null(input$target_scenarios) && length(input$target_scenarios) > 0
     )
 
@@ -695,7 +732,7 @@ server <- function(input, output, session) {
   output$config_summary <- renderText({
     target_labels <- paste(sapply(input$target_scenarios, scenario_label), collapse = ", ")
     paste(
-      "Baseline Scenario:", scenario_label(input$baseline_scenario),
+      "Baseline Scenario(s):", paste(sapply(input$baseline_scenario, scenario_label), collapse = ", "),
       "\nTarget Scenario(s):", target_labels,
       "\nGeography:", input$scenario_geography,
       "\nShock Year(s):", paste(input$shock_years, collapse = ", "),
@@ -768,7 +805,8 @@ server <- function(input, output, session) {
     # --- SAVE CURRENT RUN TO HISTORY (before overwriting) ---
     if (!is.null(rv$results)) {
       current_config <- list(
-        baseline_scenario = input$baseline_scenario,
+        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
+        baseline_scenarios = input$baseline_scenario,
         target_scenario = paste(input$target_scenarios, collapse = ", "),
         target_scenarios = input$target_scenarios,
         scenario_geography = input$scenario_geography,
@@ -824,8 +862,20 @@ server <- function(input, output, session) {
         target_scenarios_run <- input$target_scenarios
         n_scenarios <- length(target_scenarios_run)
 
+        # ---- BUILD BASELINE MAP ----
+        # The user may select multiple baselines; the first one is the default.
+        # Each target scenario is mapped to its family-matched baseline.
+        selected_baselines <- input$baseline_scenario
+        default_baseline <- selected_baselines[1]
+        baseline_map <- build_baseline_map(target_scenarios_run, selected_baselines, default_baseline)
+
         log_message("--- Parameters ---")
-        log_message(paste("  Baseline scenario:", input$baseline_scenario))
+        log_message(paste("  Selected baseline(s):", paste(selected_baselines, collapse = ", ")))
+        log_message(paste("  Default baseline:", default_baseline))
+        log_message(paste("  Baseline mapping:"))
+        for (tgt in names(baseline_map)) {
+          log_message(paste0("    ", tgt, " -> ", baseline_map[tgt]))
+        }
         log_message(paste("  Target scenario(s):", paste(target_scenarios_run, collapse = ", ")))
         log_message(paste("  Number of target scenarios:", n_scenarios))
         log_message(paste("  Geography:", input$scenario_geography))
@@ -843,9 +893,10 @@ server <- function(input, output, session) {
         assets_min_year <- min(assets_for_run$production_year)
         assets_max_year <- max(assets_for_run$production_year)
 
+        all_baselines_used <- unique(unname(baseline_map))
         selected_scenarios <- rv$scenarios %>%
           filter(
-            .data$scenario %in% c(input$baseline_scenario, target_scenarios_run),
+            .data$scenario %in% c(all_baselines_used, target_scenarios_run),
             .data$scenario_geography %in% input$scenario_geography
           )
         scen_min_year <- min(selected_scenarios$scenario_year)
@@ -899,6 +950,9 @@ server <- function(input, output, session) {
           scen_label <- scenario_label(target_scen)
           all_year_results <- list()
 
+          # Resolve baseline for this target scenario
+          matched_baseline <- baseline_map[target_scen]
+
           for (yr_i in seq_along(shock_years)) {
             yr <- shock_years[yr_i]
             run_count <- run_count + 1
@@ -906,8 +960,8 @@ server <- function(input, output, session) {
             incProgress(progress_val - (0.2 + 0.6 * ((run_count - 1) / total_runs)),
                         detail = paste0("Scenario ", scen_i, "/", n_scenarios,
                                        ", year ", yr, " (", run_count, "/", total_runs, ")..."))
-            log_message(paste0("--- Scenario: ", target_scen, " | Year: ", yr,
-                              " (", run_count, "/", total_runs, ") ---"))
+            log_message(paste0("--- Scenario: ", target_scen, " | Baseline: ", matched_baseline,
+                              " | Year: ", yr, " (", run_count, "/", total_runs, ") ---"))
 
             raw_results <- run_trisk_on_portfolio(
               assets_data = assets_for_run,
@@ -915,7 +969,7 @@ server <- function(input, output, session) {
               financial_data = rv$financial,
               carbon_data = rv$carbon,
               portfolio_data = rv$portfolio,
-              baseline_scenario = input$baseline_scenario,
+              baseline_scenario = matched_baseline,
               target_scenario = target_scen,
               scenario_geography = input$scenario_geography,
               shock_year = yr,
@@ -929,6 +983,7 @@ server <- function(input, output, session) {
             result_df <- compute_el_columns(result_df)
             result_df$shock_year <- yr
             result_df$target_scenario <- target_scen
+            result_df$baseline_scenario <- matched_baseline
             all_year_results[[as.character(yr)]] <- result_df
             log_message(paste0("  ", nrow(result_df), " rows"))
           }
@@ -975,7 +1030,7 @@ server <- function(input, output, session) {
         # NOTE: rv$internal_pd and rv$internal_el are intentionally preserved
 
         rv$run_id <- generate_run_id(list(
-          baseline = input$baseline_scenario,
+          baseline = paste(input$baseline_scenario, collapse = ","),
           targets = paste(input$target_scenarios, collapse = ","),
           geography = input$scenario_geography,
           shock_years = paste(input$shock_years, collapse = ","),
@@ -1194,7 +1249,7 @@ server <- function(input, output, session) {
 
     prev_cfg <- prev$config
     curr_cfg <- list(
-      baseline_scenario = input$baseline_scenario,
+      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
       target_scenario = paste(input$target_scenarios, collapse = ", "),
       scenario_geography = input$scenario_geography,
       shock_year = paste(input$shock_years, collapse = ", "),
@@ -5144,7 +5199,7 @@ server <- function(input, output, session) {
         run_id = rv$run_id,
         timestamp = as.character(Sys.time()),
         parameters = list(
-          baseline_scenario = input$baseline_scenario,
+          baseline_scenarios = paste(input$baseline_scenario, collapse = ", "),
           target_scenarios = paste(input$target_scenarios, collapse = ", "),
           scenario_geography = input$scenario_geography,
           shock_years = paste(input$shock_years, collapse = ", "),
@@ -5180,7 +5235,7 @@ server <- function(input, output, session) {
       paste(
         "Run ID:", rv$run_id,
         "\nTimestamp:", as.character(Sys.time()),
-        "\nBaseline:", input$baseline_scenario,
+        "\nBaseline(s):", paste(input$baseline_scenario, collapse = ", "),
         "\nTarget(s):", paste(input$target_scenarios, collapse = ", "),
         "\nGeography:", input$scenario_geography,
         "\nResults rows:", if (!is.null(rv$results)) as.character(nrow(rv$results)) else "N/A"

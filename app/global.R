@@ -501,6 +501,81 @@ build_scenario_choices <- function(scenario_codes) {
   ordered_groups
 }
 
+#' Extract the "family" of a scenario code for baseline matching.
+#' Returns a string like "NGFS2024GCAM", "GECO2023", "mission_possible_Steel", etc.
+#' Scenarios within the same family share a baseline.
+scenario_family <- function(code) {
+  # NGFS pattern: NGFS{year}[_]{model}[_]{pathway} -> family = "NGFS{year}{model}"
+  m <- regmatches(code, regexec("^(NGFS\\d{4})[_]?(GCAM|MESSAGE|REMIND)[_]?(.+)$", code))[[1]]
+  if (length(m) == 4) return(paste0(m[2], m[3]))
+
+  # GECO pattern: GECO{year}_{pathway} -> family = "GECO{year}"
+  m <- regmatches(code, regexec("^(GECO\\d{4})[_](.+)$", code))[[1]]
+  if (length(m) == 3) return(m[2])
+
+  # IPR pattern: IPR{year}[Automotive]_{pathway} -> family = "IPR{year}[Automotive]"
+  m <- regmatches(code, regexec("^(IPR\\d{4})(Automotive)?[_](.+)$", code))[[1]]
+  if (length(m) == 4) return(paste0(m[2], m[3]))
+
+  # mission_possible pattern: mission_possible_{sector}_{pathway} -> family = "mission_possible_{sector}"
+  m <- regmatches(code, regexec("^(mission_possible[_].+)[_](baseline|NZ)$", code))[[1]]
+  if (length(m) == 3) return(m[2])
+
+  # Fallback: treat code itself as its own family
+  code
+}
+
+#' Determine the correct baseline scenario for a given target scenario.
+#'
+#' Rules:
+#'   1. GECO targets use the GECO baseline from the same family (e.g. GECO2023_CP)
+#'   2. Mission Possible targets use the mission_possible_{sector}_baseline from the same family
+#'   3. All other targets (NGFS, IPR, custom) use the default baseline
+#'      (NGFS GCAM 2024 Current Policies, or fallback)
+#'
+#' @param target_code The target scenario code
+#' @param available_baselines Character vector of all available baseline scenario codes
+#' @param default_baseline The default baseline to use when no family match is found
+#' @return The baseline scenario code to use for this target
+baseline_for_scenario <- function(target_code, available_baselines, default_baseline) {
+  family <- scenario_family(target_code)
+
+  # For GECO targets, look for a GECO baseline in the same family
+  if (grepl("^GECO", target_code)) {
+    family_baselines <- available_baselines[sapply(available_baselines, function(b) {
+      scenario_family(b) == family
+    })]
+    # Prefer CP (Current Policies) within the family
+    cp_match <- grep("[_]CP$", family_baselines, value = TRUE)
+    if (length(cp_match) > 0) return(cp_match[1])
+    # Otherwise use any baseline from this family
+    if (length(family_baselines) > 0) return(family_baselines[1])
+  }
+
+  # For Mission Possible targets, look for the _baseline variant
+  if (grepl("^mission_possible", target_code)) {
+    mp_baseline <- paste0(family, "_baseline")
+    if (mp_baseline %in% available_baselines) return(mp_baseline)
+    # Also try matching by family prefix
+    family_baselines <- available_baselines[sapply(available_baselines, function(b) {
+      scenario_family(b) == family
+    })]
+    if (length(family_baselines) > 0) return(family_baselines[1])
+  }
+
+  # Default: use NGFS GCAM 2024 CP (or whatever the user selected as default)
+  default_baseline
+}
+
+#' Build a mapping of target scenario -> baseline scenario for all selected targets.
+#' Returns a named character vector: names = target codes, values = baseline codes.
+build_baseline_map <- function(target_scenarios, available_baselines, default_baseline) {
+  mapping <- sapply(target_scenarios, function(tgt) {
+    baseline_for_scenario(tgt, available_baselines, default_baseline)
+  }, USE.NAMES = TRUE)
+  mapping
+}
+
 #' Calculate expected loss: EL = -EAD * PD (follows trisk.analysis convention)
 #' EAD = exposure_value_usd * loss_given_default
 calculate_expected_loss <- function(exposure, pd, lgd) {

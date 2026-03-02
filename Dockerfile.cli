@@ -6,7 +6,8 @@
 # ============================================================
 # ARGs — keep in sync with main Dockerfile
 # ============================================================
-ARG ROCKER_DIGEST=sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
+# Base image — override for bank artifactory (e.g. artifactory.bank.com/approved/r-ver:4.4.1)
+ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
 ARG PAK_VERSION=0.8.0
 ARG CRAN_SNAPSHOT=2025-02-01
 ARG TRISK_MODEL_SHA=b716c9d3573bee2a730973995b9da6fc9b9703c5
@@ -16,7 +17,7 @@ ARG SCENARIOS_SHA256=b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29
 # ============================================================
 # Stage 1: builder
 # ============================================================
-FROM rocker/r-ver:4.4.1@${ROCKER_DIGEST} AS builder
+FROM ${BASE_IMAGE} AS builder
 
 ARG PAK_VERSION
 ARG CRAN_SNAPSHOT
@@ -52,7 +53,7 @@ RUN R -e "\
 # ============================================================
 # Stage 2: runtime
 # ============================================================
-FROM rocker/r-ver:4.4.1@${ROCKER_DIGEST} AS runtime
+FROM ${BASE_IMAGE} AS runtime
 
 ARG SCENARIOS_SHA256
 
@@ -71,11 +72,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy compiled R library tree from builder
 COPY --from=builder /usr/local/lib/R /usr/local/lib/R
 
-# Scenario data with integrity check
-RUN mkdir -p /opt/trisk/data/scenarios && \
-    curl -fsSL -o /opt/trisk/data/scenarios/scenarios.csv \
-      "https://storage.googleapis.com/crispy-public-data/trisk_inputs/scenarios.csv" && \
-    echo "${SCENARIOS_SHA256}  /opt/trisk/data/scenarios/scenarios.csv" | sha256sum -c -
+# Scenario data vendored in build context (no runtime network fetch)
+COPY data/scenarios/scenarios.csv /opt/trisk/data/scenarios/scenarios.csv
+RUN echo "${SCENARIOS_SHA256}  /opt/trisk/data/scenarios/scenarios.csv" | sha256sum -c -
 
 # Copy CLI script
 COPY scripts/run_analysis.R /opt/trisk/run_analysis.R

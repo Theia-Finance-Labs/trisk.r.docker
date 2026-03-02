@@ -15,7 +15,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - BASE_IMAGE=${BASE_IMAGE:-}
+        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
     image: theia-finance-labs/trisk:latest
     container_name: trisk-app
     # Bind to localhost only — prevents exposure on all interfaces
@@ -68,7 +68,7 @@ services:
       context: .
       dockerfile: Dockerfile.cli
       args:
-        - BASE_IMAGE=${BASE_IMAGE:-}
+        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
     image: theia-finance-labs/trisk-cli:latest
     container_name: trisk-cli
     volumes:

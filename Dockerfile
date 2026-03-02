@@ -3,9 +3,10 @@
 #
 # Supply-chain policy:
 #   - Base image pinned by sha256 digest (override BASE_IMAGE for bank artifactory)
+#   - APT uses default signature verification (fail-closed, no insecure flags)
 #   - CRAN packages locked to a Posit PPM date snapshot
 #   - GitHub packages pinned to exact commit SHAs
-#   - Scenario data verified against in-repo SHA256 checksum
+#   - Scenario data vendored in build context, verified against SHA256 checksum
 #   - Google Fonts vendored locally (no runtime network required)
 #
 # Runtime policy:
@@ -39,11 +40,9 @@ ARG TRISK_ANALYSIS_SHA
 # Use __linux__/jammy path for pre-compiled binaries (avoids compiling from source)
 ENV CRAN_REPO=https://packagemanager.posit.co/cran/__linux__/jammy/${CRAN_SNAPSHOT}
 
-# Refresh Ubuntu GPG keys — digest-pinned base image may predate key rotation
-RUN rm -rf /var/lib/apt/lists/* && \
-    apt-get -o Acquire::AllowInsecureRepositories=true update && \
-    apt-get -y --allow-unauthenticated install ca-certificates ubuntu-keyring && \
-    rm -rf /var/lib/apt/lists/*
+# APT runs with default signature verification (fail-closed).
+# If apt-get update fails due to expired keys in the digest-pinned base image,
+# update the BASE_IMAGE digest to a newer build of rocker/r-ver.
 
 # System build dependencies (dev headers, compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -99,12 +98,6 @@ LABEL description="TRISK Climate Transition Risk Stress Testing Tool"
 LABEL version="1.0.0"
 LABEL org.opencontainers.image.source="https://github.com/Theia-Finance-Labs/trisk.docker"
 
-# Refresh Ubuntu GPG keys (same as builder — both stages use the digest-pinned base)
-RUN rm -rf /var/lib/apt/lists/* && \
-    apt-get -o Acquire::AllowInsecureRepositories=true update && \
-    apt-get -y --allow-unauthenticated install ca-certificates ubuntu-keyring && \
-    rm -rf /var/lib/apt/lists/*
-
 # Runtime-only shared libraries (no -dev, no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4 \
@@ -125,12 +118,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy compiled R library tree from builder
 COPY --from=builder /usr/local/lib/R /usr/local/lib/R
 
-# Pre-download scenario data with integrity check
-# Build FAILS on checksum mismatch — no silent fallback for secure builds
-RUN mkdir -p /opt/trisk/data/scenarios && \
-    curl -fsSL -o /opt/trisk/data/scenarios/scenarios.csv \
-      "https://storage.googleapis.com/crispy-public-data/trisk_inputs/scenarios.csv" && \
-    echo "${SCENARIOS_SHA256}  /opt/trisk/data/scenarios/scenarios.csv" | sha256sum -c -
+# Scenario data vendored in build context (no runtime network fetch).
+# Run `bash scripts/download_scenarios.sh` before first build, or supply your own.
+# Build FAILS on checksum mismatch — no silent fallback for secure builds.
+COPY data/scenarios/scenarios.csv /opt/trisk/data/scenarios/scenarios.csv
+RUN echo "${SCENARIOS_SHA256}  /opt/trisk/data/scenarios/scenarios.csv" | sha256sum -c -
 
 # Copy Shiny application (path no longer implies shiny-server)
 RUN mkdir -p /opt/trisk/app
@@ -166,7 +158,7 @@ USER trisk
 
 EXPOSE 3838
 
-# Healthcheck: hit __ping__ which Shiny serves for every app; verify non-empty body
+# Healthcheck: verify Shiny returns HTTP 200 on the root URL
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -fsS http://localhost:3838/ -o /dev/null -w '%{http_code}' | grep -q 200 || exit 1
 

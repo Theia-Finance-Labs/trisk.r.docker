@@ -10,7 +10,7 @@ ui <- dashboardPage(
   # ============================================
   dashboardHeader(
     title = tags$span(
-      tags$span("TRISK Docker", class = "header-title"),
+      tags$span("TRISK_Desktop_2.1", class = "header-title"),
       tags$br(),
       tags$span("Climate Transition Risk Stress Testing", class = "header-subtitle")
     ),
@@ -50,14 +50,15 @@ ui <- dashboardPage(
     # Fonts are bundled locally (app/www/fonts/) for offline/air-gapped deployment.
     # No runtime network dependency on fonts.googleapis.com.
     tags$head(
-      # Content Security Policy — enforced via meta tag (httpuv has no response-header API)
-      # unsafe-eval: required by Shiny internals (data binding eval)
-      # unsafe-inline for style-src: required by shinydashboard/DT/plotly framework styles
+      # Content Security Policy — compatibility mode for Shiny/htmlwidgets ecosystem.
+      # unsafe-eval + unsafe-inline: required by shinyjs, DT, Plotly (inline <script> blocks).
+      # This is NOT a hardened CSP — it trades XSS blast-radius reduction for framework
+      # compatibility. To truly harden: externalize all inline scripts (requires upstream changes).
       # ws/wss: Shiny WebSocket; blob: Plotly chart export; data: inline images
       tags$meta(`http-equiv` = "Content-Security-Policy",
         content = paste0(
           "default-src 'self'; ",
-          "script-src 'self' 'unsafe-eval'; ",
+          "script-src 'self' 'unsafe-eval' 'unsafe-inline'; ",
           "style-src 'self' 'unsafe-inline'; ",
           "img-src 'self' data: blob:; ",
           "font-src 'self'; ",
@@ -80,7 +81,7 @@ ui <- dashboardPage(
             status = "danger",
             solidHeader = TRUE,
             width = 12,
-            h4("TRISK Docker: desktop tool for climate transition risk stress testing analysis",
+            h4("TRISK Desktop: desktop tool for climate transition risk stress testing analysis",
                class = "font-heading"),
             p("TRISK helps financial institutions assess the impact of climate transition
               scenarios on their loan portfolios. It uses forward-looking scenario analysis
@@ -251,7 +252,7 @@ ui <- dashboardPage(
                 ),
                 fileInput("scenarios_file", "Upload Scenarios CSV",
                           accept = c(".csv", ".CSV")),
-                helpText("Download scenarios from: storage.googleapis.com/crispy-public-data/trisk_inputs/scenarios.csv")
+                helpText("Scenarios are pre-loaded at build time. Upload here only to override with custom data.")
               )
             }
           )

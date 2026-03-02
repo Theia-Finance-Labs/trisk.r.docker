@@ -726,12 +726,13 @@ hr { border-color: var(--border-light); }
    (replacing compound inline styles in ui.R)
    ============================================ */
 
-/* Header title: "TRISK Docker" in the dark header bar */
+/* Header title: "TRISK_Desktop_2.1" in the dark header bar */
 .header-title {
   vertical-align: middle;
   font-family: var(--font-heading);
   font-weight: var(--fw-semibold);
   font-size: var(--fs-base);
+  color: var(--fg-on-dark) !important;
 }
 
 /* Header subtitle: "Climate Transition Risk..." line under title */
@@ -741,6 +742,12 @@ hr { border-color: var(--border-light); }
   font-weight: var(--fw-normal);
   font-size: var(--fs-xs);
   opacity: 0.75;
+  color: var(--fg-on-dark) !important;
+}
+
+/* Ensure all logo children inherit white text */
+.skin-red .main-header .logo span {
+  color: var(--fg-on-dark) !important;
 }
 
 /* Sidebar logo at bottom of sidebar */

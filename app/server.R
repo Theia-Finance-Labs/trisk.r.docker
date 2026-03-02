@@ -2870,6 +2870,7 @@ server <- function(input, output, session) {
 
     list(
       company = company_df,
+      company_detail = row_df,   # per-row (technology-level) for detailed table
       sector = sector_df,
       tech = tech_df,
       portfolio_pd_baseline = portfolio_pd_baseline,
@@ -3261,9 +3262,10 @@ server <- function(input, output, session) {
     ad <- attribution_data()
     req(ad)
 
-    company_df <- ad$company
+    # Use technology-level detail rows for the full breakdown table
+    detail_df <- ad$company_detail
 
-    display_df <- company_df %>%
+    display_df <- detail_df %>%
       arrange(desc(abs(pd_contribution))) %>%
       transmute(
         Company = company_label,
@@ -3280,10 +3282,10 @@ server <- function(input, output, session) {
       )
 
     if (ad$has_el) {
-      display_df$`EL Change ($)` <- round(company_df$el_change, 0)
+      display_df$`EL Change ($)` <- round(detail_df$el_change, 0)
     }
     if (ad$has_npv) {
-      display_df$`NPV Change (%)` <- round(company_df$npv_change_pct, 2)
+      display_df$`NPV Change (%)` <- round(detail_df$npv_change_pct, 2)
     }
 
     datatable(display_df, rownames = FALSE,
@@ -3323,7 +3325,7 @@ server <- function(input, output, session) {
     content = function(file) {
       ad <- attribution_data()
       if (!is.null(ad)) {
-        export_df <- ad$company %>%
+        export_df <- ad$company_detail %>%
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))

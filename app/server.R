@@ -34,6 +34,20 @@ server <- function(input, output, session) {
   )
 
   # ============================================
+  # Session cleanup (audit-friendly temp file housekeeping)
+  # ============================================
+  session$onSessionEnded(function() {
+    # Log session teardown for bank audit trail
+    message(sprintf("[%s] Session ended — cleaning up temp files", format(Sys.time(), "%H:%M:%S")))
+    # Remove any temp files this session may have created in TMPDIR
+    session_tmp <- file.path(tempdir(), paste0("trisk_", session$token))
+    if (dir.exists(session_tmp)) {
+      unlink(session_tmp, recursive = TRUE)
+      message(sprintf("  Removed session temp dir: %s", session_tmp))
+    }
+  })
+
+  # ============================================
   # Logging helper
   # ============================================
   log_message <- function(msg) {

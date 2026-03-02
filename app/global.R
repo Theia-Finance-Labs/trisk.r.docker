@@ -69,6 +69,11 @@ trisk_plot_theme <- function() {
 # Cap upload size to 50 MB (Shiny default is 5 MB)
 options(shiny.maxRequestSize = 50 * 1024^2)
 
+# Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
+# When TRUE, Shiny replaces raw R stack traces / e$message with a generic
+# "An error has occurred" in the browser. Server-side logs still contain the full trace.
+options(shiny.sanitize.errors = TRUE)
+
 SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
 INPUT_DIR <- "/data/input"
 OUTPUT_DIR <- "/data/output"

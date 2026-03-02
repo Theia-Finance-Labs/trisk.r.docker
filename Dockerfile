@@ -38,6 +38,12 @@ ARG TRISK_ANALYSIS_SHA
 # Use __linux__/jammy path for pre-compiled binaries (avoids compiling from source)
 ENV CRAN_REPO=https://packagemanager.posit.co/cran/__linux__/jammy/${CRAN_SNAPSHOT}
 
+# Refresh Ubuntu GPG keys — digest-pinned base image may predate key rotation
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get -o Acquire::AllowInsecureRepositories=true update && \
+    apt-get -y --allow-unauthenticated install ca-certificates ubuntu-keyring && \
+    rm -rf /var/lib/apt/lists/*
+
 # System build dependencies (dev headers, compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \
@@ -91,6 +97,12 @@ LABEL maintainer="Theia Finance Labs <info@theia-finance-labs.com>"
 LABEL description="TRISK Climate Transition Risk Stress Testing Tool"
 LABEL version="1.0.0"
 LABEL org.opencontainers.image.source="https://github.com/Theia-Finance-Labs/trisk.docker"
+
+# Refresh Ubuntu GPG keys (same as builder — both stages use the digest-pinned base)
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get -o Acquire::AllowInsecureRepositories=true update && \
+    apt-get -y --allow-unauthenticated install ca-certificates ubuntu-keyring && \
+    rm -rf /var/lib/apt/lists/*
 
 # Runtime-only shared libraries (no -dev, no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \

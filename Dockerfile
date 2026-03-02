@@ -2,7 +2,7 @@
 # Docker container for local deployment at financial institutions
 #
 # Supply-chain policy:
-#   - Base image pinned by sha256 digest
+#   - Base image pinned by sha256 digest (override BASE_IMAGE for bank artifactory)
 #   - CRAN packages locked to a Posit PPM date snapshot
 #   - GitHub packages pinned to exact commit SHAs
 #   - Scenario data verified against in-repo SHA256 checksum
@@ -16,7 +16,8 @@
 # ============================================================
 # ARGs — single place to bump versions
 # ============================================================
-ARG ROCKER_DIGEST=sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
+# Base image — override for bank artifactory (e.g. artifactory.bank.com/approved/r-ver:4.4.1)
+ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
 ARG PAK_VERSION=0.8.0
 # Posit Public Package Manager snapshot (YYYY-MM-DD) — ensures CRAN is immutable
 ARG CRAN_SNAPSHOT=2025-02-01
@@ -27,7 +28,7 @@ ARG SCENARIOS_SHA256=b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29
 # ============================================================
 # Stage 1: builder — compile R packages (dev libs + compilers)
 # ============================================================
-FROM rocker/r-ver:4.4.1@${ROCKER_DIGEST} AS builder
+FROM ${BASE_IMAGE} AS builder
 
 ARG PAK_VERSION
 ARG CRAN_SNAPSHOT
@@ -89,7 +90,7 @@ RUN R -e "\
 # ============================================================
 # Stage 2: runtime — lean image, no compilers / dev headers
 # ============================================================
-FROM rocker/r-ver:4.4.1@${ROCKER_DIGEST} AS runtime
+FROM ${BASE_IMAGE} AS runtime
 
 ARG SCENARIOS_SHA256
 

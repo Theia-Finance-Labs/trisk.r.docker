@@ -26,7 +26,29 @@ docker compose up --build
 
 Everything else (R, packages, scenarios, fonts, security policy) is handled by the Dockerfile. No further setup needed.
 
-> If the analyst's IT policy blocks Docker, use Option B below.
+**Pre-built image (alternative to building locally):**
+
+CI pushes images to `ghcr.io` on every release. If your network allows it:
+```bash
+docker pull ghcr.io/theia-finance-labs/trisk.r.docker:latest
+```
+
+### Bank Artifactory Deployment
+
+If your institution uses an internal registry (JFrog Artifactory, Sonatype Nexus) and blocks public registries, override the base image:
+
+```bash
+# Option 1: build arg
+docker compose build --build-arg BASE_IMAGE=artifactory.bank.com/approved/r-ver:4.4.1
+
+# Option 2: .env file (not committed to git)
+echo "BASE_IMAGE=artifactory.bank.com/approved/r-ver:4.4.1" > .env
+docker compose up --build
+```
+
+The bank's infosec team can also pull the pre-built image from `ghcr.io`, scan it for CVEs, and host it on the internal artifactory. Analysts then pull from there instead of building.
+
+> If the analyst's IT policy blocks Docker entirely, use Option B below.
 
 ---
 

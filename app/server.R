@@ -888,6 +888,22 @@ server <- function(input, output, session) {
 
         incProgress(0.2, detail = "Preparing data...")
 
+        # ---- ENRICH PORTFOLIO WITH TECHNOLOGY ----
+        # trisk.analysis::join_trisk_outputs_to_portfolio() joins results back
+        # to the portfolio by (company_id, country_iso2, sector, technology, term).
+        # User-uploaded portfolios are often company-level (no technology column).
+        # Expand each company to one row per technology from the assets data.
+        if (!"technology" %in% names(rv$portfolio)) {
+          company_techs <- rv$assets %>%
+            dplyr::distinct(.data$company_id, .data$sector, .data$technology)
+          portfolio_enriched <- rv$portfolio %>%
+            dplyr::select(-any_of("sector")) %>%        # drop portfolio-level sector to avoid conflict
+            dplyr::inner_join(company_techs, by = "company_id")
+          log_message(paste("  Portfolio enriched: added technology column from assets data.",
+                           nrow(rv$portfolio), "->", nrow(portfolio_enriched), "rows"))
+          rv$portfolio <- portfolio_enriched
+        }
+
         # Validate year range compatibility between assets and scenarios
         assets_for_run <- rv$assets
         assets_min_year <- min(assets_for_run$production_year)
@@ -2172,7 +2188,7 @@ server <- function(input, output, session) {
                   background = styleColorBar(range(yoy_df$`Avg PD (%)`, na.rm = TRUE), BRAND_CORAL_LT),
                   backgroundSize = "98% 60%", backgroundRepeat = "no-repeat",
                   backgroundPosition = "center") %>%
-      formatStyle("Average NPV Change (%)",
+      formatStyle("Avg NPV Change (%)",
                   color = styleInterval(0, c(STATUS_RED, STATUS_GREEN)),
                   fontWeight = "bold")
   })
@@ -2494,9 +2510,21 @@ server <- function(input, output, session) {
     req(scd)
 
     latest_yr <- max(scd$shock_year)
+
+    # After portfolio enrichment, companies may have multiple rows (one per technology).
+    # Aggregate to company-level using exposure-weighted mean PD.
+    has_exposure <- "exposure_value_usd" %in% names(scd)
     heatmap_df <- scd %>%
       filter(shock_year == latest_yr) %>%
-      select(company_name, scenario_label, pd_shock) %>%
+      group_by(company_name, scenario_label) %>%
+      summarise(
+        pd_shock = if (has_exposure) {
+          weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE)
+        } else {
+          mean(pd_shock, na.rm = TRUE)
+        },
+        .groups = "drop"
+      ) %>%
       mutate(pd_pct = round(pd_shock * 100, 3))
 
     # Pivot to matrix
@@ -2765,29 +2793,39 @@ server <- function(input, output, session) {
     total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
 
     # --- Company-level attribution ---
+    # After portfolio enrichment, results may have multiple rows per company
+    # (one per technology). Aggregate to true company-level for attribution.
     company_label_col <- if (has_company && "company_name" %in% names(df)) "company_name" else "company_id"
-    company_df <- df %>%
+    row_df <- df %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
-        pd_contribution = pd_change * weight,  # weighted contribution to portfolio PD change
-        company_label = .data[[company_label_col]]
+        pd_contribution = pd_change * weight,
+        company_label = .data[[company_label_col]],
+        el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
+        npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
       )
+
+    company_df <- row_df %>%
+      group_by(company_label, sector) %>%
+      summarise(
+        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
+        pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
+        pd_shock    = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+        pd_change   = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+        weight      = sum(weight, na.rm = TRUE),
+        pd_contribution = sum(pd_contribution, na.rm = TRUE),
+        el_change   = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
+        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+        .groups = "drop"
+      )
+
     # Guard NA labels
     company_df$company_label <- ifelse(
       is.na(company_df$company_label),
       paste0("Company_", seq_len(nrow(company_df))),
       as.character(company_df$company_label)
     )
-
-    if (has_el) {
-      company_df <- company_df %>%
-        mutate(el_change = expected_loss_shock - expected_loss_baseline)
-    }
-    if (has_npv) {
-      company_df <- company_df %>%
-        mutate(npv_change_pct = crispy_perc_value_change * 100)
-    }
 
     # --- Sector-level attribution ---
     sector_df <- company_df %>%
@@ -2871,8 +2909,7 @@ server <- function(input, output, session) {
           ),
           column(4, style = "text-align: right;",
             downloadButton("download_attribution_csv", "Export CSV",
-                          class = "btn-sm",
-                          class = "btn-export")
+                          class = "btn-sm btn-export")
           )
         )
       ),
@@ -3480,8 +3517,7 @@ server <- function(input, output, session) {
           ),
           column(4, style = "text-align: right;",
             downloadButton("download_concentration_csv", "Export CSV",
-                          class = "btn-sm",
-                          class = "btn-export")
+                          class = "btn-sm btn-export")
           )
         )
       ),

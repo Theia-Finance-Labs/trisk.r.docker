@@ -66,6 +66,15 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
+# Cap upload size to 500 MB (Shiny default is 5 MB).
+# Bank portfolios with full asset-level production trajectories can reach 200-300 MB.
+options(shiny.maxRequestSize = 500 * 1024^2)
+
+# Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
+# When TRUE, Shiny replaces raw R stack traces / e$message with a generic
+# "An error has occurred" in the browser. Server-side logs still contain the full trace.
+options(shiny.sanitize.errors = TRUE)
+
 SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
 INPUT_DIR <- "/data/input"
 OUTPUT_DIR <- "/data/output"
@@ -617,6 +626,52 @@ compute_el_columns <- function(df) {
   }
   return(df)
 }
+
+# ============================================
+# Export column allowlist
+# ============================================
+# Only these columns are included in CSV/JSON/Excel downloads.
+# Keeps internal columns (raw upload fields, intermediate calcs) out of exports.
+# Add columns here to make them available in exports.
+EXPORT_COLUMNS <- c(
+  # Identifiers
+  "company_id", "company_name", "company_label",
+  "sector", "technology", "country_iso2",
+  # Scenario / run context
+  "target_scenario", "baseline_scenario", "shock_year",
+  "scenario_geography",
+  # Exposure
+  "exposure_value_usd", "loss_given_default", "exposure_at_default", "weight",
+  # PD metrics
+  "pd_baseline", "pd_shock",
+  # NPV metrics
+  "net_present_value_baseline", "net_present_value_shock",
+  "net_present_value_difference", "crispy_perc_value_change", "crispy_value_loss",
+  # EL metrics
+  "expected_loss_baseline", "expected_loss_shock", "expected_loss_difference",
+  # Attribution
+  "pd_change", "pd_contribution", "el_change", "npv_change_pct"
+)
+
+#' Filter a data.frame to only the allowed export columns.
+#' Columns not in the allowlist are silently dropped.
+sanitize_export <- function(df) {
+  keep <- intersect(EXPORT_COLUMNS, names(df))
+  df[, keep, drop = FALSE]
+}
+
+# Auto-source all server modules (alphabetical order for determinism)
+# Placed in global.R so modules are available regardless of entry point (app.R vs server.R+ui.R)
+local({
+  module_dir <- file.path(getwd(), "modules")
+  if (dir.exists(module_dir)) {
+    module_files <- sort(list.files(module_dir, pattern = "^mod_.*\\.R$", full.names = TRUE))
+    for (f in module_files) {
+      source(f, local = FALSE)
+    }
+    message(sprintf("Loaded %d server modules from %s", length(module_files), module_dir))
+  }
+})
 
 message("\n========================================")
 message("TRISK Shiny App Initialized (1in1000)")

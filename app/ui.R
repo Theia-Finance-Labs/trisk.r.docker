@@ -10,9 +10,9 @@ ui <- dashboardPage(
   # ============================================
   dashboardHeader(
     title = tags$span(
-      tags$span("TRISK Docker", style = "vertical-align: middle; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14px;"),
+      tags$span("TRISK_Desktop_2.1", class = "header-title"),
       tags$br(),
-      tags$span("Climate Transition Risk Stress Testing", style = "vertical-align: middle; font-family: 'Inter', sans-serif; font-weight: 400; font-size: 11px; opacity: 0.75;")
+      tags$span("Climate Transition Risk Stress Testing", class = "header-subtitle")
     ),
     titleWidth = 320
   ),
@@ -35,8 +35,8 @@ ui <- dashboardPage(
       menuItem("Documentation", tabName = "docs", icon = icon("book")),
       menuItem("About", tabName = "about", icon = icon("info-circle"))
     ),
-    tags$div(style = "text-align: center; padding: 15px 10px 20px 10px; position: absolute; bottom: 0; width: 100%;",
-      tags$img(src = "logo-black.png", height = "160px", style = "opacity: 0.6;")
+    tags$div(class = "sidebar-logo-wrap",
+      tags$img(src = "logo-black.png", height = "160px", class = "opacity-60")
     )
   ),
 
@@ -46,21 +46,28 @@ ui <- dashboardPage(
   dashboardBody(
     useShinyjs(),
 
-    # ---- Google Fonts + Custom CSS using 1in1000 palette ----
+    # ---- Vendored Fonts + Custom CSS using 1in1000 palette ----
+    # Fonts are bundled locally (app/www/fonts/) for offline/air-gapped deployment.
+    # No runtime network dependency on fonts.googleapis.com.
     tags$head(
-      tags$link(rel = "stylesheet",
-        href = "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"),
+      # Content Security Policy — compatibility mode for Shiny/htmlwidgets ecosystem.
+      # unsafe-eval + unsafe-inline: required by shinyjs, DT, Plotly (inline <script> blocks).
+      # This is NOT a hardened CSP — it trades XSS blast-radius reduction for framework
+      # compatibility. To truly harden: externalize all inline scripts (requires upstream changes).
+      # ws/wss: Shiny WebSocket; blob: Plotly chart export; data: inline images
+      tags$meta(`http-equiv` = "Content-Security-Policy",
+        content = paste0(
+          "default-src 'self'; ",
+          "script-src 'self' 'unsafe-eval' 'unsafe-inline'; ",
+          "style-src 'self' 'unsafe-inline'; ",
+          "img-src 'self' data: blob:; ",
+          "font-src 'self'; ",
+          "connect-src 'self' ws: wss:;"
+        )
+      ),
+      tags$link(rel = "stylesheet", href = "fonts.css"),
       tags$link(rel = "stylesheet", href = "trisk.css"),
-
-      # JavaScript for collapsible guidance boxes
-      tags$script(HTML("
-        $(document).on('click', '.guidance-toggle-btn', function() {
-          var wrapper = $(this).closest('.guidance-wrapper');
-          var content = wrapper.find('.guidance-content');
-          $(this).toggleClass('open');
-          content.toggleClass('open');
-        });
-      "))
+      tags$script(src = "trisk.js")
     ),
 
     tabItems(
@@ -74,8 +81,8 @@ ui <- dashboardPage(
             status = "danger",
             solidHeader = TRUE,
             width = 12,
-            h4("TRISK Docker: desktop tool for climate transition risk stress testing analysis",
-               style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("TRISK Desktop: desktop tool for climate transition risk stress testing analysis",
+               class = "font-heading"),
             p("TRISK helps financial institutions assess the impact of climate transition
               scenarios on their loan portfolios. It uses forward-looking scenario analysis
               to estimate changes in company-level Net Present Value (NPV) and Probability
@@ -179,7 +186,7 @@ ui <- dashboardPage(
             uiOutput("portfolio_status"),
             uiOutput("portfolio_audit"),
             downloadLink("download_portfolio_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default", style = "margin-bottom: 8px;"),
+                         class = "btn btn-xs btn-default mb-8"),
             div(class = "data-preview", DTOutput("portfolio_preview"))
           ),
 
@@ -196,7 +203,7 @@ ui <- dashboardPage(
             uiOutput("assets_status"),
             uiOutput("assets_audit"),
             downloadLink("download_assets_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default", style = "margin-bottom: 8px;"),
+                         class = "btn btn-xs btn-default mb-8"),
             div(class = "data-preview", DTOutput("assets_preview"))
           )
         ),
@@ -215,7 +222,7 @@ ui <- dashboardPage(
             uiOutput("financial_status"),
             uiOutput("financial_audit"),
             downloadLink("download_financial_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default", style = "margin-bottom: 8px;"),
+                         class = "btn btn-xs btn-default mb-8"),
             div(class = "data-preview", DTOutput("financial_preview"))
           ),
 
@@ -245,7 +252,7 @@ ui <- dashboardPage(
                 ),
                 fileInput("scenarios_file", "Upload Scenarios CSV",
                           accept = c(".csv", ".CSV")),
-                helpText("Download scenarios from: storage.googleapis.com/crispy-public-data/trisk_inputs/scenarios.csv")
+                helpText("Scenarios are pre-loaded at build time. Upload here only to override with custom data.")
               )
             }
           )
@@ -312,7 +319,7 @@ ui <- dashboardPage(
                      "The first selected baseline is the default for unmatched targets."),
 
             h5("Target (Shock) Scenario(s)",
-               style = "font-family: 'Space Grotesk', sans-serif; font-weight: 600; margin-bottom: 4px;"),
+               class = "font-heading fw-600 mb-4"),
             selectizeInput("target_scenarios", NULL,
                            choices = NULL, selected = NULL,
                            multiple = TRUE,
@@ -323,18 +330,18 @@ ui <- dashboardPage(
             helpText("Select one or more target scenarios. Multiple scenarios enable the ",
                      tags$b("Scenario Comparison"), " tab with distribution analysis."),
             # Quick-select buttons by NGFS category
-            div(style = "margin-bottom: 12px;",
-              tags$small(tags$b("Quick select:"), style = "margin-right: 6px;"),
+            div(class = "mb-12",
+              tags$small(tags$b("Quick select:"), class = "mr-6"),
               actionButton("sel_orderly", HTML("&#x1F7E2; Orderly"),
-                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
+                           class = "btn btn-default btn-xs btn-tag"),
               actionButton("sel_disorderly", HTML("&#x1F7E1; Disorderly"),
-                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
+                           class = "btn btn-default btn-xs btn-tag"),
               actionButton("sel_hotthouse", HTML("&#x1F534; Hot House"),
-                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
+                           class = "btn btn-default btn-xs btn-tag"),
               actionButton("sel_all_targets", "All",
-                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;"),
+                           class = "btn btn-default btn-xs btn-tag"),
               actionButton("sel_clear_targets", "Clear",
-                           class = "btn btn-default btn-xs", style = "font-size: 10px; padding: 2px 6px; margin: 1px;")
+                           class = "btn btn-default btn-xs btn-tag")
             ),
 
             selectInput("scenario_geography", "Scenario Geography",
@@ -397,7 +404,7 @@ ui <- dashboardPage(
               ),
               helpText("Firm's ability to pass carbon tax costs onto the consumer (0 = none, 1 = full)."),
               hr(),
-              h5("Carbon Price Model", style = "font-family: 'Space Grotesk', sans-serif; font-weight: 600;"),
+              h5("Carbon Price Model", class = "font-heading fw-600"),
               radioButtons("carbon_price_model", NULL,
                            choices = c("No Carbon Tax" = "no_carbon_tax",
                                      "Apply Carbon Tax" = "carbon_tax"),
@@ -408,8 +415,7 @@ ui <- dashboardPage(
               hr(),
               actionButton("reset_defaults", "Reset All to Defaults",
                            icon = icon("undo"),
-                           class = "btn-default",
-                           style = "margin-top: 8px;")
+                           class = "btn-default mt-8")
             )
           )
         )
@@ -462,7 +468,7 @@ ui <- dashboardPage(
         fluidRow(
           box(
             width = 12,
-            div(style = "text-align: center; padding: 20px;",
+            div(class = "run-action-wrap",
               actionButton("run_analysis", "Run TRISK Analysis",
                           class = "btn-primary btn-lg btn-run",
                           icon = icon("play-circle")),
@@ -576,8 +582,7 @@ ui <- dashboardPage(
                 p(tags$b("Optional step."), " Use this page to combine TRISK climate stress test
                   outputs with your institution's internally calculated PD and Expected Loss.
                   Skip this step if you only need the raw TRISK results from Step 4."),
-                tags$table(class = "table table-bordered table-condensed def-table",
-                  style = "font-size: 13px; margin-top: 8px;",
+                tags$table(class = "table table-bordered table-condensed def-table integration-guidance-table",
                   tags$thead(
                     tags$tr(
                       tags$th("Method"), tags$th("Use When"), tags$th("Formula")
@@ -601,7 +606,7 @@ ui <- dashboardPage(
                     )
                   )
                 ),
-                p(style = "font-size: 12px; color: #666; margin-top: 8px;",
+                p(class = "upload-hint",
                   "Upload a CSV with ", tags$code("company_id"), " + ",
                   tags$code("internal_pd"), " (or ", tags$code("internal_el"),
                   ") columns, or edit values directly in the tables below.")
@@ -636,14 +641,14 @@ ui <- dashboardPage(
             # Internal PD upload & explanation
             fluidRow(
               column(8,
-                tags$div(style = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;",
-                  h5(icon("info-circle"), "Internal PD Values", style = "margin: 0;"),
-                  tags$button(id = "toggle_pd_info", class = "btn btn-xs",
-                    style = paste0("background: #d9edf7; border: 1px solid #bce8f1; color: #31708f; border-radius: 4px; font-size: 11px; padding: 2px 8px;"),
-                    icon("question-circle"), " Help",
-                    onclick = "$(this).closest('.col-sm-8').find('.pd-info-box').slideToggle(200);")
+                tags$div(class = "d-flex align-center gap-8 mb-6",
+                  h5(icon("info-circle"), "Internal PD Values", class = "m-0"),
+                  tags$button(id = "toggle_pd_info",
+                    class = "btn btn-xs btn-help-toggle info-toggle-btn",
+                    `data-target` = ".pd-info-box",
+                    icon("question-circle"), " Help")
                 ),
-                div(class = "alert alert-info pd-info-box", style = "font-size: 13px; padding: 10px; margin-bottom: 10px; display: none;",
+                div(class = "alert alert-info pd-info-box info-box-hidden",
                   tags$b("Internal_PD"), " represents ", tags$b("your institution's own PD estimates"),
                   " for each counterparty. This is ", tags$em("conceptually separate"), " from ",
                   tags$b("pd_baseline"), ", which is the TRISK model's baseline PD derived from the ",
@@ -698,14 +703,14 @@ ui <- dashboardPage(
             # Internal EL upload & explanation
             fluidRow(
               column(8,
-                tags$div(style = "display: flex; align-items: center; gap: 8px; margin-bottom: 6px;",
-                  h5(icon("info-circle"), "Internal EL Values", style = "margin: 0;"),
-                  tags$button(id = "toggle_el_info", class = "btn btn-xs",
-                    style = paste0("background: #d9edf7; border: 1px solid #bce8f1; color: #31708f; border-radius: 4px; font-size: 11px; padding: 2px 8px;"),
-                    icon("question-circle"), " Help",
-                    onclick = "$(this).closest('.col-sm-8').find('.el-info-box').slideToggle(200);")
+                tags$div(class = "d-flex align-center gap-8 mb-6",
+                  h5(icon("info-circle"), "Internal EL Values", class = "m-0"),
+                  tags$button(id = "toggle_el_info",
+                    class = "btn btn-xs btn-help-toggle info-toggle-btn",
+                    `data-target` = ".el-info-box",
+                    icon("question-circle"), " Help")
                 ),
-                div(class = "alert alert-info el-info-box", style = "font-size: 13px; padding: 10px; margin-bottom: 10px; display: none;",
+                div(class = "alert alert-info el-info-box info-box-hidden",
                   tags$b("Internal_EL"), " represents ", tags$b("your institution's own Expected Loss estimates"),
                   " for each counterparty. This is ", tags$em("conceptually separate"), " from ",
                   tags$b("expected_loss_baseline"), ", which is the TRISK model's EL derived from ",
@@ -806,7 +811,7 @@ ui <- dashboardPage(
             solidHeader = TRUE,
             width = 12,
 
-            h3("Input Data Definitions", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h3("Input Data Definitions", class = "font-heading"),
 
             h4("Portfolio Data"),
             tags$table(class = "def-table",
@@ -873,7 +878,7 @@ ui <- dashboardPage(
 
             hr(), hr(),
 
-            h3("Model Parameters", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h3("Model Parameters", class = "font-heading"),
             tags$table(class = "def-table",
               tags$tr(tags$td("baseline_scenario"), tags$td("The business-as-usual scenario (e.g. Current Policies).")),
               tags$tr(tags$td("target_scenario"), tags$td("The climate transition shock scenario (e.g. Net Zero 2050).")),
@@ -889,7 +894,7 @@ ui <- dashboardPage(
 
             hr(), hr(),
 
-            h3("Output Definitions", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h3("Output Definitions", class = "font-heading"),
 
             h4("NPV Results"),
             tags$table(class = "def-table",
@@ -929,7 +934,7 @@ ui <- dashboardPage(
             ),
 
             hr(), hr(),
-            h3("External Resources", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h3("External Resources", class = "font-heading"),
             tags$ul(
               tags$li(tags$a(href = "https://theia-finance-labs.github.io/trisk.model/",
                             "trisk.model Documentation", target = "_blank")),
@@ -958,7 +963,7 @@ ui <- dashboardPage(
             fluidRow(
               column(8,
                 h3("Climate Risk Research, Advisory & Software",
-                   style = "font-family: 'Space Grotesk', sans-serif;"),
+                   class = "font-heading"),
                 p("1in1000 is a climate risk research initiative, advisory practice, and
                   software development team dedicated to open-source, transparent, and
                   easy-to-use climate financial risk tools."),
@@ -970,50 +975,47 @@ ui <- dashboardPage(
                   delivering hands-on climate stress testing and capacity building with banks,
                   supervisors, and governments around the world.")
               ),
-              column(4, style = "text-align: center; padding-top: 20px;",
+              column(4, class = "text-center pt-20",
                 tags$img(src = "logo-black.png", height = "80px"),
                 br(), br(),
                 tags$a(href = "https://1in1000.com", "www.1in1000.com", target = "_blank",
-                       style = paste0("color: ", BRAND_RED, "; font-weight: 600;"))
+                       class = "fg-brand-red fw-600")
               )
             ),
 
             hr(),
 
-            h4("Why 1in1000?", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("Why 1in1000?", class = "font-heading"),
             p("Climate-related financial risks pose a systemic challenge to the global economy.
               Three key factors motivate our work:"),
             fluidRow(
               column(4,
-                div(style = paste0("background: ", BG_CARD, "; border: 1px solid ", BORDER_PINK, ";
-                    border-radius: 12px; padding: 20px; margin: 8px 0; min-height: 140px;"),
-                  h5(strong("Perceived as Low Probability"), style = paste0("color: ", BRAND_CORAL_DK, ";")),
+                div(class = "about-card",
+                  h5(strong("Perceived as Low Probability"), class = "fg-brand-coral"),
                   p("Climate risks are perceived as a low probability tail risk, yet their
-                    potential impact on financial stability is enormous.", style = "font-size: 13px;")
+                    potential impact on financial stability is enormous.", class = "fs-13")
                 )
               ),
               column(4,
-                div(style = paste0("background: ", BG_CARD, "; border: 1px solid ", BORDER_PINK, ";
-                    border-radius: 12px; padding: 20px; margin: 8px 0; min-height: 140px;"),
-                  h5(strong("Uncertain but Inevitable"), style = paste0("color: ", BRAND_CORAL_DK, ";")),
+                div(class = "about-card",
+                  h5(strong("Uncertain but Inevitable"), class = "fg-brand-coral"),
                   p("While the timing and severity are uncertain, the transition away from
-                    fossil fuels is an inevitable structural shift.", style = "font-size: 13px;")
+                    fossil fuels is an inevitable structural shift.", class = "fs-13")
                 )
               ),
               column(4,
-                div(style = paste0("background: ", BG_CARD, "; border: 1px solid ", BORDER_PINK, ";
-                    border-radius: 12px; padding: 20px; margin: 8px 0; min-height: 140px;"),
-                  h5(strong("Capacity Gap"), style = paste0("color: ", BRAND_CORAL_DK, ";")),
+                div(class = "about-card",
+                  h5(strong("Capacity Gap"), class = "fg-brand-coral"),
                   p("Many financial institutions, especially in emerging markets, lack the
-                    tools and capacity to assess these risks.", style = "font-size: 13px;")
+                    tools and capacity to assess these risks.", class = "fs-13")
                 )
               )
             ),
 
             hr(),
-            h4("Our Mission", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("Our Mission", class = "font-heading"),
             p(tags$em("Transparent climate analytical tools, tailored to any institution, anywhere."),
-              style = paste0("font-size: 16px; color: ", BRAND_CORAL_DK, "; font-weight: 500;")),
+              class = "mission-statement"),
             tags$ul(
               tags$li(strong("Transparent:"), " All models, code, and data are open-source under GPL/LGPL licenses."),
               tags$li(strong("Tailored:"), " Tools designed to work with any portfolio structure, any scenario, any geography."),
@@ -1021,11 +1023,11 @@ ui <- dashboardPage(
             ),
 
             hr(),
-            h4("What We Do", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("What We Do", class = "font-heading"),
             fluidRow(
               column(4,
                 h5(icon("file-alt"), " Research"),
-                tags$ul(style = "font-size: 13px;",
+                tags$ul(class = "fs-13",
                   tags$li("Publications on models and scenarios"),
                   tags$li("Frameworks for transition, physical, nature, and social risk"),
                   tags$li("Projects on every continent")
@@ -1033,14 +1035,14 @@ ui <- dashboardPage(
               ),
               column(4,
                 h5(icon("briefcase"), " Application"),
-                tags$ul(style = "font-size: 13px;",
+                tags$ul(class = "fs-13",
                   tags$li("Stress testing exercises with banks in climate-sensitive regions"),
                   tags$li("Technical analyses for central banks and supervisors")
                 )
               ),
               column(4,
                 h5(icon("desktop"), " Software"),
-                tags$ul(style = "font-size: 13px;",
+                tags$ul(class = "fs-13",
                   tags$li("Online and desktop portfolio analysis applications"),
                   tags$li("End-to-end pipeline with scenario repository and asset-level data")
                 )
@@ -1048,51 +1050,49 @@ ui <- dashboardPage(
             ),
 
             hr(),
-            h4("Partners", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("Partners", class = "font-heading"),
             p("University of Oxford, Theia Finance Labs, World Bank, International Finance Corporation,
               Inevitable Policy Response, KAPSARC, CINEA (European Union)."),
 
             hr(),
-            h4("Contact", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("Contact", class = "font-heading"),
             p(tags$a(href = "mailto:1in1000@theiafinance.org", "1in1000@theiafinance.org"),
               " | ",
               tags$a(href = "https://theiafinance.org/", "Theia Finance Labs", target = "_blank")),
 
-            h5("Business Details", style = "font-family: 'Space Grotesk', sans-serif; margin-top: 16px;"),
+            h5("Business Details", class = "font-heading mt-16"),
             fluidRow(
               column(6,
-                div(style = paste0("background: ", BG_CARD, "; border: 1px solid ", BORDER_PINK, ";
-                    border-radius: 10px; padding: 16px; margin-bottom: 12px;"),
-                  h5(strong("Theia Finance Labs"), style = paste0("color: ", BRAND_CORAL_DK, "; margin-top: 0;")),
-                  p("2 Degrees Investing e.V.", style = "margin-bottom: 4px;"),
+                div(class = "contact-card",
+                  h5(strong("Theia Finance Labs"), class = "fg-brand-coral mt-0"),
+                  p("2 Degrees Investing e.V.", class = "mb-4"),
                   p(tags$em("Neue Sch\u00F6nhauserstra\u00DFe 3-5, 10178 Berlin, Germany"),
-                    style = "font-size: 13px;")
+                    class = "fs-13")
                 )
               ),
               column(6,
-                div(style = paste0("background: ", BG_CARD, "; border: 1px solid ", BORDER_PINK, ";
-                    border-radius: 10px; padding: 16px; margin-bottom: 12px;"),
-                  h5(strong("Alternative Pathways Lab, s.r.o."), style = paste0("color: ", BRAND_CORAL_DK, "; margin-top: 0;")),
+                div(class = "contact-card",
+                  h5(strong("Alternative Pathways Lab, s.r.o."), class = "fg-brand-coral mt-0"),
                   p(tags$em("Na Petynce 142/136, 16900, Praha, Czech Republic"),
-                    style = "font-size: 13px;")
+                    class = "fs-13")
                 )
               )
             ),
 
             hr(),
-            h4("Funding", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("Funding", class = "font-heading"),
             p("Co-funded by the European Union. Views and opinions expressed are however those of
               the author(s) only and do not necessarily reflect those of the European Union or CINEA."),
             p("Scientific Transition Risk Exercises for Stress tests & Scenario Analysis has received
               funding from the European Union's Life programme under Grant No. LIFE21-GIC-DE-Stress."),
 
             hr(),
-            h4("License & Version", style = "font-family: 'Space Grotesk', sans-serif;"),
+            h4("License & Version", class = "font-heading"),
             p("trisk.model: GPL-3.0 | trisk.analysis: LGPL-3.0"),
             verbatimTextOutput("version_info"),
             br(),
             p(tags$em("A research initiative incubated by and housed at Theia Finance Labs."),
-              style = paste0("text-align: center; color: ", FG_MUTED, ";"))
+              class = "text-center fg-muted")
           )
         )
       )

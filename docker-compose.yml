@@ -1,43 +1,107 @@
+# TRISK Docker Compose — hardened for secure bank workstation deployment
+# See comments for rationale on each directive.
+
+networks:
+  trisk-internal:
+    driver: bridge
+    internal: true  # No outbound internet access from containers
+  trisk-host:
+    driver: bridge  # Non-internal network allows host port publishing
+
 services:
   # Main Shiny application
   trisk:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
     image: theia-finance-labs/trisk:latest
     container_name: trisk-app
+    # Bind to localhost only — prevents exposure on all interfaces
     ports:
-      - "3838:3838"
+      - "127.0.0.1:3838:3838"
     volumes:
-      # Mount bank's private data directory (read-only for input)
       - ./data/input:/data/input:ro
-      - ./data/output:/data/output
+      # Output is writable but noexec to limit RCE impact
+      - ./data/output:/data/output:rw,noexec,nosuid
     environment:
-      - SHINY_LOG_LEVEL=TRACE
-    restart: unless-stopped
-    # Resource limits (adjust based on portfolio size)
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 2G
+      - SHINY_LOG_LEVEL=WARN
+      - TMPDIR=/tmp
+    # Avoid zombie-service restarts on analyst workstations
+    restart: "no"
+    stop_grace_period: 30s
+    networks:
+      - trisk-internal
+      - trisk-host
+    # ── Runtime resource limits (compose v2, non-Swarm) ──
+    mem_limit: 4g
+    mem_reservation: 2g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 4096
+    # ── Security hardening ──
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # ── Log rotation (prevent disk fill on long-running workstations) ──
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Cap swap to match mem_limit — prevents silent OOM-swap spiral
+    memswap_limit: 4g
+    # Shiny / R need writable tmp & run dirs; provide via tmpfs
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=2g
+      - /run:rw,noexec,nosuid,size=8m
 
   # CLI version for batch processing (optional)
   trisk-cli:
     build:
       context: .
       dockerfile: Dockerfile.cli
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
     image: theia-finance-labs/trisk-cli:latest
     container_name: trisk-cli
     volumes:
       - ./data/input:/data/input:ro
-      - ./data/output:/data/output
+      - ./data/output:/data/output:rw,noexec,nosuid
+    restart: "no"
+    stop_grace_period: 30s
+    networks:
+      - trisk-internal
     profiles:
-      - cli  # Only starts when explicitly requested: docker-compose --profile cli run trisk-cli
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 2G
+      - cli  # Only starts when explicitly requested: docker compose --profile cli run trisk-cli
+    # ── Runtime resource limits ──
+    mem_limit: 4g
+    mem_reservation: 2g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 4096
+    # ── Security hardening ──
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # ── Log rotation ──
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    memswap_limit: 4g
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=2g
+      - /run:rw,noexec,nosuid,size=8m

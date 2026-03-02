@@ -32,6 +32,9 @@ Thumbs.db
 # Data files (should be mounted, not committed)
 data/input/*
 data/output/*
+# Scenario data is vendored in build context but too large for git (57MB).
+# Run `bash scripts/download_scenarios.sh` to fetch it before your first build.
+data/scenarios/scenarios.csv
 !data/input/.gitkeep
 !data/output/.gitkeep
 !data/scenarios/.gitkeep

@@ -2394,6 +2394,7 @@ server <- function(input, output, session) {
 
     datatable(ranking, rownames = FALSE, options = list(
       dom = "t", pageLength = 20, ordering = FALSE,
+      scrollY = "250px", scrollCollapse = TRUE,
       columnDefs = list(list(className = "dt-center", targets = "_all"))
     )) %>%
       formatStyle("Avg PD (%)", backgroundColor = styleInterval(
@@ -2809,14 +2810,15 @@ server <- function(input, output, session) {
     company_df <- row_df %>%
       group_by(company_label, sector) %>%
       summarise(
-        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
+        # Weighted means MUST come before exposure_value_usd is overwritten by sum()
         pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
         pd_shock    = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
         pd_change   = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
         weight      = sum(weight, na.rm = TRUE),
         pd_contribution = sum(pd_contribution, na.rm = TRUE),
         el_change   = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
-        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
         .groups = "drop"
       )
 
@@ -2845,11 +2847,12 @@ server <- function(input, output, session) {
       arrange(desc(abs(pd_contribution)))
 
     # --- Technology-level attribution (if available) ---
+    # Use row_df (pre-company-aggregation) since it still has the technology column
     tech_df <- if (has_tech) {
-      company_df %>%
+      row_df %>%
         group_by(sector, technology) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),

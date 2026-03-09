@@ -74,7 +74,7 @@ RUN R -e "\
   options(repos = c(CRAN = Sys.getenv('CRAN_REPO'))); \
   pak::pak(c( \
     'httpuv', 'htmltools', 'shiny', 'shinydashboard', 'shinyWidgets', \
-    'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'writexl', \
+    'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'data.table', 'writexl', \
     'jsonlite', 'dplyr', 'tidyr' \
   ), ask = FALSE, upgrade = FALSE)"
 

@@ -5207,7 +5207,18 @@ server <- function(input, output, session) {
         sheets[["EL Integration"]] <- rv$el_integration_result
       }
 
-      writexl::write_xlsx(sheets, file)
+      # Guard against OOM: writexl builds the entire workbook in memory.
+      # For large exports (>100K rows), write CSV instead which streams to disk.
+      total_rows <- sum(vapply(sheets, nrow, integer(1)))
+      if (total_rows > 100000) {
+        showNotification(
+          paste0("Large export (", format(total_rows, big.mark = ","),
+                 " rows) — writing CSV instead of Excel to avoid memory issues."),
+          type = "warning", duration = 8)
+        data.table::fwrite(sheets[["Full Results"]], file)
+      } else {
+        writexl::write_xlsx(sheets, file)
+      }
     }
   )
 

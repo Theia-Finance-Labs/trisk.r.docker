@@ -121,7 +121,8 @@ server <- function(input, output, session) {
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
-      rv$portfolio <- tibble::as_tibble(data.table::fread(input$portfolio_file$datapath))
+      rv$portfolio <- strip_columns(
+        tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading portfolio:", e$message), type = "error")
@@ -131,7 +132,8 @@ server <- function(input, output, session) {
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
-      rv$assets <- tibble::as_tibble(data.table::fread(input$assets_file$datapath))
+      rv$assets <- strip_columns(
+        tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading assets:", e$message), type = "error")
@@ -141,7 +143,8 @@ server <- function(input, output, session) {
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
-      rv$financial <- tibble::as_tibble(data.table::fread(input$financial_file$datapath))
+      rv$financial <- strip_columns(
+        tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading financial data:", e$message), type = "error")
@@ -151,7 +154,8 @@ server <- function(input, output, session) {
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      rv$scenarios <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
+      rv$scenarios <- strip_columns(
+        tibble::as_tibble(data.table::fread(input$scenarios_file$datapath)), "scenarios")
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
         type = "message"
@@ -2071,19 +2075,20 @@ server <- function(input, output, session) {
     plot_df <- hd %>%
       mutate(npv_pct = crispy_perc_value_change * 100,
              pd_pct = pd_shock * 100,
-             exp_size = sqrt(exposure_value_usd) / 100)
+             exp_size = sqrt(exposure_value_usd) / 100,
+             hover_label = htmltools::htmlEscape(as.character(get(id_col))))
 
     if (has_sector) {
       p <- plot_ly(plot_df, x = ~npv_pct, y = ~pd_pct, size = ~exp_size,
                    color = ~sector, frame = ~shock_year,
-                   text = ~paste0(get(id_col), "\nNPV: ", round(npv_pct, 2), "%\nPD: ", round(pd_pct, 4), "%"),
+                   text = ~paste0(hover_label, "\nNPV: ", round(npv_pct, 2), "%\nPD: ", round(pd_pct, 4), "%"),
                    hoverinfo = "text",
                    type = "scatter", mode = "markers",
                    marker = list(opacity = 0.7, sizemode = "diameter", sizeref = 2))
     } else {
       p <- plot_ly(plot_df, x = ~npv_pct, y = ~pd_pct, size = ~exp_size,
                    frame = ~shock_year,
-                   text = ~paste0(get(id_col), "\nNPV: ", round(npv_pct, 2), "%\nPD: ", round(pd_pct, 4), "%"),
+                   text = ~paste0(hover_label, "\nNPV: ", round(npv_pct, 2), "%\nPD: ", round(pd_pct, 4), "%"),
                    hoverinfo = "text",
                    type = "scatter", mode = "markers",
                    marker = list(opacity = 0.7, color = BRAND_CORAL, sizemode = "diameter", sizeref = 2))
@@ -2201,7 +2206,7 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results_by_year)
       combined <- bind_rows(rv$results_by_year, .id = "shock_year")
-      write.csv(combined, file, row.names = FALSE)
+      write.csv(sanitize_export(combined), file, row.names = FALSE)
     }
   )
 
@@ -2533,7 +2538,7 @@ server <- function(input, output, session) {
       select(company_name, scenario_label, pd_pct) %>%
       tidyr::pivot_wider(names_from = scenario_label, values_from = pd_pct)
 
-    companies <- mat$company_name
+    companies <- htmltools::htmlEscape(mat$company_name)
     scenarios <- setdiff(names(mat), "company_name")
     z_matrix <- as.matrix(mat[, scenarios])
 
@@ -2770,7 +2775,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       scd <- scenario_comparison_data()
-      if (!is.null(scd)) write.csv(scd, file, row.names = FALSE)
+      if (!is.null(scd)) write.csv(sanitize_export(scd), file, row.names = FALSE)
     }
   )
 
@@ -2802,7 +2807,7 @@ server <- function(input, output, session) {
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
         pd_contribution = pd_change * weight,
-        company_label = .data[[company_label_col]],
+        company_label = htmltools::htmlEscape(.data[[company_label_col]]),
         el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
         npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
       )
@@ -3359,13 +3364,13 @@ server <- function(input, output, session) {
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
-        company_label = .data[[company_label_col]]
+        company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]]))
       )
     # Guard NA labels: replace with row-index fallback
     company_df$company_label <- ifelse(
-      is.na(company_df$company_label),
+      is.na(company_df$company_label) | company_df$company_label == "",
       paste0("Company_", seq_len(nrow(company_df))),
-      as.character(company_df$company_label)
+      company_df$company_label
     )
     if (has_el) {
       company_df <- company_df %>%
@@ -5069,7 +5074,7 @@ server <- function(input, output, session) {
 
       chart_df$color <- ifelse(chart_df$EL_Adjustment < 0, BRAND_CORAL, STATUS_GREEN)
       chart_df$hover_text <- paste0(
-        "<b>", chart_df$sector, "</b><br>",
+        "<b>", htmltools::htmlEscape(chart_df$sector), "</b><br>",
         "EL Adjustment: ", sapply(chart_df$EL_Adjustment, format_number), "<br>",
         "Exposure: ", sapply(chart_df$Exposure, format_number), "<br>",
         "Counterparties: ", chart_df$n
@@ -5102,7 +5107,7 @@ server <- function(input, output, session) {
 
       chart_df$color <- ifelse(chart_df$EL_Adjustment < 0, BRAND_CORAL, STATUS_GREEN)
       chart_df$hover_text <- paste0(
-        "<b>", chart_df$company_name, "</b><br>",
+        "<b>", htmltools::htmlEscape(chart_df$company_name), "</b><br>",
         "EL Adjustment: ", sapply(chart_df$EL_Adjustment, format_number)
       )
 
@@ -5207,6 +5212,9 @@ server <- function(input, output, session) {
         sheets[["EL Integration"]] <- rv$el_integration_result
       }
 
+      # Sanitize all sheets to export-safe columns
+      sheets <- lapply(sheets, sanitize_export)
+
       # Guard against OOM: writexl builds the entire workbook in memory.
       # For large exports (>100K rows), write CSV instead which streams to disk.
       total_rows <- sum(vapply(sheets, nrow, integer(1)))
@@ -5228,7 +5236,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
-      write_csv(rv$results, file)
+      write_csv(sanitize_export(rv$results), file)
     }
   )
 
@@ -5238,7 +5246,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
-      jsonlite::write_json(rv$results, file, pretty = TRUE)
+      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
     }
   )
 

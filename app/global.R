@@ -224,6 +224,19 @@ generate_run_id <- function(config_list) {
 
 #' Validate portfolio data structure
 #' Matches check_portfolio() from trisk.analysis
+# Column allowlists: only these columns survive upload.
+# Any extra columns (PII, internal IDs, etc.) are silently dropped.
+PORTFOLIO_COLUMNS <- c("company_id", "company_name", "country_iso2", "sector",
+                       "exposure_value_usd", "term", "loss_given_default", "technology")
+ASSETS_COLUMNS    <- c("asset_id", "asset_name", "company_id", "company_name",
+                       "country_iso2", "sector", "technology", "production_year",
+                       "capacity", "capacity_factor", "production_unit", "emission_factor")
+FINANCIAL_COLUMNS <- c("company_id", "pd", "net_profit_margin", "debt_equity_ratio",
+                       "volatility")
+SCENARIOS_COLUMNS <- c("scenario", "scenario_type", "scenario_geography", "sector",
+                       "technology", "scenario_year", "direction", "fair_share_perc",
+                       "value", "units")
+
 validate_portfolio <- function(df) {
   required_cols <- c("company_id", "company_name", "country_iso2",
                      "exposure_value_usd", "term", "loss_given_default")
@@ -252,6 +265,25 @@ validate_financial <- function(df) {
     return(paste("Missing required columns:", paste(missing, collapse = ", ")))
   }
   return(NULL)
+}
+
+#' Strip columns not in the allowlist for a given dataset type.
+#' Prevents PII or extraneous columns from entering reactive state.
+strip_columns <- function(df, type) {
+  allowed <- switch(type,
+    "portfolio"  = PORTFOLIO_COLUMNS,
+    "assets"     = ASSETS_COLUMNS,
+    "financial"  = FINANCIAL_COLUMNS,
+    "scenarios"  = SCENARIOS_COLUMNS,
+    names(df)  # fallback: keep all
+  )
+  keep <- intersect(allowed, names(df))
+  dropped <- setdiff(names(df), allowed)
+  if (length(dropped) > 0) {
+    message(sprintf("[security] Stripped %d non-model columns from %s upload: %s",
+                    length(dropped), type, paste(dropped, collapse = ", ")))
+  }
+  df[, keep, drop = FALSE]
 }
 
 #' Audit a dataset: compute QA statistics and identify issues

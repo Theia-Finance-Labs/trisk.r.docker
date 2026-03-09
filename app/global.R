@@ -98,7 +98,7 @@ config_defaults <- function() {
 
 if (file.exists(SCENARIOS_PATH)) {
   scenarios_data_preloaded <- tryCatch({
-    read_csv(SCENARIOS_PATH, show_col_types = FALSE)
+    tibble::as_tibble(data.table::fread(SCENARIOS_PATH))
   }, error = function(e) {
     message("Warning: Could not load pre-bundled scenarios: ", e$message)
     NULL

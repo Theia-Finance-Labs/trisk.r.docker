@@ -121,7 +121,7 @@ server <- function(input, output, session) {
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
-      rv$portfolio <- read_csv(input$portfolio_file$datapath, show_col_types = FALSE)
+      rv$portfolio <- tibble::as_tibble(data.table::fread(input$portfolio_file$datapath))
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading portfolio:", e$message), type = "error")
@@ -131,7 +131,7 @@ server <- function(input, output, session) {
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
-      rv$assets <- read_csv(input$assets_file$datapath, show_col_types = FALSE)
+      rv$assets <- tibble::as_tibble(data.table::fread(input$assets_file$datapath))
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading assets:", e$message), type = "error")
@@ -141,7 +141,7 @@ server <- function(input, output, session) {
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
-      rv$financial <- read_csv(input$financial_file$datapath, show_col_types = FALSE)
+      rv$financial <- tibble::as_tibble(data.table::fread(input$financial_file$datapath))
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
       showNotification(paste("Error loading financial data:", e$message), type = "error")
@@ -151,7 +151,7 @@ server <- function(input, output, session) {
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      rv$scenarios <- read_csv(input$scenarios_file$datapath, show_col_types = FALSE)
+      rv$scenarios <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
         type = "message"

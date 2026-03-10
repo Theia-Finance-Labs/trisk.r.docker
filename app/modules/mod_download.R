@@ -53,10 +53,10 @@ setup_download <- function(input, output, session, rv) {
 
       # Add integration results if available
       if (!is.null(rv$pd_integration_result)) {
-        sheets[["PD Integration"]] <- rv$pd_integration_result
+        sheets[["PD Integration"]] <- sanitize_export(rv$pd_integration_result)
       }
       if (!is.null(rv$el_integration_result)) {
-        sheets[["EL Integration"]] <- rv$el_integration_result
+        sheets[["EL Integration"]] <- sanitize_export(rv$el_integration_result)
       }
 
       writexl::write_xlsx(sheets, file)

@@ -50,21 +50,9 @@ ui <- dashboardPage(
     # Fonts are bundled locally (app/www/fonts/) for offline/air-gapped deployment.
     # No runtime network dependency on fonts.googleapis.com.
     tags$head(
-      # Content Security Policy — compatibility mode for Shiny/htmlwidgets ecosystem.
-      # unsafe-eval + unsafe-inline: required by shinyjs, DT, Plotly (inline <script> blocks).
-      # This is NOT a hardened CSP — it trades XSS blast-radius reduction for framework
-      # compatibility. To truly harden: externalize all inline scripts (requires upstream changes).
-      # ws/wss: Shiny WebSocket; blob: Plotly chart export; data: inline images
-      tags$meta(`http-equiv` = "Content-Security-Policy",
-        content = paste0(
-          "default-src 'self'; ",
-          "script-src 'self' 'unsafe-eval' 'unsafe-inline'; ",
-          "style-src 'self' 'unsafe-inline'; ",
-          "img-src 'self' data: blob:; ",
-          "font-src 'self'; ",
-          "connect-src 'self' ws: wss:;"
-        )
-      ),
+      # CSP, X-Frame-Options, and other security headers are set by the
+      # Caddy reverse proxy (see Caddyfile). Do not add a <meta> CSP here —
+      # HTTP headers are more secure and support frame-ancestors.
       tags$link(rel = "stylesheet", href = "fonts.css"),
       tags$link(rel = "stylesheet", href = "trisk.css"),
       tags$script(src = "trisk.js")

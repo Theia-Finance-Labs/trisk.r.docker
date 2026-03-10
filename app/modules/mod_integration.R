@@ -134,7 +134,8 @@ setup_integration <- function(input, output, session, rv) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      message(paste("ERROR (PD upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please ensure it is a valid CSV.", type = "error", duration = 8)
     })
   })
 
@@ -472,7 +473,8 @@ setup_integration <- function(input, output, session, rv) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      message(paste("ERROR (EL upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please ensure it is a valid CSV.", type = "error", duration = 8)
     })
   })
 
@@ -806,7 +808,7 @@ setup_integration <- function(input, output, session, rv) {
 
       chart_df$color <- ifelse(chart_df$EL_Adjustment < 0, BRAND_CORAL, STATUS_GREEN)
       chart_df$hover_text <- paste0(
-        "<b>", chart_df$sector, "</b><br>",
+        "<b>", htmltools::htmlEscape(as.character(chart_df$sector)), "</b><br>",
         "EL Adjustment: ", sapply(chart_df$EL_Adjustment, format_number), "<br>",
         "Exposure: ", sapply(chart_df$Exposure, format_number), "<br>",
         "Counterparties: ", chart_df$n
@@ -839,7 +841,7 @@ setup_integration <- function(input, output, session, rv) {
 
       chart_df$color <- ifelse(chart_df$EL_Adjustment < 0, BRAND_CORAL, STATUS_GREEN)
       chart_df$hover_text <- paste0(
-        "<b>", chart_df$company_name, "</b><br>",
+        "<b>", htmltools::htmlEscape(as.character(chart_df$company_name)), "</b><br>",
         "EL Adjustment: ", sapply(chart_df$EL_Adjustment, format_number)
       )
 

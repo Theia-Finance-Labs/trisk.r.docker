@@ -41,3 +41,13 @@ data/scenarios/scenarios.csv
 
 # Build artifacts
 *.tar.gz
+
+# Environment files (may contain credentials)
+.env
+.env.local
+.env.production
+
+# TLS certificates (must not be committed)
+tls/*.pem
+tls/*.key
+tls/*.crt

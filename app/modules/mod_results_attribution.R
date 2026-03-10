@@ -224,7 +224,7 @@ setup_results_attribution <- function(input, output, session, rv) {
     # Hover text
     wf_text <- c(
       paste0("Baseline PD: ", round(baseline, 4), "%"),
-      paste0(sector_df$sector,
+      paste0(htmltools::htmlEscape(as.character(sector_df$sector)),
              "\nContribution: ", ifelse(sector_df$pd_contribution >= 0, "+", ""),
              round(sector_df$pd_contribution * 100, 4), " pp",
              "\nWeight: ", round(sector_df$weight * 100, 1), "%",
@@ -274,8 +274,8 @@ setup_results_attribution <- function(input, output, session, rv) {
     colors <- ifelse(company_df$pd_contribution >= 0, BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      htmltools::htmlEscape(as.character(company_df$company_label)),
+      "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(company_df$weight * 100, 1), "%",
@@ -329,8 +329,8 @@ setup_results_attribution <- function(input, output, session, rv) {
     colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      htmltools::htmlEscape(as.character(company_df$company_label)),
+      "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
       "\nShare of total PD change: ", round(company_df$share_pct, 1), "%",
       "\nDirection: ", company_df$direction,
       "\nContribution: ", round(company_df$pd_contribution * 100, 4), " pp"
@@ -380,13 +380,13 @@ setup_results_attribution <- function(input, output, session, rv) {
         if (nrow(match_row) > 0) {
           z_matrix[r, cc] <- match_row$pd_contribution[1] * 100
           text_matrix[r, cc] <- paste0(
-            techs[r], " / ", sectors[cc],
+            htmltools::htmlEscape(as.character(techs[r])), " / ", htmltools::htmlEscape(as.character(sectors[cc])),
             "\nPD Contribution: ", round(match_row$pd_contribution[1] * 100, 4), " pp",
             "\nCompanies: ", match_row$n_companies[1],
             "\nExposure: $", format(round(match_row$total_exposure[1]), big.mark = ",")
           )
         } else {
-          text_matrix[r, cc] <- paste0(techs[r], " / ", sectors[cc], "\nNo data")
+          text_matrix[r, cc] <- paste0(htmltools::htmlEscape(as.character(techs[r])), " / ", htmltools::htmlEscape(as.character(sectors[cc])), "\nNo data")
         }
       }
     }
@@ -438,7 +438,7 @@ setup_results_attribution <- function(input, output, session, rv) {
     wf_measure <- c(rep("relative", nrow(sector_df)), "total")
 
     hover_text <- c(
-      paste0(sector_df$sector,
+      paste0(htmltools::htmlEscape(as.character(sector_df$sector)),
              "\nEL Change: $", format(round(sector_df$el_change), big.mark = ","),
              "\nExposure: $", format(round(sector_df$total_exposure), big.mark = ","),
              "\nCompanies: ", sector_df$n_companies),

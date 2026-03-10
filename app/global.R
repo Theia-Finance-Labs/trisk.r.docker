@@ -66,14 +66,15 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
-# Cap upload size to 500 MB (Shiny default is 5 MB).
-# Bank portfolios with full asset-level production trajectories can reach 200-300 MB.
-options(shiny.maxRequestSize = 500 * 1024^2)
+# Cap upload size to 50 MB (Shiny default is 5 MB).
+options(shiny.maxRequestSize = 50 * 1024^2)  # 50 MB — sufficient for CSV portfolios
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic
 # "An error has occurred" in the browser. Server-side logs still contain the full trace.
 options(shiny.sanitize.errors = TRUE)
+
+MAX_UPLOAD_ROWS <- 500000L  # Row count limit for uploaded CSVs
 
 SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
 INPUT_DIR <- "/data/input"
@@ -211,15 +212,8 @@ validate_internal_el_csv <- function(df) {
   NULL
 }
 
-#' Generate a unique run ID from timestamp + config hash (base R only)
-#' @param config_list named list of analysis parameters
-#' @return character string like "20260301_143022_a7f3b"
-generate_run_id <- function(config_list) {
-  ts <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  config_str <- paste(sort(unlist(config_list)), collapse = "")
-  hash_int <- abs(sum(utf8ToInt(config_str)))
-  hash_hex <- substring(sprintf("%x", hash_int), 1, 5)
-  paste0(ts, "_", hash_hex)
+generate_run_id <- function() {
+  paste0(format(Sys.time(), "%Y%m%d_%H%M%S"), "_", paste0(sample(c(0:9, letters[1:6]), 8, replace = TRUE), collapse = ""))
 }
 
 #' Validate portfolio data structure
@@ -283,7 +277,43 @@ strip_columns <- function(df, type) {
     message(sprintf("[security] Stripped %d non-model columns from %s upload: %s",
                     length(dropped), type, paste(dropped, collapse = ", ")))
   }
-  df[, keep, drop = FALSE]
+  df <- df[, keep, drop = FALSE]
+
+  # Formula injection protection: strip leading =, +, -, @ from string columns
+  # to prevent CSV injection when data is later exported to Excel
+  char_cols <- names(df)[sapply(df, is.character)]
+  for (col in char_cols) {
+    df[[col]] <- sub("^[=+\\-@]+", "", df[[col]])
+  }
+
+  df
+}
+
+# Server-side file type validation (defense-in-depth beyond client-side accept= hint)
+validate_file_type <- function(filepath, original_name) {
+  ext <- tolower(tools::file_ext(original_name))
+  if (!ext %in% c("csv")) {
+    return("Only .csv files are accepted.")
+  }
+  raw_bytes <- readBin(filepath, "raw", n = 4)
+  if (length(raw_bytes) >= 4) {
+    if (identical(raw_bytes[1:4], as.raw(c(0x25, 0x50, 0x44, 0x46)))) return("PDF files are not accepted. Please upload a CSV.")
+    if (identical(raw_bytes[1:2], as.raw(c(0x50, 0x4B)))) return("ZIP/Office files are not accepted. Please upload a CSV.")
+    if (identical(raw_bytes[1:2], as.raw(c(0xD0, 0xCF)))) return("Binary Office files are not accepted. Please upload a CSV.")
+  }
+  NULL
+}
+
+# Structured audit logging — writes JSON to stderr (captured by Docker log driver)
+# Use for security-relevant events: uploads, analysis runs, exports
+audit_log <- function(event, details = list()) {
+  entry <- list(
+    timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    event = event,
+    session = if (exists("session")) session$token else "startup"
+  )
+  entry <- c(entry, details)
+  message(jsonlite::toJSON(entry, auto_unbox = TRUE))
 }
 
 #' Audit a dataset: compute QA statistics and identify issues
@@ -692,18 +722,17 @@ sanitize_export <- function(df) {
   df[, keep, drop = FALSE]
 }
 
-# Auto-source all server modules (alphabetical order for determinism)
-# Placed in global.R so modules are available regardless of entry point (app.R vs server.R+ui.R)
-local({
-  module_dir <- file.path(getwd(), "modules")
-  if (dir.exists(module_dir)) {
-    module_files <- sort(list.files(module_dir, pattern = "^mod_.*\\.R$", full.names = TRUE))
-    for (f in module_files) {
-      source(f, local = FALSE)
-    }
-    message(sprintf("Loaded %d server modules from %s", length(module_files), module_dir))
-  }
-})
+# Module files — explicit list prevents code injection via rogue files
+source(file.path("modules", "mod_upload.R"))
+source(file.path("modules", "mod_config.R"))
+source(file.path("modules", "mod_run.R"))
+source(file.path("modules", "mod_download.R"))
+source(file.path("modules", "mod_integration.R"))
+source(file.path("modules", "mod_results_summary.R"))
+source(file.path("modules", "mod_results_concentration.R"))
+source(file.path("modules", "mod_results_attribution.R"))
+source(file.path("modules", "mod_results_horizon.R"))
+source(file.path("modules", "mod_results_scenarios.R"))
 
 message("\n========================================")
 message("TRISK Shiny App Initialized (1in1000)")

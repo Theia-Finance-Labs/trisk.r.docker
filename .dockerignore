@@ -33,3 +33,24 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# CI/CD and development tooling
+.github/
+.claude/
+
+# Documentation (exclude INSTALL.md which is needed)
+*.md
+!INSTALL.md
+
+# Scripts not needed in image (except run-shiny.sh)
+scripts/*.sh
+!scripts/run-shiny.sh
+
+# Security and infrastructure files
+security/
+tls/
+.env
+.env.*
+!.env.example
+Caddyfile
+Makefile

@@ -41,6 +41,34 @@ server <- function(input, output, session) {
     rv$analysis_log <- c(rv$analysis_log, paste(timestamp, msg))
   }
 
+  # Session idle timeout handler (JS fires this after 30 min inactivity)
+  observeEvent(input$session_idle_timeout, {
+    log_message("Session closed due to inactivity timeout")
+    session$close()
+  })
+
+  # Session cleanup — null all reactive values on disconnect
+  session$onSessionEnded(function() {
+    tryCatch({
+      rv$portfolio <- NULL
+      rv$assets <- NULL
+      rv$financial <- NULL
+      rv$scenarios <- NULL
+      rv$carbon <- NULL
+      rv$results <- NULL
+      rv$results_by_year <- NULL
+      rv$results_by_scenario <- NULL
+      rv$run_history <- list()
+      rv$internal_pd <- NULL
+      rv$internal_el <- NULL
+      rv$pd_integration_result <- NULL
+      rv$el_integration_result <- NULL
+      rv$analysis_log <- character()
+    }, error = function(e) {
+      message(paste("Session cleanup error:", conditionMessage(e)))
+    })
+  })
+
   # ============================================
   # Load mock/demo data from trisk packages
   # ============================================
@@ -79,13 +107,15 @@ server <- function(input, output, session) {
       if (loaded == 5) {
         showNotification("All demo data loaded successfully! Go to Configure.", type = "message", duration = 5)
         log_message("All mock data loaded successfully.")
+        audit_log("upload", list(type = "mock_data", datasets_loaded = loaded))
       } else {
         showNotification(paste("Loaded", loaded, "of 5 datasets. Some may be missing."), type = "warning", duration = 5)
         log_message(paste("Warning: only", loaded, "of 5 datasets loaded."))
       }
     }, error = function(e) {
-      showNotification(paste("Error loading mock data:", e$message), type = "error")
-      log_message(paste("ERROR loading mock data:", e$message))
+      message(paste("ERROR (mock data load):", conditionMessage(e)))
+      showNotification("Could not load demo data. Please try again.", type = "error")
+      log_message("ERROR loading mock data (see server log for details)")
     })
   })
 
@@ -115,53 +145,80 @@ server <- function(input, output, session) {
   })
 
   # ============================================
-  # File upload handlers
+  # File upload handlers (with security controls)
   # ============================================
 
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
+      file_check <- validate_file_type(input$portfolio_file$datapath, input$portfolio_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
       rv$portfolio <- strip_columns(
         tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
+      audit_log("upload", list(type = "portfolio", rows = nrow(rv$portfolio)))
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading portfolio:", e$message), type = "error")
+      message(paste("ERROR (portfolio upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
+      file_check <- validate_file_type(input$assets_file$datapath, input$assets_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
       rv$assets <- strip_columns(
         tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
+      audit_log("upload", list(type = "assets", rows = nrow(rv$assets)))
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading assets:", e$message), type = "error")
+      message(paste("ERROR (assets upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
+      file_check <- validate_file_type(input$financial_file$datapath, input$financial_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
       rv$financial <- strip_columns(
         tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
+      audit_log("upload", list(type = "financial", rows = nrow(rv$financial)))
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading financial data:", e$message), type = "error")
+      message(paste("ERROR (financial upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      rv$scenarios <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$scenarios_file$datapath)), "scenarios")
+      file_check <- validate_file_type(input$scenarios_file$datapath, input$scenarios_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
+      rv$scenarios <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
+      audit_log("upload", list(type = "scenarios", rows = nrow(rv$scenarios)))
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
         type = "message"
       )
     }, error = function(e) {
-      showNotification(paste("Error loading scenarios:", e$message), type = "error")
+      message(paste("ERROR (scenarios upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
@@ -856,13 +913,17 @@ server <- function(input, output, session) {
         incProgress(0.2, detail = "Preparing data...")
         log_message("--- Input Data ---")
         log_message(paste("  Portfolio rows:", nrow(rv$portfolio)))
-        log_message(paste("  Portfolio columns:", paste(names(rv$portfolio), collapse = ", ")))
+        log_message(paste("  Portfolio columns:", ncol(rv$portfolio)))
         log_message(paste("  Assets rows:", nrow(rv$assets)))
         log_message(paste("  Assets companies:", length(unique(rv$assets$company_id))))
         log_message(paste("  Financial rows:", nrow(rv$financial)))
         log_message(paste("  Scenarios rows:", nrow(rv$scenarios)))
-        log_message(paste("  Scenarios available:", paste(unique(rv$scenarios$scenario), collapse = ", ")))
+        log_message(paste("  Scenarios count:", length(unique(rv$scenarios$scenario))))
         log_message(paste("  Carbon price rows:", if (!is.null(rv$carbon)) nrow(rv$carbon) else "NULL"))
+        if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
+          log_message(paste("  Debug - Portfolio columns:", paste(names(rv$portfolio), collapse = ", ")))
+          log_message(paste("  Debug - Scenarios available:", paste(unique(rv$scenarios$scenario), collapse = ", ")))
+        }
         target_scenarios_run <- input$target_scenarios
         n_scenarios <- length(target_scenarios_run)
 
@@ -1023,24 +1084,33 @@ server <- function(input, output, session) {
         log_message(paste("  Primary scenario:", primary_scenario))
         log_message(paste("  Primary shock year:", primary_year))
         log_message(paste("  Result rows:", nrow(rv$results)))
-        log_message(paste("  Result columns:", paste(names(rv$results), collapse = ", ")))
+        log_message(paste("  Result columns:", ncol(rv$results)))
         log_message(paste("  Total scenarios:", n_scenarios, "| Total years:", n_years,
                          "| Total runs:", total_runs))
 
-        if ("crispy_perc_value_change" %in% names(rv$results)) {
-          log_message(paste("  Avg NPV change:", smart_round(mean(rv$results$crispy_perc_value_change, na.rm = TRUE) * 100), "%"))
-        }
-        if ("pd_shock" %in% names(rv$results)) {
-          log_message(paste("  Max PD shock:", smart_round(max(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
-        }
-        if ("expected_loss_shock" %in% names(rv$results)) {
-          log_message(paste("  Total expected loss (shock):", smart_round(sum(rv$results$expected_loss_shock, na.rm = TRUE))))
-        }
         if ("sector" %in% names(rv$results)) {
-          log_message(paste("  Sectors:", paste(unique(rv$results$sector), collapse = ", ")))
+          log_message(paste("  Distinct sectors:", length(unique(rv$results$sector))))
         }
         if ("technology" %in% names(rv$results)) {
-          log_message(paste("  Technologies:", paste(unique(rv$results$technology), collapse = ", ")))
+          log_message(paste("  Distinct technologies:", length(unique(rv$results$technology))))
+        }
+        if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
+          log_message(paste("  Debug - Result columns:", paste(names(rv$results), collapse = ", ")))
+          if ("crispy_perc_value_change" %in% names(rv$results)) {
+            log_message(paste("  Debug - Avg NPV change:", smart_round(mean(rv$results$crispy_perc_value_change, na.rm = TRUE) * 100), "%"))
+          }
+          if ("pd_shock" %in% names(rv$results)) {
+            log_message(paste("  Debug - Max PD shock:", smart_round(max(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
+          }
+          if ("expected_loss_shock" %in% names(rv$results)) {
+            log_message(paste("  Debug - Total expected loss (shock):", smart_round(sum(rv$results$expected_loss_shock, na.rm = TRUE))))
+          }
+          if ("sector" %in% names(rv$results)) {
+            log_message(paste("  Debug - Sectors:", paste(unique(rv$results$sector), collapse = ", ")))
+          }
+          if ("technology" %in% names(rv$results)) {
+            log_message(paste("  Debug - Technologies:", paste(unique(rv$results$technology), collapse = ", ")))
+          }
         }
 
         # Reset computed integration results (need recalculation with new model outputs)
@@ -1049,20 +1119,12 @@ server <- function(input, output, session) {
         rv$el_integration_result <- NULL
         # NOTE: rv$internal_pd and rv$internal_el are intentionally preserved
 
-        rv$run_id <- generate_run_id(list(
-          baseline = paste(input$baseline_scenario, collapse = ","),
-          targets = paste(input$target_scenarios, collapse = ","),
-          geography = input$scenario_geography,
-          shock_years = paste(input$shock_years, collapse = ","),
-          discount_rate = input$discount_rate,
-          growth_rate = input$growth_rate,
-          risk_free_rate = input$risk_free_rate,
-          market_passthrough = input$market_passthrough,
-          carbon_price_model = input$carbon_price_model
-        ))
+        rv$run_id <- generate_run_id()
 
         incProgress(0.9, detail = "Finalizing...")
         log_message(paste("Analysis complete! Run ID:", rv$run_id))
+        audit_log("analysis_run", list(run_id = rv$run_id, n_scenarios = n_scenarios,
+                                       n_years = n_years, result_rows = nrow(rv$results)))
 
         n_yr_label <- if (n_years > 1) paste0(" across ", n_years, " shock years") else ""
         showNotification(paste0("Analysis completed successfully!", n_yr_label), type = "message", duration = 5)
@@ -1071,9 +1133,10 @@ server <- function(input, output, session) {
         updateTabsetPanel(session, "tabs", selected = "results")
 
       }, error = function(e) {
-        log_message(paste("ERROR:", e$message))
+        message(paste("ERROR (analysis run):", conditionMessage(e)))
+        log_message("ERROR: Analysis failed (see server log for details)")
         showNotification(
-          paste("Analysis failed:", e$message),
+          "Analysis failed. Please check your data and parameters.",
           type = "error",
           duration = 10
         )
@@ -4409,7 +4472,8 @@ server <- function(input, output, session) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      message(paste("ERROR (PD CSV read):", conditionMessage(e)))
+      showNotification("Could not read the PD CSV file. Please check the file format.", type = "error", duration = 8)
     })
   })
 
@@ -4746,7 +4810,8 @@ server <- function(input, output, session) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      message(paste("ERROR (EL CSV read):", conditionMessage(e)))
+      showNotification("Could not read the EL CSV file. Please check the file format.", type = "error", duration = 8)
     })
   })
 
@@ -5166,6 +5231,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
+      audit_log("export", list(format = "xlsx", run_id = rv$run_id, rows = nrow(rv$results)))
 
       df <- rv$results
       grp_cols <- intersect(c("sector", "technology"), names(df))
@@ -5236,6 +5302,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
+      audit_log("export", list(format = "csv", run_id = rv$run_id, rows = nrow(rv$results)))
       write_csv(sanitize_export(rv$results), file)
     }
   )
@@ -5246,6 +5313,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
+      audit_log("export", list(format = "json", run_id = rv$run_id, rows = nrow(rv$results)))
       jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
     }
   )
@@ -5255,6 +5323,7 @@ server <- function(input, output, session) {
       paste0("trisk_config_", rv$run_id, ".json")
     },
     content = function(file) {
+      audit_log("export", list(format = "config_json", run_id = rv$run_id))
       config <- list(
         run_id = rv$run_id,
         timestamp = as.character(Sys.time()),
@@ -5276,8 +5345,7 @@ server <- function(input, output, session) {
         ),
         versions = list(
           trisk_model = as.character(packageVersion("trisk.model")),
-          trisk_analysis = as.character(packageVersion("trisk.analysis")),
-          R = R.version$version.string
+          trisk_analysis = as.character(packageVersion("trisk.analysis"))
         )
       )
       jsonlite::write_json(config, file, pretty = TRUE, auto_unbox = TRUE)
@@ -5306,10 +5374,7 @@ server <- function(input, output, session) {
   output$version_info <- renderText({
     paste(
       "trisk.model:", as.character(packageVersion("trisk.model")),
-      "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis")),
-      "\nR:", R.version$version.string,
-      "\nShiny:", as.character(packageVersion("shiny")),
-      "\nContainer build:", Sys.getenv("BUILD_DATE", "unknown")
+      "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis"))
     )
   })
 }

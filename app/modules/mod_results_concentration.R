@@ -423,7 +423,7 @@ setup_results_concentration <- function(input, output, session, rv) {
           val <- match_row[[metric_col]][1]
           z_matrix[r, cc] <- if (metric == "pd_change") val * 100 else val
           text_matrix[r, cc] <- paste0(
-            rows[r], " / ", cols[cc],
+            htmltools::htmlEscape(as.character(rows[r])), " / ", htmltools::htmlEscape(as.character(cols[cc])),
             "\n", metric_label, ": ",
             if (metric == "pd_change") paste0(round(val * 100, 4), " pp")
             else if (metric == "exposure") paste0("$", format(round(val), big.mark = ","))
@@ -432,7 +432,7 @@ setup_results_concentration <- function(input, output, session, rv) {
             "\nCompanies: ", match_row$n_companies[1]
           )
         } else {
-          text_matrix[r, cc] <- paste0(rows[r], " / ", cols[cc], "\nNo data")
+          text_matrix[r, cc] <- paste0(htmltools::htmlEscape(as.character(rows[r])), " / ", htmltools::htmlEscape(as.character(cols[cc])), "\nNo data")
         }
       }
     }
@@ -509,8 +509,8 @@ setup_results_concentration <- function(input, output, session, rv) {
       rep(palette, length.out = n_top)
     }
 
-    hover_text <- paste0(company_df$company_label,
-             "\nSector: ", company_df$sector,
+    hover_text <- paste0(htmltools::htmlEscape(as.character(company_df$company_label)),
+             "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
              "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
              "\nWeight: ", round(company_df$weight * 100, 1), "%",
              "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp")
@@ -562,8 +562,8 @@ setup_results_concentration <- function(input, output, session, rv) {
     if (is.na(pd_range) || pd_range == 0) pd_range <- 1  # avoid division by zero
 
     hover_text <- paste0(
-      top_co$company_label,
-      "\nSector: ", top_co$sector,
+      htmltools::htmlEscape(as.character(top_co$company_label)),
+      "\nSector: ", htmltools::htmlEscape(as.character(top_co$sector)),
       "\nExposure: $", format(round(top_co$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(top_co$weight * 100, 1), "%",
       "\nPD Change: ", round(top_co$pd_change * 100, 4), " pp"
@@ -590,7 +590,7 @@ setup_results_concentration <- function(input, output, session, rv) {
     sector_color_vals <- sector_pd / pd_range
 
     sector_hover <- paste0(
-      sectors,
+      htmltools::htmlEscape(as.character(sectors)),
       "\nTotal weight: ", round(sector_weights, 1), "%",
       "\nAvg PD Change: ", round(sector_pd * 100, 4), " pp"
     )
@@ -701,8 +701,8 @@ setup_results_concentration <- function(input, output, session, rv) {
     colors <- ifelse(company_df$pd_change >= 0, BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      htmltools::htmlEscape(as.character(company_df$company_label)),
+      "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nWeight: ", round(company_df$weight * 100, 2), "%",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
@@ -761,7 +761,7 @@ setup_results_concentration <- function(input, output, session, rv) {
     }
 
     hover_text <- paste0(
-      geo_df$country_iso2,
+      htmltools::htmlEscape(as.character(geo_df$country_iso2)),
       "\nCompanies: ", geo_df$n_companies,
       "\nExposure: $", format(round(geo_df$total_exposure), big.mark = ","),
       "\nWeight: ", round(geo_df$weight * 100, 1), "%",

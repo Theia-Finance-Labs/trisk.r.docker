@@ -46,8 +46,9 @@ setup_upload <- function(input, output, session, rv, log_message) {
         log_message(paste("Warning: only", loaded, "of 5 datasets loaded."))
       }
     }, error = function(e) {
-      showNotification(paste("Error loading mock data:", e$message), type = "error")
-      log_message(paste("ERROR loading mock data:", e$message))
+      message(paste("ERROR (mock data):", conditionMessage(e)))
+      showNotification("Could not load demo data. Please check the trisk package installation.", type = "error")
+      log_message(paste("ERROR loading mock data:", conditionMessage(e)))
     })
   })
 
@@ -83,7 +84,12 @@ setup_upload <- function(input, output, session, rv, log_message) {
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
-      df <- read_csv(input$portfolio_file$datapath, show_col_types = FALSE)
+      file_check <- validate_file_type(input$portfolio_file$datapath, input$portfolio_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
+      df <- strip_columns(tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
       err <- validate_portfolio(df)
       if (!is.null(err)) {
         showNotification(paste("Portfolio rejected:", err), type = "error", duration = 8)
@@ -92,14 +98,20 @@ setup_upload <- function(input, output, session, rv, log_message) {
       rv$portfolio <- df
       showNotification(paste("Portfolio loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading portfolio:", e$message), type = "error")
+      message(paste("ERROR (portfolio upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
-      df <- read_csv(input$assets_file$datapath, show_col_types = FALSE)
+      file_check <- validate_file_type(input$assets_file$datapath, input$assets_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
+      df <- strip_columns(tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
       err <- validate_assets(df)
       if (!is.null(err)) {
         showNotification(paste("Assets rejected:", err), type = "error", duration = 8)
@@ -108,14 +120,20 @@ setup_upload <- function(input, output, session, rv, log_message) {
       rv$assets <- df
       showNotification(paste("Assets loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading assets:", e$message), type = "error")
+      message(paste("ERROR (assets upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
-      df <- read_csv(input$financial_file$datapath, show_col_types = FALSE)
+      file_check <- validate_file_type(input$financial_file$datapath, input$financial_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
+      df <- strip_columns(tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
       err <- validate_financial(df)
       if (!is.null(err)) {
         showNotification(paste("Financial data rejected:", err), type = "error", duration = 8)
@@ -124,14 +142,20 @@ setup_upload <- function(input, output, session, rv, log_message) {
       rv$financial <- df
       showNotification(paste("Financial data loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading financial data:", e$message), type = "error")
+      message(paste("ERROR (financial upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      df <- read_csv(input$scenarios_file$datapath, show_col_types = FALSE)
+      file_check <- validate_file_type(input$scenarios_file$datapath, input$scenarios_file$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
+      df <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
       # Minimal schema check: must have 'scenario' column at minimum
       if (!"scenario" %in% names(df)) {
         showNotification("Scenarios rejected: missing required column 'scenario'", type = "error", duration = 8)
@@ -143,7 +167,8 @@ setup_upload <- function(input, output, session, rv, log_message) {
         type = "message"
       )
     }, error = function(e) {
-      showNotification(paste("Error loading scenarios:", e$message), type = "error")
+      message(paste("ERROR (scenarios upload):", conditionMessage(e)))
+      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
     })
   })
 

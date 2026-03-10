@@ -24,7 +24,7 @@ ARG CRAN_SNAPSHOT
 ARG TRISK_MODEL_SHA
 ARG TRISK_ANALYSIS_SHA
 
-ENV CRAN_REPO=https://packagemanager.posit.co/cran/${CRAN_SNAPSHOT}
+ENV CRAN_REPO=https://packagemanager.posit.co/cran/__linux__/jammy/${CRAN_SNAPSHOT}
 
 # Minimal build dependencies for CLI (no font/graphics libs)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -66,7 +66,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4 \
     libssl3 \
     libxml2 \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy compiled R library tree from builder
@@ -91,6 +90,8 @@ WORKDIR /data
 ENV TMPDIR=/tmp
 
 USER trisk
+
+# No HEALTHCHECK — this is a batch CLI tool, not a long-running service
 
 ENTRYPOINT ["Rscript", "/opt/trisk/run_analysis.R"]
 CMD ["--help"]

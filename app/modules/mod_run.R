@@ -178,13 +178,10 @@ setup_run <- function(input, output, session, rv, log_message) {
 
         incProgress(0.2, detail = "Preparing data...")
         log_message("--- Input Data ---")
-        log_message(paste("  Portfolio rows:", nrow(rv$portfolio)))
-        log_message(paste("  Portfolio columns:", paste(names(rv$portfolio), collapse = ", ")))
-        log_message(paste("  Assets rows:", nrow(rv$assets)))
-        log_message(paste("  Assets companies:", length(unique(rv$assets$company_id))))
-        log_message(paste("  Financial rows:", nrow(rv$financial)))
-        log_message(paste("  Scenarios rows:", nrow(rv$scenarios)))
-        log_message(paste("  Scenarios available:", paste(unique(rv$scenarios$scenario), collapse = ", ")))
+        log_message(paste("  Portfolio:", nrow(rv$portfolio), "rows,", ncol(rv$portfolio), "columns"))
+        log_message(paste("  Assets:", nrow(rv$assets), "rows,", length(unique(rv$assets$company_id)), "companies"))
+        log_message(paste("  Financial:", nrow(rv$financial), "rows"))
+        log_message(paste("  Scenarios:", nrow(rv$scenarios), "rows,", length(unique(rv$scenarios$scenario)), "scenarios"))
         log_message(paste("  Carbon price rows:", if (!is.null(rv$carbon)) nrow(rv$carbon) else "NULL"))
         target_scenarios_run <- input$target_scenarios
         n_scenarios <- length(target_scenarios_run)
@@ -330,25 +327,33 @@ setup_run <- function(input, output, session, rv, log_message) {
         log_message("--- Results (Primary) ---")
         log_message(paste("  Primary scenario:", primary_scenario))
         log_message(paste("  Primary shock year:", primary_year))
-        log_message(paste("  Result rows:", nrow(rv$results)))
-        log_message(paste("  Result columns:", paste(names(rv$results), collapse = ", ")))
+        log_message(paste("  Result:", nrow(rv$results), "rows,", ncol(rv$results), "columns"))
         log_message(paste("  Total scenarios:", n_scenarios, "| Total years:", n_years,
                          "| Total runs:", total_runs))
 
-        if ("crispy_perc_value_change" %in% names(rv$results)) {
-          log_message(paste("  Avg NPV change:", smart_round(mean(rv$results$crispy_perc_value_change, na.rm = TRUE) * 100), "%"))
-        }
-        if ("pd_shock" %in% names(rv$results)) {
-          log_message(paste("  Max PD shock:", smart_round(max(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
-        }
-        if ("expected_loss_shock" %in% names(rv$results)) {
-          log_message(paste("  Total expected loss (shock):", smart_round(sum(rv$results$expected_loss_shock, na.rm = TRUE))))
-        }
         if ("sector" %in% names(rv$results)) {
-          log_message(paste("  Sectors:", paste(unique(rv$results$sector), collapse = ", ")))
+          log_message(paste("  Distinct sectors:", length(unique(rv$results$sector))))
         }
         if ("technology" %in% names(rv$results)) {
-          log_message(paste("  Technologies:", paste(unique(rv$results$technology), collapse = ", ")))
+          log_message(paste("  Distinct technologies:", length(unique(rv$results$technology))))
+        }
+        if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
+          log_message(paste("  Debug - columns:", paste(names(rv$results), collapse = ", ")))
+          if ("crispy_perc_value_change" %in% names(rv$results)) {
+            log_message(paste("  Debug - Avg NPV change:", smart_round(mean(rv$results$crispy_perc_value_change, na.rm = TRUE) * 100), "%"))
+          }
+          if ("pd_shock" %in% names(rv$results)) {
+            log_message(paste("  Debug - Max PD shock:", smart_round(max(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
+          }
+          if ("expected_loss_shock" %in% names(rv$results)) {
+            log_message(paste("  Debug - Total expected loss (shock):", smart_round(sum(rv$results$expected_loss_shock, na.rm = TRUE))))
+          }
+          if ("sector" %in% names(rv$results)) {
+            log_message(paste("  Debug - Sectors:", paste(unique(rv$results$sector), collapse = ", ")))
+          }
+          if ("technology" %in% names(rv$results)) {
+            log_message(paste("  Debug - Technologies:", paste(unique(rv$results$technology), collapse = ", ")))
+          }
         }
 
         # Reset computed integration results (need recalculation with new model outputs)
@@ -357,17 +362,7 @@ setup_run <- function(input, output, session, rv, log_message) {
         rv$el_integration_result <- NULL
         # NOTE: rv$internal_pd and rv$internal_el are intentionally preserved
 
-        rv$run_id <- generate_run_id(list(
-          baseline = paste(input$baseline_scenario, collapse = ","),
-          targets = paste(input$target_scenarios, collapse = ","),
-          geography = input$scenario_geography,
-          shock_years = paste(input$shock_years, collapse = ","),
-          discount_rate = input$discount_rate,
-          growth_rate = input$growth_rate,
-          risk_free_rate = input$risk_free_rate,
-          market_passthrough = input$market_passthrough,
-          carbon_price_model = input$carbon_price_model
-        ))
+        rv$run_id <- generate_run_id()
 
         incProgress(0.9, detail = "Finalizing...")
         log_message(paste("Analysis complete! Run ID:", rv$run_id))
@@ -382,9 +377,10 @@ setup_run <- function(input, output, session, rv, log_message) {
         updateTabsetPanel(session, "tabs", selected = "results")
 
       }, error = function(e) {
-        log_message(paste("ERROR:", e$message))
+        log_message(paste("ERROR:", conditionMessage(e)))
+        message(paste("ERROR (analysis):", conditionMessage(e)))
         showNotification(
-          paste("Analysis failed:", e$message),
+          "Analysis failed. Please check your data and configuration, then try again.",
           type = "error",
           duration = 10
         )

@@ -117,6 +117,46 @@ setup_download <- function(input, output, session, rv) {
   )
 
   # ============================================
+  # HTML Report Export
+  # ============================================
+
+  output$download_report_html <- downloadHandler(
+    filename = function() {
+      paste0("trisk_report_", rv$run_id, ".html")
+    },
+    content = function(file) {
+      req(rv$results)
+
+      # Copy template to temp dir so rmarkdown::render can write intermediates
+      tempReport <- file.path(tempdir(), "report.Rmd")
+      file.copy("report_template.Rmd", tempReport, overwrite = TRUE)
+
+      # Build config list for the report
+      config <- list(
+        run_id = rv$run_id,
+        baseline = paste(input$baseline_scenario, collapse = ", "),
+        target = paste(input$target_scenarios, collapse = ", "),
+        geography = input$scenario_geography,
+        shock_years = paste(input$shock_years, collapse = ", "),
+        risk_free_rate = input$risk_free_rate,
+        discount_rate = input$discount_rate,
+        growth_rate = input$growth_rate
+      )
+
+      rmarkdown::render(
+        tempReport,
+        output_file = file,
+        params = list(
+          results = sanitize_export(rv$results),
+          config = config,
+          run_id = rv$run_id
+        ),
+        envir = new.env(parent = globalenv())
+      )
+    }
+  )
+
+  # ============================================
   # Metadata
   # ============================================
 

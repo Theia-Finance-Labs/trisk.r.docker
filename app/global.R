@@ -20,6 +20,8 @@ library(readr)
 library(writexl)
 library(dplyr)
 library(tidyr)
+library(rmarkdown)
+library(knitr)
 
 # ============================================
 # 1in1000 Color Palette (from 1in1000.com)
@@ -50,16 +52,100 @@ TRISK_HEX_RED   <- "#F53D3F"
 TRISK_HEX_GREEN <- "#5D9324"
 TRISK_HEX_GREY  <- "#BAB6B5"
 
-#' TRISK ggplot2 theme using 1in1000 fonts
+#' TRISK ggplot2 theme — font families are browser-rendered via ggplotly()
 trisk_plot_theme <- function() {
-  theme_minimal(base_size = 12) +
+  theme_minimal(base_size = 12, base_family = "Inter") +
     theme(
-      plot.title = element_text(hjust = 0.5, face = "bold"),
+      plot.title = element_text(hjust = 0.5, face = "bold",
+                                family = "Space Grotesk", size = 14),
+      plot.subtitle = element_text(hjust = 0.5, color = FG_MUTED, size = 11),
       legend.title = element_blank(),
+      legend.text = element_text(size = 10),
+      axis.title = element_text(family = "Space Grotesk", size = 11, color = FG_MUTED),
+      axis.text = element_text(size = 10, color = FG_TEXT),
       axis.line = element_line(colour = TRISK_HEX_GREY, linewidth = 0.5),
       panel.grid.major = element_line(colour = "#EDEDED"),
-      panel.grid.minor = element_blank()
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background = element_rect(fill = "transparent", color = NA)
     )
+}
+
+#' Get Plotly theme colors based on current theme (light/dark)
+plotly_theme_colors <- function(input) {
+  if (!is.null(input$current_theme) && input$current_theme == "dark") {
+    list(
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "#242438",
+      font_color = "#E8E6F0",
+      gridcolor = "#3A3A52",
+      zerolinecolor = "#4A4A62"
+    )
+  } else {
+    list(
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "#FFFFFF",
+      font_color = FG_TEXT,
+      gridcolor = "#EDEDED",
+      zerolinecolor = "#CCCCCC"
+    )
+  }
+}
+
+#' Standard Plotly hoverlabel styling
+PLOTLY_HOVERLABEL <- list(
+  bgcolor = "#1A1A1A",
+  font = list(family = "Inter, sans-serif", size = 12, color = "#FFFFFF"),
+  bordercolor = "transparent"
+)
+
+#' Standard Plotly config (mode bar buttons)
+PLOTLY_CONFIG <- list(
+  displayModeBar = TRUE,
+  modeBarButtonsToRemove = c("lasso2d", "select2d", "autoScale2d"),
+  displaylogo = FALSE
+)
+
+# ============================================
+# Column definitions (for DT table header tooltips)
+# ============================================
+
+COLUMN_DEFS <- list(
+  company_id = "Unique company identifier",
+  company_name = "Company display name",
+  sector = "NACE/ICB sector classification",
+  technology = "Production technology type",
+  country_iso2 = "ISO 3166-1 alpha-2 country code",
+  exposure_value_usd = "Loan exposure amount in USD",
+  term = "Loan maturity in years",
+  loss_given_default = "LGD: expected loss severity (0-1)",
+  pd_baseline = "Probability of default under baseline scenario",
+  pd_shock = "Probability of default under shocked scenario",
+  PD_Change = "Absolute PD change (shock minus baseline)",
+  PD_Change_Pct = "Relative PD change as percentage",
+  EL_Baseline = "Expected loss under baseline (EAD x PD_baseline)",
+  EL_Shock = "Expected loss under shock (EAD x PD_shock)",
+  EL_Change = "Change in expected loss (shock minus baseline)",
+  EL_Change_Pct = "Relative change in expected loss (%)",
+  crispy_perc_value_change = "NPV percentage change under shock scenario",
+  net_present_value_baseline = "Net present value under baseline",
+  net_present_value_shock = "Net present value under shock"
+)
+
+#' Build DT headerCallback JS for column tooltips
+make_header_tooltips <- function(col_names) {
+  tips <- sapply(col_names, function(cn) {
+    if (cn %in% names(COLUMN_DEFS)) COLUMN_DEFS[[cn]] else cn
+  })
+  DT::JS(paste0(
+    "function(thead, data, start, end, display) {",
+    "  var tips = ", jsonlite::toJSON(unname(tips)), ";",
+    "  $(thead).find('th').each(function(i) {",
+    "    $(this).attr('title', tips[i]);",
+    "    $(this).css('cursor', 'help');",
+    "  });",
+    "}"
+  ))
 }
 
 # ============================================
@@ -283,7 +369,7 @@ strip_columns <- function(df, type) {
   # to prevent CSV injection when data is later exported to Excel
   char_cols <- names(df)[sapply(df, is.character)]
   for (col in char_cols) {
-    df[[col]] <- sub("^[=+\\-@]+", "", df[[col]])
+    df[[col]] <- sub("^[=+@-]+", "", df[[col]])
   }
 
   df
@@ -360,8 +446,8 @@ audit_dataset <- function(df, type) {
     }
   }
 
-  # Check for duplicate company_id
-  if ("company_id" %in% names(df)) {
+  # Check for duplicate company_id (skip for assets — multiple rows per company is normal)
+  if ("company_id" %in% names(df) && type %in% c("portfolio", "financial")) {
     dup_ids <- df$company_id[duplicated(df$company_id)]
     if (length(dup_ids) > 0) {
       dup_rows <- which(df$company_id %in% unique(dup_ids))
@@ -446,14 +532,14 @@ display_round <- function(x) {
   round(x, 2)
 }
 
-#' Format large numbers for display (always returns character)
+#' Format large numbers for display (always returns character, never scientific notation)
 format_number <- function(x) {
-  as.character(
-    ifelse(abs(x) >= 1e6,
-           paste0(round(x / 1e6, 2), "M"),
-           ifelse(abs(x) >= 1e3,
-                  paste0(round(x / 1e3, 2), "K"),
-                  as.character(round(x, 2))))
+  dplyr::case_when(
+    is.na(x)       ~ "N/A",
+    abs(x) >= 1e9  ~ paste0(format(round(x / 1e9, 2), scientific = FALSE), "B"),
+    abs(x) >= 1e6  ~ paste0(format(round(x / 1e6, 2), scientific = FALSE), "M"),
+    abs(x) >= 1e3  ~ paste0(format(round(x / 1e3, 2), scientific = FALSE), "K"),
+    TRUE           ~ format(round(x, 2), scientific = FALSE)
   )
 }
 

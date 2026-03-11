@@ -30,7 +30,14 @@ server <- function(input, output, session) {
     # Each entry: list(results, config, run_id, timestamp, n_companies)
     run_history = list(),
     # Currently selected comparison run (index into run_history)
-    compare_run_idx = NULL
+    compare_run_idx = NULL,
+    # Scenario pairs: explicit baseline-target pairing
+    pair_ids = integer(0),      # active pair row IDs
+    pair_counter = 0L,          # monotonically increasing pair ID counter
+    baseline_choices = NULL,    # named vector: label -> code (for selectize)
+    target_choices = NULL,      # named vector: label -> code (for selectize)
+    baseline_default = NULL,    # default baseline scenario code
+    target_default = NULL       # default target scenario code
   )
 
   # ============================================
@@ -300,6 +307,91 @@ server <- function(input, output, session) {
     }
   })
 
+  # ============================================
+  # Consolidated Data Quality Dashboard
+  # ============================================
+  output$data_quality_dashboard <- renderUI({
+    datasets <- list(
+      Portfolio = rv$portfolio,
+      Assets   = rv$assets,
+      Financial = rv$financial,
+      Scenarios = rv$scenarios
+    )
+    loaded <- !sapply(datasets, is.null)
+    if (!any(loaded)) return(NULL)
+
+    auditable_types <- c("Portfolio" = "portfolio", "Assets" = "assets", "Financial" = "financial")
+    total_rows <- 0L
+    total_issues <- 0L
+    ds_cards <- list()
+
+    for (label in names(datasets)) {
+      df <- datasets[[label]]
+      if (is.null(df)) {
+        ds_cards[[label]] <- tags$div(class = "dq-badge dq-badge--missing",
+          icon("times-circle"),
+          tags$span(class = "dq-badge-label", label),
+          tags$span(class = "dq-badge-detail", "Not loaded")
+        )
+        next
+      }
+
+      n_rows <- nrow(df)
+      total_rows <- total_rows + n_rows
+
+      type_key <- auditable_types[label]
+      n_issues <- 0L
+      if (!is.na(type_key) && !is.null(type_key)) {
+        audit <- audit_dataset(df, type_key)
+        if (!is.null(audit)) n_issues <- nrow(audit$issues)
+      }
+      total_issues <- total_issues + n_issues
+
+      badge_class <- if (n_issues == 0) "dq-badge--good"
+                     else if (n_issues <= 10) "dq-badge--warning"
+                     else "dq-badge--danger"
+      badge_icon <- if (n_issues == 0) icon("check-circle")
+                    else if (n_issues <= 10) icon("exclamation-triangle")
+                    else icon("times-circle")
+
+      detail_text <- paste0(format(n_rows, big.mark = ","), " rows")
+      if (n_issues > 0) {
+        detail_text <- paste0(detail_text, " \u00B7 ", n_issues, " issue", if (n_issues != 1) "s" else "")
+      }
+
+      ds_cards[[label]] <- tags$div(class = paste("dq-badge", badge_class),
+        badge_icon,
+        tags$span(class = "dq-badge-label", label),
+        tags$span(class = "dq-badge-detail", detail_text)
+      )
+    }
+
+    tagList(
+      tags$div(class = "dq-dashboard",
+        tags$div(class = "dq-summary-row",
+          tags$div(class = "dq-stat",
+            tags$span(class = "dq-stat-value", format(total_rows, big.mark = ",")),
+            tags$span(class = "dq-stat-label", "Total Rows")
+          ),
+          tags$div(class = "dq-stat",
+            tags$span(class = "dq-stat-value", sum(loaded)),
+            tags$span(class = "dq-stat-label",
+              paste0("of ", length(datasets), " Datasets"))
+          ),
+          tags$div(class = "dq-stat",
+            tags$span(class = paste0("dq-stat-value",
+              if (total_issues > 0) " status-missing" else " status-ok"),
+              total_issues),
+            tags$span(class = "dq-stat-label", "Issues Found")
+          )
+        ),
+        tags$div(class = "dq-badges-row",
+          ds_cards
+        )
+      )
+    )
+  })
+
   output$upload_summary <- renderUI({
     portfolio_ok <- !is.null(rv$portfolio) && is.null(validate_portfolio(rv$portfolio))
     assets_ok <- !is.null(rv$assets) && is.null(validate_assets(rv$assets))
@@ -465,6 +557,77 @@ server <- function(input, output, session) {
   )
 
   # ============================================
+  # Scenario pair management helpers
+  # ============================================
+
+  # Insert a new pair row into the UI
+  add_pair_to_ui <- function(baseline_selected = NULL, target_selected = NULL) {
+    if (is.null(baseline_selected)) baseline_selected <- rv$baseline_default
+    if (is.null(target_selected)) target_selected <- rv$target_default
+    rv$pair_counter <- rv$pair_counter + 1L
+    pid <- rv$pair_counter
+    rv$pair_ids <- c(rv$pair_ids, pid)
+
+    insertUI(
+      selector = "#scenario_pairs_container",
+      where = "beforeEnd",
+      ui = div(id = paste0("pair_row_", pid), class = "scenario-pair-row",
+        fluidRow(
+          column(5,
+            selectizeInput(paste0("pair_baseline_", pid), NULL,
+                           choices = rv$baseline_choices,
+                           selected = baseline_selected,
+                           multiple = FALSE,
+                           options = list(placeholder = "Select baseline..."))
+          ),
+          column(5,
+            selectizeInput(paste0("pair_target_", pid), NULL,
+                           choices = rv$target_choices,
+                           selected = target_selected,
+                           multiple = FALSE,
+                           options = list(placeholder = "Select target..."))
+          ),
+          column(2,
+            actionButton(paste0("remove_pair_", pid), NULL, icon = icon("times"),
+                         class = "btn btn-default btn-sm btn-remove-pair")
+          )
+        )
+      )
+    )
+
+    # Register remove handler (once = TRUE auto-destroys the observer)
+    observeEvent(input[[paste0("remove_pair_", pid)]], {
+      removeUI(selector = paste0("#pair_row_", pid))
+      rv$pair_ids <- setdiff(rv$pair_ids, pid)
+    }, ignoreInit = TRUE, once = TRUE)
+  }
+
+  # Remove all existing pair rows from the UI
+  clear_all_pairs <- function() {
+    for (pid in rv$pair_ids) {
+      removeUI(selector = paste0("#pair_row_", pid))
+    }
+    rv$pair_ids <- integer(0)
+  }
+
+  # Read all complete pairs from current inputs
+  get_scenario_pairs <- function() {
+    if (length(rv$pair_ids) == 0) return(list())
+    pairs <- lapply(rv$pair_ids, function(pid) {
+      list(
+        id = pid,
+        baseline = input[[paste0("pair_baseline_", pid)]],
+        target = input[[paste0("pair_target_", pid)]]
+      )
+    })
+    # Keep only pairs where both fields are filled
+    Filter(function(p) {
+      !is.null(p$baseline) && nzchar(p$baseline) &&
+      !is.null(p$target) && nzchar(p$target)
+    }, pairs)
+  }
+
+  # ============================================
   # Update scenario choices (filtered by scenario_type)
   # ============================================
 
@@ -492,8 +655,7 @@ server <- function(input, output, session) {
 
     # Determine the primary default baseline (NGFS GCAM 2024 CP preferred)
     ngfs_gcam_cp_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?CP$", baseline_scenarios, value = TRUE)
-    baseline_default <- if (length(ngfs_gcam_cp_candidates) > 0) {
-      # Pick the most recent year
+    bl_default <- if (length(ngfs_gcam_cp_candidates) > 0) {
       ngfs_gcam_cp_candidates[length(ngfs_gcam_cp_candidates)]
     } else if ("NGFS2023GCAM_CP" %in% baseline_scenarios) {
       "NGFS2023GCAM_CP"
@@ -502,7 +664,7 @@ server <- function(input, output, session) {
     }
 
     ngfs_gcam_nz_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?NZ2050$", target_scenarios, value = TRUE)
-    target_default <- if (length(ngfs_gcam_nz_candidates) > 0) {
+    tgt_default <- if (length(ngfs_gcam_nz_candidates) > 0) {
       ngfs_gcam_nz_candidates[length(ngfs_gcam_nz_candidates)]
     } else if ("NGFS2023GCAM_NZ2050" %in% target_scenarios) {
       "NGFS2023GCAM_NZ2050"
@@ -512,59 +674,129 @@ server <- function(input, output, session) {
 
     geo_default <- if ("Global" %in% geographies) "Global" else geographies[1]
 
-    # Build flat labeled choices for baseline multi-select (selectize doesn't do optgroups well in multi mode)
+    # Build flat labeled choices
     baseline_labels <- sapply(baseline_scenarios, function(s) {
       paste0(scenario_label(s), "  [", s, "]")
     }, USE.NAMES = FALSE)
-    baseline_choices_flat <- setNames(baseline_scenarios, baseline_labels)
+    rv$baseline_choices <- setNames(baseline_scenarios, baseline_labels)
 
-    # For multi-select target, we need a flat named vector
     target_labels <- sapply(target_scenarios, function(s) {
       paste0(scenario_label(s), "  [", s, "]")
     }, USE.NAMES = FALSE)
-    target_choices_flat <- setNames(target_scenarios, target_labels)
+    rv$target_choices <- setNames(target_scenarios, target_labels)
 
-    updateSelectizeInput(session, "baseline_scenario",
-                         choices = baseline_choices_flat, selected = baseline_default,
-                         server = FALSE)
-    updateSelectizeInput(session, "target_scenarios",
-                         choices = target_choices_flat, selected = target_default,
-                         server = FALSE)
+    rv$baseline_default <- bl_default
+    rv$target_default <- tgt_default
+
     updateSelectInput(session, "scenario_geography",
                       choices = geographies, selected = geo_default)
 
     # Store target scenarios by category for quick-select buttons
     rv$target_scenarios_all <- target_scenarios
     rv$target_scenario_categories <- sapply(target_scenarios, scenario_category, USE.NAMES = TRUE)
-    # Store all available baseline scenario codes for baseline matching
     rv$available_baselines <- baseline_scenarios
+
+    # If no pairs exist yet, add one default pair
+    if (length(rv$pair_ids) == 0) {
+      add_pair_to_ui(baseline_selected = bl_default, target_selected = tgt_default)
+    }
   })
 
-  # ---- Quick-select buttons for target scenarios ----
+  # ---- Add Pair button ----
+  observeEvent(input$add_pair, {
+    req(rv$baseline_choices)
+    add_pair_to_ui()
+  })
+
+  # ---- Quick-select buttons: clear existing pairs, add new pairs for category ----
   observeEvent(input$sel_orderly, {
-    req(rv$target_scenario_categories)
+    req(rv$target_scenario_categories, rv$available_baselines, rv$baseline_default)
     cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Orderly", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
+    selected_targets <- names(cats[grepl("Orderly", cats)])
+    if (length(selected_targets) == 0) return()
+    clear_all_pairs()
+    for (tgt in selected_targets) {
+      bl <- baseline_for_scenario(tgt, rv$available_baselines, rv$baseline_default)
+      add_pair_to_ui(baseline_selected = bl, target_selected = tgt)
+    }
   })
   observeEvent(input$sel_disorderly, {
-    req(rv$target_scenario_categories)
+    req(rv$target_scenario_categories, rv$available_baselines, rv$baseline_default)
     cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Disorderly", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
+    selected_targets <- names(cats[grepl("Disorderly", cats)])
+    if (length(selected_targets) == 0) return()
+    clear_all_pairs()
+    for (tgt in selected_targets) {
+      bl <- baseline_for_scenario(tgt, rv$available_baselines, rv$baseline_default)
+      add_pair_to_ui(baseline_selected = bl, target_selected = tgt)
+    }
   })
   observeEvent(input$sel_hotthouse, {
-    req(rv$target_scenario_categories)
+    req(rv$target_scenario_categories, rv$available_baselines, rv$baseline_default)
     cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Hot House", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
+    selected_targets <- names(cats[grepl("Hot House", cats)])
+    if (length(selected_targets) == 0) return()
+    clear_all_pairs()
+    for (tgt in selected_targets) {
+      bl <- baseline_for_scenario(tgt, rv$available_baselines, rv$baseline_default)
+      add_pair_to_ui(baseline_selected = bl, target_selected = tgt)
+    }
   })
   observeEvent(input$sel_all_targets, {
-    req(rv$target_scenarios_all)
-    updateSelectizeInput(session, "target_scenarios", selected = rv$target_scenarios_all)
+    req(rv$target_scenarios_all, rv$available_baselines, rv$baseline_default)
+    clear_all_pairs()
+    for (tgt in rv$target_scenarios_all) {
+      bl <- baseline_for_scenario(tgt, rv$available_baselines, rv$baseline_default)
+      add_pair_to_ui(baseline_selected = bl, target_selected = tgt)
+    }
   })
   observeEvent(input$sel_clear_targets, {
-    updateSelectizeInput(session, "target_scenarios", selected = character(0))
+    clear_all_pairs()
+  })
+
+  # ---- Apply Single-Sector Scenarios (Mission Possible + IPR Automotive) ----
+  observeEvent(input$apply_sector_scenarios, {
+    req(rv$target_scenarios_all, rv$available_baselines, rv$baseline_default, rv$assets)
+
+    # Get portfolio sectors
+    portfolio_sectors <- tolower(unique(rv$assets$sector))
+
+    matching_pairs <- list()
+    for (tgt in rv$target_scenarios_all) {
+      # Mission Possible: mission_possible_{sector}_{pathway}
+      if (grepl("^mission_possible_", tgt)) {
+        scen_sector <- sub("^mission_possible_([^_]+)_.*$", "\\1", tgt)
+        if (tolower(scen_sector) %in% portfolio_sectors) {
+          bl <- baseline_for_scenario(tgt, rv$available_baselines, rv$baseline_default)
+          matching_pairs <- c(matching_pairs, list(list(baseline = bl, target = tgt)))
+        }
+      }
+      # IPR Automotive: IPR{year}Automotive_{pathway}
+      if (grepl("^IPR.*Automotive", tgt)) {
+        if ("automotive" %in% portfolio_sectors) {
+          bl <- baseline_for_scenario(tgt, rv$available_baselines, rv$baseline_default)
+          matching_pairs <- c(matching_pairs, list(list(baseline = bl, target = tgt)))
+        }
+      }
+    }
+
+    if (length(matching_pairs) == 0) {
+      showNotification(
+        "No sector-specific scenarios match your portfolio sectors.",
+        type = "warning", duration = 5
+      )
+      return()
+    }
+
+    # Add pairs without clearing existing ones
+    for (pair in matching_pairs) {
+      add_pair_to_ui(baseline_selected = pair$baseline, target_selected = pair$target)
+    }
+
+    showNotification(
+      paste0("Added ", length(matching_pairs), " sector-specific scenario pair(s)."),
+      type = "message", duration = 5
+    )
   })
 
   # ---- Slider <-> Numeric input sync (Advanced Assumptions) ----
@@ -640,63 +872,73 @@ server <- function(input, output, session) {
     showNotification("All parameters reset to defaults.", type = "message", duration = 3)
   })
 
-  # ---- Scenario safety warnings ----
+  # ---- Scenario safety warnings (pair-based) ----
   output$scenario_warnings <- renderUI({
+    # Trigger reactivity on any pair input change
+    lapply(rv$pair_ids, function(pid) {
+      input[[paste0("pair_baseline_", pid)]]
+      input[[paste0("pair_target_", pid)]]
+    })
+
     warnings <- list()
+    pairs <- get_scenario_pairs()
 
-    # No baseline selected
-    if (is.null(input$baseline_scenario) || length(input$baseline_scenario) == 0) {
+    # No complete pairs
+    if (length(pairs) == 0) {
       warnings <- c(warnings, list(
         div(class = "alert alert-danger", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-            icon("exclamation-triangle"), " No baseline scenario selected. Analysis requires at least one baseline.")
+            icon("exclamation-triangle"), " No scenario pairs configured. Add at least one baseline-target pair.")
       ))
     }
 
-    # No target selected
-    if (is.null(input$target_scenarios) || length(input$target_scenarios) == 0) {
-      warnings <- c(warnings, list(
-        div(class = "alert alert-danger", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-            icon("exclamation-triangle"), " No target scenario selected. Select at least one target.")
-      ))
-    }
+    if (length(pairs) > 0) {
+      # Check for pairs where baseline == target
+      same_pairs <- Filter(function(p) p$baseline == p$target, pairs)
+      if (length(same_pairs) > 0) {
+        overlap_targets <- unique(sapply(same_pairs, `[[`, "target"))
+        warnings <- c(warnings, list(
+          div(class = "alert alert-warning", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+              icon("exclamation-circle"), paste0(" Baseline equals target in ",
+                                                length(same_pairs), " pair(s): ",
+                                                paste(overlap_targets, collapse = ", "),
+                                                ". Results will show zero change."))
+        ))
+      }
 
-    # Baseline == one of the targets
-    if (!is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0 &&
-        !is.null(input$target_scenarios) && any(input$baseline_scenario %in% input$target_scenarios)) {
-      overlap <- intersect(input$baseline_scenario, input$target_scenarios)
-      warnings <- c(warnings, list(
-        div(class = "alert alert-warning", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-            icon("exclamation-circle"), paste0(" Baseline also selected as target: ",
-                                              paste(overlap, collapse = ", "),
-                                              ". Results will show zero change for those scenarios."))
-      ))
-    }
+      # Check for duplicate targets across pairs
+      target_codes <- sapply(pairs, `[[`, "target")
+      if (any(duplicated(target_codes))) {
+        dup_targets <- unique(target_codes[duplicated(target_codes)])
+        warnings <- c(warnings, list(
+          div(class = "alert alert-warning", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+              icon("exclamation-circle"), paste0(" Duplicate target(s): ",
+                                                paste(dup_targets, collapse = ", "),
+                                                ". Only the first pair per target will be used."))
+        ))
+      }
 
-    # Show baseline mapping info when targets are selected
-    if (!is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0 &&
-        !is.null(input$target_scenarios) && length(input$target_scenarios) > 0) {
-      bmap <- build_baseline_map(input$target_scenarios, input$baseline_scenario, input$baseline_scenario[1])
-      # Show mapping if multiple distinct baselines are used
-      unique_baselines <- unique(unname(bmap))
-      if (length(unique_baselines) > 1) {
-        mapping_lines <- sapply(names(bmap), function(tgt) {
+      # Show pair summary
+      if (length(pairs) > 1) {
+        mapping_lines <- lapply(pairs, function(p) {
           tags$li(style = "font-size: 12px;",
-                  tags$code(scenario_label(tgt)), " \u2192 baseline: ", tags$code(scenario_label(bmap[tgt])))
-        }, USE.NAMES = FALSE)
+                  tags$code(scenario_label(p$target)),
+                  " \u2190 baseline: ",
+                  tags$code(scenario_label(p$baseline)))
+        })
         warnings <- c(warnings, list(
           div(class = "alert alert-info", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-              icon("info-circle"), " Multiple baselines active. Mapping:",
+              icon("info-circle"), paste0(" ", length(pairs), " scenario pairs configured:"),
               tags$ul(style = "margin: 4px 0 0 0; padding-left: 20px;", mapping_lines))
         ))
       }
-    }
 
-    # Performance warning: >5 targets
-    if (!is.null(input$target_scenarios) && length(input$target_scenarios) > 5) {
-      warnings <- c(warnings, list(
-        div(class = "alert alert-info", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
-            icon("info-circle"), paste0(" ", length(input$target_scenarios), " target scenarios selected. Runs with >5 targets may be slow."))
-      ))
+      # Performance warning: >5 pairs
+      if (length(pairs) > 5) {
+        warnings <- c(warnings, list(
+          div(class = "alert alert-info", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+              icon("info-circle"), paste0(" ", length(pairs), " scenario pairs. Runs with >5 pairs may be slow."))
+        ))
+      }
     }
 
     if (length(warnings) > 0) do.call(tagList, warnings) else NULL
@@ -742,15 +984,24 @@ server <- function(input, output, session) {
   # ============================================
 
   output$run_checklist <- renderUI({
+    # Trigger reactivity on pair inputs
+    lapply(rv$pair_ids, function(pid) {
+      input[[paste0("pair_baseline_", pid)]]
+      input[[paste0("pair_target_", pid)]]
+    })
+    pairs <- get_scenario_pairs()
+    has_pairs <- length(pairs) > 0
+
     checks <- list(
       portfolio = !is.null(rv$portfolio) && is.null(validate_portfolio(rv$portfolio)),
       assets = !is.null(rv$assets) && is.null(validate_assets(rv$assets)),
       financial = !is.null(rv$financial) && is.null(validate_financial(rv$financial)),
       scenarios = !is.null(rv$scenarios),
       carbon = !is.null(rv$carbon),
-      baseline = !is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0,
-      target = !is.null(input$target_scenarios) && length(input$target_scenarios) > 0
+      pairs = has_pairs
     )
+
+    n_pairs_label <- if (has_pairs) paste0(" (", length(pairs), " pair", if (length(pairs) > 1) "s" else "", ")") else ""
 
     tagList(
       tags$p(
@@ -774,12 +1025,8 @@ server <- function(input, output, session) {
         " Carbon price data available"
       ),
       tags$p(
-        if (checks$baseline) icon("check-circle", class = "status-ok") else icon("times-circle", class = "status-missing"),
-        " Baseline scenario selected"
-      ),
-      tags$p(
-        if (checks$target) icon("check-circle", class = "status-ok") else icon("times-circle", class = "status-missing"),
-        " Target scenario selected"
+        if (checks$pairs) icon("check-circle", class = "status-ok") else icon("times-circle", class = "status-missing"),
+        paste0(" Scenario pair configured", n_pairs_label)
       ),
       hr(),
       if (all(unlist(checks))) {
@@ -791,10 +1038,21 @@ server <- function(input, output, session) {
   })
 
   output$config_summary <- renderText({
-    target_labels <- paste(sapply(input$target_scenarios, scenario_label), collapse = ", ")
+    # Trigger reactivity
+    lapply(rv$pair_ids, function(pid) {
+      input[[paste0("pair_baseline_", pid)]]
+      input[[paste0("pair_target_", pid)]]
+    })
+    pairs <- get_scenario_pairs()
+    pairs_label <- if (length(pairs) > 0) {
+      paste(sapply(pairs, function(p) {
+        paste0(scenario_label(p$baseline), " -> ", scenario_label(p$target))
+      }), collapse = "; ")
+    } else {
+      "(none)"
+    }
     paste(
-      "Baseline Scenario(s):", paste(sapply(input$baseline_scenario, scenario_label), collapse = ", "),
-      "\nTarget Scenario(s):", target_labels,
+      "Scenario Pairs:", pairs_label,
       "\nGeography:", input$scenario_geography,
       "\nShock Year(s):", paste(input$shock_years, collapse = ", "),
       "\nRisk-Free Rate:", input$risk_free_rate,
@@ -818,9 +1076,10 @@ server <- function(input, output, session) {
       showNotification("Please select at least one shock year on the Configure tab.", type = "error")
       return()
     }
-    # Validate at least one target scenario selected
-    if (is.null(input$target_scenarios) || length(input$target_scenarios) == 0) {
-      showNotification("Please select at least one target scenario on the Configure tab.", type = "error")
+    # Validate at least one complete scenario pair
+    pairs <- get_scenario_pairs()
+    if (length(pairs) == 0) {
+      showNotification("Please configure at least one scenario pair on the Configure tab.", type = "error")
       return()
     }
 
@@ -865,11 +1124,12 @@ server <- function(input, output, session) {
 
     # --- SAVE CURRENT RUN TO HISTORY (before overwriting) ---
     if (!is.null(rv$results)) {
+      run_pairs <- get_scenario_pairs()
       current_config <- list(
-        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-        baseline_scenarios = input$baseline_scenario,
-        target_scenario = paste(input$target_scenarios, collapse = ", "),
-        target_scenarios = input$target_scenarios,
+        scenario_pairs = lapply(run_pairs, function(p) list(baseline = p$baseline, target = p$target)),
+        # Backward compat: flat summaries for display
+        baseline_scenario = paste(unique(sapply(run_pairs, `[[`, "baseline")), collapse = ", "),
+        target_scenario = paste(unique(sapply(run_pairs, `[[`, "target")), collapse = ", "),
         scenario_geography = input$scenario_geography,
         shock_year = paste(input$shock_years, collapse = ", "),
         shock_years = input$shock_years,
@@ -924,25 +1184,27 @@ server <- function(input, output, session) {
           log_message(paste("  Debug - Portfolio columns:", paste(names(rv$portfolio), collapse = ", ")))
           log_message(paste("  Debug - Scenarios available:", paste(unique(rv$scenarios$scenario), collapse = ", ")))
         }
-        target_scenarios_run <- input$target_scenarios
-        n_scenarios <- length(target_scenarios_run)
-
-        # ---- BUILD BASELINE MAP ----
-        # The user may select multiple baselines; the first one is the default.
-        # Each target scenario is mapped to its family-matched baseline.
-        selected_baselines <- input$baseline_scenario
-        default_baseline <- selected_baselines[1]
-        baseline_map <- build_baseline_map(target_scenarios_run, selected_baselines, default_baseline)
+        # ---- COLLECT SCENARIO PAIRS ----
+        run_pairs <- get_scenario_pairs()
+        # Deduplicate by target (keep first pair per target for results keying)
+        seen_targets <- character(0)
+        deduped_pairs <- list()
+        for (p in run_pairs) {
+          if (!(p$target %in% seen_targets)) {
+            seen_targets <- c(seen_targets, p$target)
+            deduped_pairs <- c(deduped_pairs, list(p))
+          }
+        }
+        run_pairs <- deduped_pairs
+        target_scenarios_run <- sapply(run_pairs, `[[`, "target")
+        n_scenarios <- length(run_pairs)
 
         log_message("--- Parameters ---")
-        log_message(paste("  Selected baseline(s):", paste(selected_baselines, collapse = ", ")))
-        log_message(paste("  Default baseline:", default_baseline))
-        log_message(paste("  Baseline mapping:"))
-        for (tgt in names(baseline_map)) {
-          log_message(paste0("    ", tgt, " -> ", baseline_map[tgt]))
+        log_message(paste("  Scenario pairs:"))
+        for (p in run_pairs) {
+          log_message(paste0("    ", p$target, " <- baseline: ", p$baseline))
         }
-        log_message(paste("  Target scenario(s):", paste(target_scenarios_run, collapse = ", ")))
-        log_message(paste("  Number of target scenarios:", n_scenarios))
+        log_message(paste("  Number of scenario pairs:", n_scenarios))
         log_message(paste("  Geography:", input$scenario_geography))
         log_message(paste("  Shock year(s):", paste(input$shock_years, collapse = ", ")))
         log_message(paste("  Risk-free rate:", input$risk_free_rate))
@@ -974,7 +1236,7 @@ server <- function(input, output, session) {
         assets_min_year <- min(assets_for_run$production_year)
         assets_max_year <- max(assets_for_run$production_year)
 
-        all_baselines_used <- unique(unname(baseline_map))
+        all_baselines_used <- unique(sapply(run_pairs, `[[`, "baseline"))
         selected_scenarios <- rv$scenarios %>%
           filter(
             .data$scenario %in% c(all_baselines_used, target_scenarios_run),
@@ -1026,20 +1288,18 @@ server <- function(input, output, session) {
         # Store results: scenario -> year -> df
         all_scenario_results <- list()
 
-        for (scen_i in seq_along(target_scenarios_run)) {
-          target_scen <- target_scenarios_run[scen_i]
+        for (scen_i in seq_along(run_pairs)) {
+          target_scen <- run_pairs[[scen_i]]$target
+          matched_baseline <- run_pairs[[scen_i]]$baseline
           scen_label <- scenario_label(target_scen)
           all_year_results <- list()
-
-          # Resolve baseline for this target scenario
-          matched_baseline <- baseline_map[target_scen]
 
           for (yr_i in seq_along(shock_years)) {
             yr <- shock_years[yr_i]
             run_count <- run_count + 1
             progress_val <- 0.2 + 0.6 * (run_count / total_runs)
             incProgress(progress_val - (0.2 + 0.6 * ((run_count - 1) / total_runs)),
-                        detail = paste0("Scenario ", scen_i, "/", n_scenarios,
+                        detail = paste0("Pair ", scen_i, "/", n_scenarios,
                                        ", year ", yr, " (", run_count, "/", total_runs, ")..."))
             log_message(paste0("--- Scenario: ", target_scen, " | Baseline: ", matched_baseline,
                               " | Year: ", yr, " (", run_count, "/", total_runs, ") ---"))
@@ -1177,14 +1437,25 @@ server <- function(input, output, session) {
       run <- rv$run_history[[i]]
       cfg <- run$config
       ts <- format(run$timestamp, "%H:%M:%S %b %d")
-      baseline_lbl <- scenario_label(cfg$baseline_scenario)
-      # Handle multi-scenario config (target_scenario may be comma-separated)
-      target_codes <- if (!is.null(cfg$target_scenarios)) cfg$target_scenarios
-                      else strsplit(cfg$target_scenario, ",\\s*")[[1]]
-      if (length(target_codes) <= 2) {
-        target_lbl <- paste(sapply(target_codes, scenario_label), collapse = ", ")
+      # Handle both new (scenario_pairs) and old (baseline_scenario/target_scenario) config formats
+      if (!is.null(cfg$scenario_pairs) && length(cfg$scenario_pairs) > 0) {
+        n_pairs <- length(cfg$scenario_pairs)
+        first_pair <- cfg$scenario_pairs[[1]]
+        baseline_lbl <- scenario_label(first_pair$baseline)
+        target_lbl <- if (n_pairs <= 2) {
+          paste(sapply(cfg$scenario_pairs, function(p) scenario_label(p$target)), collapse = ", ")
+        } else {
+          paste0(scenario_label(first_pair$target), " + ", n_pairs - 1, " more")
+        }
       } else {
-        target_lbl <- paste0(scenario_label(target_codes[1]), " + ", length(target_codes) - 1, " more")
+        baseline_lbl <- scenario_label(cfg$baseline_scenario)
+        target_codes <- if (!is.null(cfg$target_scenarios)) cfg$target_scenarios
+                        else strsplit(cfg$target_scenario, ",\\s*")[[1]]
+        if (length(target_codes) <= 2) {
+          target_lbl <- paste(sapply(target_codes, scenario_label), collapse = ", ")
+        } else {
+          target_lbl <- paste0(scenario_label(target_codes[1]), " + ", length(target_codes) - 1, " more")
+        }
       }
 
       # Compute key metrics for compact display
@@ -1283,10 +1554,12 @@ server <- function(input, output, session) {
         if (i > length(rv$run_history)) return()
         cfg <- rv$run_history[[i]]$config
 
-        # Restore all config inputs from the history entry
-        updateSelectInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
-        if (!is.null(cfg$target_scenarios)) {
-          updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
+        # Restore scenario pairs from history
+        clear_all_pairs()
+        if (!is.null(cfg$scenario_pairs)) {
+          for (sp in cfg$scenario_pairs) {
+            add_pair_to_ui(baseline_selected = sp$baseline, target_selected = sp$target)
+          }
         }
         updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
         if (!is.null(cfg$shock_years)) {
@@ -1331,9 +1604,13 @@ server <- function(input, output, session) {
     if (is.null(curr)) return(NULL)
 
     prev_cfg <- prev$config
+    curr_pairs <- get_scenario_pairs()
+    curr_pairs_label <- if (length(curr_pairs) > 0) {
+      paste(sapply(curr_pairs, function(p) paste0(p$baseline, "->", p$target)), collapse = "; ")
+    } else "(none)"
     curr_cfg <- list(
-      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-      target_scenario = paste(input$target_scenarios, collapse = ", "),
+      baseline_scenario = paste(unique(sapply(curr_pairs, `[[`, "baseline")), collapse = ", "),
+      target_scenario = paste(unique(sapply(curr_pairs, `[[`, "target")), collapse = ", "),
       scenario_geography = input$scenario_geography,
       shock_year = paste(input$shock_years, collapse = ", "),
       discount_rate = input$discount_rate,
@@ -5324,12 +5601,12 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       audit_log("export", list(format = "config_json", run_id = rv$run_id))
+      cfg_pairs <- get_scenario_pairs()
       config <- list(
         run_id = rv$run_id,
         timestamp = as.character(Sys.time()),
         parameters = list(
-          baseline_scenarios = paste(input$baseline_scenario, collapse = ", "),
-          target_scenarios = paste(input$target_scenarios, collapse = ", "),
+          scenario_pairs = lapply(cfg_pairs, function(p) list(baseline = p$baseline, target = p$target)),
           scenario_geography = input$scenario_geography,
           shock_years = paste(input$shock_years, collapse = ", "),
           risk_free_rate = input$risk_free_rate,
@@ -5360,11 +5637,14 @@ server <- function(input, output, session) {
     if (is.null(rv$run_id)) {
       "No analysis run yet."
     } else {
+      meta_pairs <- get_scenario_pairs()
+      pairs_str <- if (length(meta_pairs) > 0) {
+        paste(sapply(meta_pairs, function(p) paste0(p$baseline, " -> ", p$target)), collapse = "\n  ")
+      } else "(none)"
       paste(
         "Run ID:", rv$run_id,
         "\nTimestamp:", as.character(Sys.time()),
-        "\nBaseline(s):", paste(input$baseline_scenario, collapse = ", "),
-        "\nTarget(s):", paste(input$target_scenarios, collapse = ", "),
+        "\nScenario Pairs:\n ", pairs_str,
         "\nGeography:", input$scenario_geography,
         "\nResults rows:", if (!is.null(rv$results)) as.character(nrow(rv$results)) else "N/A"
       )

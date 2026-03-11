@@ -60,11 +60,11 @@
   --status-danger: #C44245;
   --status-info: #4A7FA5;
 
-  /* Colors — Value Boxes (4 distinct semantic) */
-  --vb-primary: #2D3748;
-  --vb-success: #276749;
-  --vb-warning: #975A16;
-  --vb-danger: #9B2C2C;
+  /* Colors — Value Boxes (4 distinct semantic, WCAG AA on white text) */
+  --vb-primary: #334155;
+  --vb-success: #16803C;
+  --vb-warning: #B45309;
+  --vb-danger: #DC2626;
 
   /* Shadows */
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
@@ -305,10 +305,15 @@ h1, h2, h3, h4, h5, .box-header .box-title, .header .logo,
 }
 
 .small-box p {
-  font-size: 13px !important;
+  font-size: 12px !important;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal !important;
+  line-height: 1.3;
+  max-height: 2.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .small-box .icon { font-size: 50px !important; }
@@ -424,9 +429,15 @@ h1, h2, h3, h4, h5, .box-header .box-title, .header .logo,
 table.dataTable th, table.dataTable td {
   padding: var(--sp-1) var(--sp-2) !important;
   white-space: nowrap;
-  max-width: 150px;
+  max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* First column (usually company_id/name): allow wider content */
+table.dataTable td:first-child,
+table.dataTable th:first-child {
+  max-width: 300px;
 }
 
 table.dataTable th { font-size: var(--fs-xs) !important; }
@@ -658,6 +669,37 @@ table.dataTable th { font-size: var(--fs-xs) !important; }
   box-shadow: var(--shadow-sm);
 }
 
+/* Concentration scorecard: status-colored left border + text */
+.metric-card.metric-good   { border-left: 4px solid var(--status-success); }
+.metric-card.metric-good h3,
+.metric-card.metric-good .metric-status-label { color: var(--status-success); }
+
+.metric-card.metric-warning   { border-left: 4px solid var(--status-warning); }
+.metric-card.metric-warning h3,
+.metric-card.metric-warning .metric-status-label { color: var(--status-warning); }
+
+.metric-card.metric-danger   { border-left: 4px solid var(--status-danger); }
+.metric-card.metric-danger h3,
+.metric-card.metric-danger .metric-status-label { color: var(--status-danger); }
+
+.metric-card.metric-info   { border-left: 4px solid var(--status-info); }
+.metric-card.metric-info h3,
+.metric-card.metric-info .metric-status-label { color: var(--status-info); }
+
+.metric-status-label {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.card-subtitle {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  display: block;
+  margin-bottom: var(--sp-1);
+}
+
 
 /* ============================================
    Miscellaneous
@@ -696,6 +738,7 @@ hr { border-color: var(--border-light); }
 .mb-8 { margin-bottom: 8px !important; }
 .mb-10 { margin-bottom: 10px !important; }
 .mb-12 { margin-bottom: 12px !important; }
+.mb-16 { margin-bottom: 16px !important; }
 .mr-6 { margin-right: 6px !important; }
 .p-20 { padding: 20px !important; }
 .pt-20 { padding-top: 20px !important; }
@@ -903,3 +946,364 @@ hr { border-color: var(--border-light); }
   font-size: 12px;
   margin: 4px 0;
 }
+
+
+/* ============================================
+   Color legend badges (for PD table scale)
+   ============================================ */
+
+.legend-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 3px;
+  color: white;
+  font-size: 11px;
+  margin: 0 2px;
+}
+.legend-badge--green { background: #3D8B3E; }
+.legend-badge--blue  { background: #7AADCA; }
+.legend-badge--red   { background: #A83535; }
+
+/* ============================================
+   Data Quality Dashboard (Upload tab)
+   ============================================ */
+.dq-dashboard {
+  padding: var(--sp-2) 0;
+}
+.dq-summary-row {
+  display: flex;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.dq-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.dq-stat-value {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: var(--fw-bold);
+  color: var(--fg-primary);
+  line-height: 1.2;
+}
+.dq-stat-label {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+.dq-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.dq-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  font-size: var(--fs-sm);
+}
+.dq-badge i { font-size: 14px; }
+.dq-badge-label {
+  font-weight: var(--fw-semibold);
+  color: var(--fg-primary);
+}
+.dq-badge-detail {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.dq-badge--good i { color: var(--status-success); }
+.dq-badge--warning i { color: var(--status-warning); }
+.dq-badge--danger i { color: var(--status-danger); }
+.dq-badge--missing {
+  opacity: 0.6;
+}
+.dq-badge--missing i { color: var(--fg-muted); }
+
+
+/* ============================================
+   Dark Mode — Token overrides
+   ============================================ */
+[data-theme="dark"] {
+  /* Surfaces */
+  --bg-page: #1A1A2E;
+  --bg-card: #242438;
+  --bg-sidebar: #1E1E30;
+  --bg-sidebar-active: #2A2A42;
+  --bg-header: #12121E;
+  --bg-guidance: #2A2A3E;
+
+  /* Text */
+  --fg-primary: #E8E6F0;
+  --fg-secondary: #A0A0B8;
+  --fg-muted: #707088;
+  --fg-on-dark: #FFFFFF;
+
+  /* Borders */
+  --border-light: #3A3A52;
+  --border-medium: #4A4A62;
+
+  /* Shadows (stronger in dark mode for depth) */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+
+  /* Value Boxes (brighter in dark) */
+  --vb-primary: #4A5568;
+  --vb-success: #22C55E;
+  --vb-warning: #F59E0B;
+  --vb-danger: #EF4444;
+
+  /* Status colors (slightly brighter for dark backgrounds) */
+  --status-success: #4ADE80;
+  --status-warning: #FBBF24;
+  --status-danger: #F87171;
+  --status-info: #60A5FA;
+}
+
+/* Dark mode: override elements that don't use CSS variables */
+[data-theme="dark"] .content-wrapper {
+  background-color: var(--bg-page) !important;
+}
+
+[data-theme="dark"] .main-header .navbar {
+  background-color: var(--bg-header) !important;
+}
+
+[data-theme="dark"] .main-header .logo {
+  background-color: var(--bg-header) !important;
+}
+
+[data-theme="dark"] .main-sidebar,
+[data-theme="dark"] .left-side {
+  background-color: var(--bg-sidebar) !important;
+}
+
+[data-theme="dark"] .sidebar-menu > li.active > a {
+  background-color: var(--bg-sidebar-active) !important;
+  border-left-color: var(--status-danger) !important;
+}
+
+[data-theme="dark"] .sidebar-menu > li > a {
+  color: var(--fg-secondary) !important;
+}
+
+[data-theme="dark"] .sidebar-menu > li > a:hover {
+  background-color: var(--bg-sidebar-active) !important;
+  color: var(--fg-primary) !important;
+}
+
+[data-theme="dark"] .box {
+  background-color: var(--bg-card);
+  border-color: var(--border-light) !important;
+}
+
+[data-theme="dark"] .box-header {
+  color: var(--fg-primary);
+}
+
+[data-theme="dark"] .box-body {
+  color: var(--fg-primary);
+}
+
+[data-theme="dark"] p,
+[data-theme="dark"] li,
+[data-theme="dark"] span,
+[data-theme="dark"] label {
+  color: var(--fg-primary);
+}
+
+[data-theme="dark"] .guidance-content {
+  background: var(--bg-guidance);
+  border-color: var(--border-light);
+  color: var(--fg-secondary);
+}
+
+[data-theme="dark"] .guidance-toggle-btn {
+  color: var(--fg-primary);
+}
+
+/* Dark mode: tables */
+[data-theme="dark"] table.dataTable {
+  color: var(--fg-primary);
+}
+
+[data-theme="dark"] table.dataTable th {
+  background-color: var(--bg-sidebar) !important;
+  color: var(--fg-secondary) !important;
+  border-bottom-color: var(--border-medium) !important;
+}
+
+[data-theme="dark"] table.dataTable tbody tr {
+  background-color: var(--bg-card) !important;
+}
+
+[data-theme="dark"] table.dataTable tbody tr:hover {
+  background-color: var(--bg-sidebar-active) !important;
+}
+
+[data-theme="dark"] table.dataTable td {
+  border-top-color: var(--border-light) !important;
+}
+
+[data-theme="dark"] .dataTables_wrapper .dataTables_filter input,
+[data-theme="dark"] .dataTables_wrapper .dataTables_length select {
+  background-color: var(--bg-card);
+  color: var(--fg-primary);
+  border-color: var(--border-medium);
+}
+
+[data-theme="dark"] .dataTables_wrapper .dataTables_info,
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: var(--fg-secondary) !important;
+}
+
+[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: var(--bg-sidebar-active) !important;
+  border-color: var(--border-medium) !important;
+  color: var(--fg-primary) !important;
+}
+
+/* Dark mode: tabs */
+[data-theme="dark"] .nav-tabs > li > a {
+  color: var(--fg-secondary) !important;
+}
+
+[data-theme="dark"] .nav-tabs > li.active > a,
+[data-theme="dark"] .nav-tabs > li.active > a:focus,
+[data-theme="dark"] .nav-tabs > li.active > a:hover {
+  color: var(--fg-primary) !important;
+  background-color: var(--bg-card) !important;
+  border-bottom-color: var(--bg-card) !important;
+}
+
+[data-theme="dark"] .tab-content {
+  background-color: var(--bg-card);
+}
+
+/* Dark mode: metric cards */
+[data-theme="dark"] .metric-card {
+  background: var(--bg-card);
+  border-color: var(--border-light);
+}
+
+/* Dark mode: value boxes */
+[data-theme="dark"] .small-box {
+  box-shadow: var(--shadow-md);
+}
+
+/* Dark mode: form inputs */
+[data-theme="dark"] .form-control {
+  background-color: var(--bg-sidebar) !important;
+  color: var(--fg-primary) !important;
+  border-color: var(--border-medium) !important;
+}
+
+[data-theme="dark"] .selectize-input {
+  background-color: var(--bg-sidebar) !important;
+  color: var(--fg-primary) !important;
+  border-color: var(--border-medium) !important;
+}
+
+[data-theme="dark"] .selectize-dropdown {
+  background-color: var(--bg-card) !important;
+  color: var(--fg-primary) !important;
+  border-color: var(--border-medium) !important;
+}
+
+[data-theme="dark"] .selectize-dropdown .active {
+  background-color: var(--bg-sidebar-active) !important;
+}
+
+/* Dark mode: DQ dashboard badges */
+[data-theme="dark"] .dq-badge {
+  background: var(--bg-sidebar);
+  border-color: var(--border-medium);
+}
+
+[data-theme="dark"] .dq-stat {
+  background: var(--bg-sidebar);
+  border-color: var(--border-medium);
+}
+
+/* Dark mode: buttons */
+[data-theme="dark"] .btn-default {
+  background-color: var(--bg-sidebar) !important;
+  color: var(--fg-primary) !important;
+  border-color: var(--border-medium) !important;
+}
+
+[data-theme="dark"] .btn-default:hover {
+  background-color: var(--bg-sidebar-active) !important;
+}
+
+/* Dark mode: hr, well, misc */
+[data-theme="dark"] hr {
+  border-color: var(--border-light);
+}
+
+[data-theme="dark"] .well {
+  background-color: var(--bg-sidebar) !important;
+  border-color: var(--border-light) !important;
+}
+
+[data-theme="dark"] .help-block {
+  color: var(--fg-muted) !important;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--fg-on-dark);
+  font-size: var(--fs-sm);
+  font-family: var(--font-body);
+  transition: background var(--transition-fast);
+  margin-right: 12px;
+  line-height: 1.4;
+}
+.theme-toggle:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+/* Scenario pair rows */
+.scenario-pair-row {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 4px;
+}
+.scenario-pair-row:last-child {
+  border-bottom: none;
+}
+.scenario-pair-row .form-group {
+  margin-bottom: 0;
+}
+.scenario-pair-row .selectize-input {
+  min-height: 34px;
+}
+.btn-remove-pair {
+  margin-top: 0;
+  padding: 6px 10px;
+  color: var(--fg-muted);
+}
+.btn-remove-pair:hover {
+  color: var(--brand-coral);
+}
+
+[data-theme="dark"] .scenario-pair-row {
+  border-bottom-color: var(--border-light);
+}
+
+.cursor-help { cursor: help; }

@@ -1,0 +1,24 @@
+# TRISK Docker Compose — development mode (no Caddy/TLS)
+# Exposes Shiny directly on port 3838 for local development.
+
+services:
+  trisk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: theia-finance-labs/trisk:dev
+    container_name: trisk-app-dev
+    ports:
+      - "127.0.0.1:3838:3838"
+    volumes:
+      - ./data/input:/data/input:ro
+      - ./data/output:/data/output:rw
+      # Mount app source for live-reload during development
+      - ./app:/opt/trisk/app:ro
+    environment:
+      - SHINY_LOG_LEVEL=TRACE
+      - TMPDIR=/tmp
+      - TRISK_DEBUG_LOG=true
+    restart: "no"
+    tmpfs:
+      - /tmp:rw,size=2g

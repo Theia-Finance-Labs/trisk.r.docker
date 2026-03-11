@@ -204,6 +204,7 @@ setup_results_attribution <- function(input, output, session, rv) {
   output$attr_waterfall <- renderPlotly({
     ad <- attribution_data()
     req(ad)
+    tc <- plotly_theme_colors(input)
 
     sector_df <- ad$sector
     baseline <- ad$portfolio_pd_baseline * 100  # convert to percentage points
@@ -249,19 +250,26 @@ setup_results_attribution <- function(input, output, session, rv) {
       texttemplate = "%{y:.4f}"
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11),
-                     categoryorder = "array", categoryarray = wf_labels),
-        yaxis = list(title = "Portfolio PD (%)", tickformat = ".4f"),
+                     categoryorder = "array", categoryarray = wf_labels, gridcolor = tc$gridcolor),
+        yaxis = list(title = "Portfolio PD (%)", tickformat = ".4f", gridcolor = tc$gridcolor),
         margin = list(b = 100, t = 30),
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Top Company Risk Movers (horizontal bar chart) ----
   output$attr_company_movers <- renderPlotly({
     ad <- attribution_data()
     req(ad)
+    tc <- plotly_theme_colors(input)
 
     company_df <- ad$company %>%
       arrange(desc(abs(pd_contribution))) %>%
@@ -295,19 +303,26 @@ setup_results_attribution <- function(input, output, session, rv) {
       textposition = "outside"
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         xaxis = list(title = "Contribution to Portfolio PD Change (pp)", zeroline = TRUE,
-                     zerolinecolor = "#999", zerolinewidth = 1),
-        yaxis = list(title = "", tickfont = list(size = 10)),
+                     zerolinecolor = "#999", zerolinewidth = 1, gridcolor = tc$gridcolor),
+        yaxis = list(title = "", tickfont = list(size = 10), gridcolor = tc$gridcolor),
         margin = list(l = 120, r = 50, t = 10, b = 50),
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
-  # ---- Marginal Contribution (treemap-style bar chart) ----
+  # ---- Marginal Contribution (treemap with sector hierarchy) ----
   output$attr_marginal_contribution <- renderPlotly({
     ad <- attribution_data()
     req(ad)
+    tc <- plotly_theme_colors(input)
 
     company_df <- ad$company %>%
       mutate(abs_contribution = abs(pd_contribution)) %>%
@@ -320,15 +335,30 @@ setup_results_attribution <- function(input, output, session, rv) {
       mutate(
         share_pct = abs_contribution / total_abs * 100,
         direction = ifelse(pd_contribution >= 0, "Risk Increase", "Risk Decrease")
-      )
-
-    # Cumulative share for visual ordering
-    company_df <- company_df %>%
+      ) %>%
       arrange(desc(share_pct))
 
-    colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
+    # Build hierarchical data: sector parents + company children
+    sectors <- unique(company_df$sector)
 
-    hover_text <- paste0(
+    # Sector-level parent nodes (parent = "" means root)
+    sector_labels <- as.character(sectors)
+    sector_parents <- rep("", length(sectors))
+    sector_values <- vapply(sectors, function(s) {
+      sum(company_df$share_pct[company_df$sector == s])
+    }, numeric(1))
+    sector_colors <- rep("#888888", length(sectors))
+    sector_text <- paste0(
+      htmltools::htmlEscape(sector_labels),
+      "\nTotal share: ", round(sector_values, 1), "%"
+    )
+
+    # Company-level child nodes (parent = sector name)
+    company_labels <- as.character(company_df$company_label)
+    company_parents <- as.character(company_df$sector)
+    company_values <- company_df$share_pct
+    company_colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
+    company_text <- paste0(
       htmltools::htmlEscape(as.character(company_df$company_label)),
       "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
       "\nShare of total PD change: ", round(company_df$share_pct, 1), "%",
@@ -336,30 +366,45 @@ setup_results_attribution <- function(input, output, session, rv) {
       "\nContribution: ", round(company_df$pd_contribution * 100, 4), " pp"
     )
 
+    # Combine sector + company into single vectors
+    all_labels <- c(sector_labels, company_labels)
+    all_parents <- c(sector_parents, company_parents)
+    all_values <- c(sector_values, company_values)
+    all_colors <- c(sector_colors, company_colors)
+    all_text <- c(sector_text, company_text)
+
     plot_ly(
-      labels = company_df$company_label,
-      values = company_df$share_pct,
-      parents = company_df$sector,
+      labels = all_labels,
+      parents = all_parents,
+      values = all_values,
       type = "treemap",
+      branchvalues = "total",
       marker = list(
-        colors = colors,
+        colors = all_colors,
         line = list(color = "white", width = 1)
       ),
-      text = hover_text,
+      text = all_text,
       hoverinfo = "text",
       textinfo = "label+percent parent",
       textfont = list(size = 11)
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         margin = list(l = 5, r = 5, t = 5, b = 5)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Sector × Technology Attribution Heatmap ----
   output$attr_sector_tech_heatmap <- renderPlotly({
     ad <- attribution_data()
     req(ad, ad$has_tech, ad$tech)
+    tc <- plotly_theme_colors(input)
 
     tech_df <- ad$tech
     if (is.null(tech_df) || nrow(tech_df) == 0) {
@@ -410,17 +455,24 @@ setup_results_attribution <- function(input, output, session, rv) {
       colorbar = list(title = "PD Contr.\n(pp)", len = 0.6)
     ) %>%
       layout(
-        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 10)),
-        yaxis = list(title = "", tickfont = list(size = 10)),
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
+        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 10), gridcolor = tc$gridcolor),
+        yaxis = list(title = "", tickfont = list(size = 10), gridcolor = tc$gridcolor),
         margin = list(l = 100, b = 80, t = 10)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Expected Loss Attribution by Sector (waterfall) ----
   output$attr_el_waterfall <- renderPlotly({
     ad <- attribution_data()
     req(ad, ad$has_el)
+    tc <- plotly_theme_colors(input)
 
     sector_df <- ad$sector %>%
       filter(!is.na(el_change)) %>%
@@ -461,12 +513,18 @@ setup_results_attribution <- function(input, output, session, rv) {
       texttemplate = "$%{y:,.0f}"
     ) %>%
       layout(
-        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11)),
-        yaxis = list(title = "EL Change ($)", tickformat = "$,.0f"),
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
+        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11), gridcolor = tc$gridcolor),
+        yaxis = list(title = "EL Change ($)", tickformat = "$,.0f", gridcolor = tc$gridcolor),
         margin = list(b = 100, t = 30),
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Detailed Attribution Table ----

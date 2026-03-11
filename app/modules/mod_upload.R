@@ -368,6 +368,96 @@ setup_upload <- function(input, output, session, rv, log_message) {
   )
 
   # ============================================
+  # Consolidated Data Quality Dashboard
+  # ============================================
+
+  output$data_quality_dashboard <- renderUI({
+    # Only show after at least one dataset is loaded
+    datasets <- list(
+      Portfolio = rv$portfolio,
+      Assets   = rv$assets,
+      Financial = rv$financial,
+      Scenarios = rv$scenarios
+    )
+    loaded <- !sapply(datasets, is.null)
+    if (!any(loaded)) return(NULL)
+
+    # Compute per-dataset quality stats
+    auditable_types <- c("Portfolio" = "portfolio", "Assets" = "assets", "Financial" = "financial")
+    total_rows <- 0L
+    total_issues <- 0L
+    ds_cards <- list()
+
+    for (label in names(datasets)) {
+      df <- datasets[[label]]
+      if (is.null(df)) {
+        ds_cards[[label]] <- tags$div(class = "dq-badge dq-badge--missing",
+          icon("times-circle"),
+          tags$span(class = "dq-badge-label", label),
+          tags$span(class = "dq-badge-detail", "Not loaded")
+        )
+        next
+      }
+
+      n_rows <- nrow(df)
+      total_rows <- total_rows + n_rows
+
+      # Audit if auditable (scenarios don't have audit_dataset support)
+      type_key <- auditable_types[label]
+      n_issues <- 0L
+      if (!is.na(type_key) && !is.null(type_key)) {
+        audit <- audit_dataset(df, type_key)
+        if (!is.null(audit)) n_issues <- nrow(audit$issues)
+      }
+      total_issues <- total_issues + n_issues
+
+      # Badge color: green (0 issues), yellow (1-10), red (>10)
+      badge_class <- if (n_issues == 0) "dq-badge--good"
+                     else if (n_issues <= 10) "dq-badge--warning"
+                     else "dq-badge--danger"
+      badge_icon <- if (n_issues == 0) icon("check-circle")
+                    else if (n_issues <= 10) icon("exclamation-triangle")
+                    else icon("times-circle")
+
+      detail_text <- paste0(format(n_rows, big.mark = ","), " rows")
+      if (n_issues > 0) {
+        detail_text <- paste0(detail_text, " \u00B7 ", n_issues, " issue", if (n_issues != 1) "s" else "")
+      }
+
+      ds_cards[[label]] <- tags$div(class = paste("dq-badge", badge_class),
+        badge_icon,
+        tags$span(class = "dq-badge-label", label),
+        tags$span(class = "dq-badge-detail", detail_text)
+      )
+    }
+
+    tagList(
+      tags$div(class = "dq-dashboard",
+        tags$div(class = "dq-summary-row",
+          tags$div(class = "dq-stat",
+            tags$span(class = "dq-stat-value", format(total_rows, big.mark = ",")),
+            tags$span(class = "dq-stat-label", "Total Rows")
+          ),
+          tags$div(class = "dq-stat",
+            tags$span(class = "dq-stat-value", sum(loaded)),
+            tags$span(class = "dq-stat-label",
+              paste0("of ", length(datasets), " Datasets"))
+          ),
+          tags$div(class = "dq-stat",
+            tags$span(class = paste0("dq-stat-value",
+              if (total_issues > 0) " status-missing" else " status-ok"),
+              total_issues),
+            tags$span(class = "dq-stat-label", "Issues Found")
+          )
+        ),
+        tags$div(class = "dq-badges-row",
+          ds_cards
+        )
+      )
+    )
+  })
+
+  # ============================================
   # Error report (combined issues from all datasets)
   # ============================================
 

@@ -248,6 +248,70 @@ setup_run <- function(input, output, session, rv, log_message) {
                            "years:", min(assets_for_run$production_year), "-", max(assets_for_run$production_year)))
         }
 
+        # ---- PRE-FLIGHT DATA COMPATIBILITY CHECK ----
+        # The trisk.model inner-joins assets with financial data on company_id.
+        # If few companies overlap, the analysis will fail with a cryptic
+        # "nrow(assets_data_filtered) > 0 is not TRUE" error.  Catch this early
+        # and present a clear, actionable message instead.
+
+        asset_companies <- unique(assets_for_run$company_id)
+        fin_companies   <- unique(rv$financial$company_id)
+        shared_companies <- intersect(asset_companies, fin_companies)
+        n_asset  <- length(asset_companies)
+        n_fin    <- length(fin_companies)
+        n_shared <- length(shared_companies)
+
+        log_message("--- Data Compatibility Check ---")
+        log_message(paste("  Asset companies:", n_asset))
+        log_message(paste("  Financial companies:", n_fin))
+        log_message(paste("  Overlapping companies:", n_shared))
+
+        if (n_shared == 0) {
+          stop(paste0(
+            "No companies in common between Assets data (", n_asset,
+            " companies) and Financial data (", n_fin, " companies). ",
+            "The model requires matching company_id values across both datasets. ",
+            "Please ensure your Assets and Financial files cover the same companies."
+          ))
+        }
+
+        overlap_pct <- round(100 * n_shared / n_asset, 1)
+        if (overlap_pct < 5) {
+          log_message(paste0("  WARNING: Only ", overlap_pct, "% of asset companies (",
+                             n_shared, "/", n_asset, ") have financial data"))
+        }
+
+        # Check technology overlap: do the matched companies' technologies
+        # intersect with the selected scenarios' technologies?
+        matched_assets <- assets_for_run %>%
+          filter(.data$company_id %in% shared_companies)
+        asset_techs <- unique(matched_assets$technology)
+
+        scen_techs <- unique(selected_scenarios$technology)
+        tech_overlap <- intersect(asset_techs, scen_techs)
+
+        log_message(paste("  Asset technologies (matched companies):",
+                          paste(sort(asset_techs), collapse = ", ")))
+        log_message(paste("  Scenario technologies:",
+                          paste(sort(scen_techs), collapse = ", ")))
+        log_message(paste("  Technology overlap:",
+                          paste(sort(tech_overlap), collapse = ", ")))
+
+        if (length(tech_overlap) == 0) {
+          stop(paste0(
+            "No technology overlap between your portfolio and the selected scenario(s). ",
+            "Companies with financial data produce: ",
+            paste(sort(asset_techs), collapse = ", "), ". ",
+            "The selected scenarios cover: ",
+            paste(sort(head(scen_techs, 10)), collapse = ", "),
+            if (length(scen_techs) > 10) paste0(" (and ", length(scen_techs) - 10, " more)") else "",
+            ". Please select a different scenario or load data with matching technologies."
+          ))
+        }
+
+        log_message(paste("  Pre-flight check PASSED:",
+                          n_shared, "companies,", length(tech_overlap), "technologies in common"))
+
         # ---- MULTI-SCENARIO × MULTI-HORIZON LOOP ----
         shock_years <- sort(as.integer(input$shock_years))
         n_years <- length(shock_years)
@@ -377,12 +441,19 @@ setup_run <- function(input, output, session, rv, log_message) {
         updateTabsetPanel(session, "tabs", selected = "results")
 
       }, error = function(e) {
-        log_message(paste("ERROR:", conditionMessage(e)))
-        message(paste("ERROR (analysis):", conditionMessage(e)))
+        err_msg <- conditionMessage(e)
+        log_message(paste("ERROR:", err_msg))
+        message(paste("ERROR (analysis):", err_msg))
+
+        # Show actionable message for pre-flight errors; generic otherwise
+        is_preflight <- grepl("No companies in common|No technology overlap", err_msg)
+        display_msg <- if (is_preflight) err_msg
+                       else "Analysis failed. Please check your data and configuration, then try again."
+
         showNotification(
-          "Analysis failed. Please check your data and configuration, then try again.",
+          display_msg,
           type = "error",
-          duration = 10
+          duration = if (is_preflight) 15 else 10
         )
       })
     })

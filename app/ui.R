@@ -14,7 +14,12 @@ ui <- dashboardPage(
       tags$br(),
       tags$span("Climate Transition Risk Stress Testing", class = "header-subtitle")
     ),
-    titleWidth = 320
+    titleWidth = 320,
+    tags$li(class = "dropdown",
+      tags$button(id = "theme-toggle-btn",
+                  class = "theme-toggle",
+                  "\u263E Dark")
+    )
   ),
 
   # ============================================
@@ -54,8 +59,8 @@ ui <- dashboardPage(
       # Caddy reverse proxy (see Caddyfile). Do not add a <meta> CSP here —
       # HTTP headers are more secure and support frame-ancestors.
       tags$link(rel = "stylesheet", href = "fonts.css"),
-      tags$link(rel = "stylesheet", href = "trisk.css"),
-      tags$script(src = "trisk.js")
+      tags$link(rel = "stylesheet", href = paste0("trisk.css?v=", as.integer(Sys.time()))),
+      tags$script(src = paste0("trisk.js?v=", as.integer(Sys.time())))
     ),
 
     tabItems(
@@ -248,10 +253,12 @@ ui <- dashboardPage(
 
         fluidRow(
           box(
-            title = "Data Upload Summary",
+            title = "Data Quality Overview",
             status = "info",
             solidHeader = TRUE,
             width = 12,
+            uiOutput("data_quality_dashboard"),
+            hr(),
             uiOutput("upload_summary"),
             conditionalPanel(
               condition = "output.has_data_issues",
@@ -291,32 +298,26 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            title = "Scenario Selection",
+            title = "Scenario Pairs",
             status = "warning",
             solidHeader = TRUE,
             width = 6,
-            selectizeInput("baseline_scenario", "Baseline Scenario(s)",
-                           choices = NULL, selected = NULL,
-                           multiple = TRUE,
-                           options = list(
-                             plugins = list("remove_button"),
-                             placeholder = "Select one or more baseline scenarios..."
-                           )),
-            helpText("Select the baseline(s) for your analysis. Each target scenario is matched to its ",
-                     "family baseline (e.g. GECO targets use GECO baseline, Mission Possible uses its own). ",
-                     "The first selected baseline is the default for unmatched targets."),
-
-            h5("Target (Shock) Scenario(s)",
-               class = "font-heading fw-600 mb-4"),
-            selectizeInput("target_scenarios", NULL,
-                           choices = NULL, selected = NULL,
-                           multiple = TRUE,
-                           options = list(
-                             plugins = list("remove_button"),
-                             placeholder = "Select one or more target scenarios..."
-                           )),
-            helpText("Select one or more target scenarios. Multiple scenarios enable the ",
-                     tags$b("Scenario Comparison"), " tab with distribution analysis."),
+            # Column headers for pair rows
+            fluidRow(
+              column(5, tags$label("Baseline", class = "control-label")),
+              column(5, tags$label("Target (Shock)", class = "control-label")),
+              column(2)
+            ),
+            # Dynamic container for scenario pair rows (populated via insertUI)
+            div(id = "scenario_pairs_container"),
+            # Action buttons
+            div(class = "mb-8",
+              actionButton("add_pair", "Add Scenario Pair", icon = icon("plus"),
+                           class = "btn btn-default btn-sm"),
+              actionButton("apply_sector_scenarios", "Apply Single-Sector Scenarios",
+                           icon = icon("industry"),
+                           class = "btn btn-default btn-sm")
+            ),
             # Quick-select buttons by NGFS category
             div(class = "mb-12",
               tags$small(tags$b("Quick select:"), class = "mr-6"),
@@ -331,6 +332,9 @@ ui <- dashboardPage(
               actionButton("sel_clear_targets", "Clear",
                            class = "btn btn-default btn-xs btn-tag")
             ),
+            helpText("Each row pairs a baseline with a target scenario. Quick-select creates ",
+                     "pairs using auto-matched baselines. Multiple pairs enable the ",
+                     tags$b("Scenario Comparison"), " tab."),
 
             selectInput("scenario_geography", "Scenario Geography",
                         choices = NULL, selected = NULL),
@@ -361,7 +365,7 @@ ui <- dashboardPage(
               status = "warning",
               solidHeader = TRUE,
               collapsible = TRUE,
-              collapsed = TRUE,
+              collapsed = FALSE,
               width = 12,
               fluidRow(
                 column(8, sliderInput("risk_free_rate", "Risk-Free Rate",
@@ -497,14 +501,7 @@ ui <- dashboardPage(
             )
           )
         ),
-        fluidRow(
-          valueBoxOutput("vb_companies", width = 2),
-          valueBoxOutput("vb_total_exposure", width = 2),
-          valueBoxOutput("vb_avg_npv_change", width = 2),
-          valueBoxOutput("vb_max_pd_shock", width = 2),
-          valueBoxOutput("vb_pd_change", width = 2),
-          valueBoxOutput("vb_el_change", width = 2)
-        ),
+        uiOutput("value_cards_row"),
         # Run History panel (collapsible)
         uiOutput("run_history_panel"),
         fluidRow(
@@ -520,11 +517,22 @@ ui <- dashboardPage(
               )
             ),
 
-            tabPanel("Exposures PD",
-              DTOutput("pd_table"),
-              hr(),
-              h4("Portfolio-Level Aggregates"),
-              uiOutput("pd_portfolio_summary")
+            tabPanel("Exposures PD Analysis",
+              tags$div(class = "fs-12 fg-secondary mb-8",
+                tags$span("Color key: "),
+                tags$span("Green", class = "legend-badge legend-badge--green"),
+                tags$span(" = PD decrease (improvement) | "),
+                tags$span("Blue", class = "legend-badge legend-badge--blue"),
+                tags$span(" = neutral | "),
+                tags$span("Red", class = "legend-badge legend-badge--red"),
+                tags$span(" = PD increase (deterioration)")
+              ),
+              DTOutput("pd_table")
+            ),
+
+            # Concentration Risk tab (moved up per feedback)
+            tabPanel("Concentration",
+              uiOutput("concentration_ui")
             ),
 
             tabPanel("Exposures NPV",
@@ -536,19 +544,14 @@ ui <- dashboardPage(
               uiOutput("horizon_analysis_ui")
             ),
 
-            # Scenario Comparison tab (only populated when multi-scenario run is available)
-            tabPanel("Scenario Comparison",
-              uiOutput("scenario_comparison_ui")
-            ),
-
-            # Attribution / Waterfall tab
+            # Attribution / Waterfall tab (before Scenario Comparison per feedback)
             tabPanel("Attribution",
               uiOutput("attribution_ui")
             ),
 
-            # Concentration Risk tab
-            tabPanel("Concentration",
-              uiOutput("concentration_ui")
+            # Scenario Comparison tab (only populated when multi-scenario run is available)
+            tabPanel("Scenario Comparison",
+              uiOutput("scenario_comparison_ui")
             )
           )
         )
@@ -771,7 +774,11 @@ ui <- dashboardPage(
             downloadButton("download_json", "Download Results (JSON)",
                           class = "btn-info"),
             hr(),
-            helpText("Excel format includes multiple sheets with detailed breakdowns.")
+            downloadButton("download_report_html", "Download HTML Report",
+                          class = "btn-success"),
+            br(), br(),
+            helpText("Excel format includes multiple sheets with detailed breakdowns. ",
+                     "The HTML report provides a self-contained summary suitable for sharing.")
           ),
 
           box(

@@ -259,6 +259,100 @@ server <- function(input, output, session) {
   })
 
   # ============================================
+  # Dynamic Upload Boxes (status changes on success)
+  # ============================================
+
+  output$portfolio_upload_box <- renderUI({
+    loaded <- !is.null(rv$portfolio)
+    box(
+      title = "Portfolio Data",
+      status = if (loaded) "success" else "primary",
+      solidHeader = TRUE,
+      width = 6,
+      fileInput("portfolio_file", "Upload Portfolio CSV",
+                accept = c(".csv", ".CSV"),
+                placeholder = "No file selected"),
+      helpText("Required columns: company_id, company_name, country_iso2,
+               exposure_value_usd, term, loss_given_default"),
+      uiOutput("portfolio_status"),
+      uiOutput("portfolio_audit"),
+      downloadLink("download_portfolio_template", "Download Template CSV",
+                   class = "btn btn-xs btn-default mb-8"),
+      div(class = "data-preview", DTOutput("portfolio_preview"))
+    )
+  })
+
+  output$assets_upload_box <- renderUI({
+    loaded <- !is.null(rv$assets)
+    box(
+      title = "Assets Data",
+      status = if (loaded) "success" else "primary",
+      solidHeader = TRUE,
+      width = 6,
+      fileInput("assets_file", "Upload Assets CSV",
+                accept = c(".csv", ".CSV"),
+                placeholder = "No file selected"),
+      helpText("Company-level production and asset data with production trajectories"),
+      uiOutput("assets_status"),
+      uiOutput("assets_audit"),
+      downloadLink("download_assets_template", "Download Template CSV",
+                   class = "btn btn-xs btn-default mb-8"),
+      div(class = "data-preview", DTOutput("assets_preview"))
+    )
+  })
+
+  output$financial_upload_box <- renderUI({
+    loaded <- !is.null(rv$financial)
+    box(
+      title = "Financial Features Data",
+      status = if (loaded) "success" else "primary",
+      solidHeader = TRUE,
+      width = 6,
+      fileInput("financial_file", "Upload Financial Features CSV",
+                accept = c(".csv", ".CSV"),
+                placeholder = "No file selected"),
+      helpText("PD, net profit margin, debt/equity ratio, volatility per company"),
+      uiOutput("financial_status"),
+      uiOutput("financial_audit"),
+      downloadLink("download_financial_template", "Download Template CSV",
+                   class = "btn btn-xs btn-default mb-8"),
+      div(class = "data-preview", DTOutput("financial_preview"))
+    )
+  })
+
+  output$scenarios_upload_box <- renderUI({
+    has_preloaded <- !is.null(rv$scenarios)
+    box(
+      title = "Scenarios Data",
+      status = if (has_preloaded) "success" else "warning",
+      solidHeader = TRUE,
+      width = 6,
+      if (has_preloaded) {
+        tagList(
+          tags$p(class = "status-ok",
+            icon("check-circle"),
+            strong(paste0(" ", length(unique(rv$scenarios$scenario)), " scenarios loaded"))
+          ),
+          tags$p(paste("Geographies:", paste(sort(unique(rv$scenarios$scenario_geography)), collapse = ", "))),
+          hr(),
+          tags$p("Or upload custom scenarios:"),
+          fileInput("scenarios_file", NULL, accept = c(".csv", ".CSV"))
+        )
+      } else {
+        tagList(
+          tags$p(class = "status-missing",
+            icon("exclamation-triangle"),
+            strong(" No pre-loaded scenarios")
+          ),
+          fileInput("scenarios_file", "Upload Scenarios CSV",
+                    accept = c(".csv", ".CSV")),
+          helpText("Scenarios are pre-loaded at build time. Upload here only to override with custom data.")
+        )
+      }
+    )
+  })
+
+  # ============================================
   # Status indicators
   # ============================================
 
@@ -632,56 +726,38 @@ server <- function(input, output, session) {
   observe({
     req(rv$scenarios)
 
-    has_type_col <- "scenario_type" %in% names(rv$scenarios)
     all_scenarios <- sort(unique(rv$scenarios$scenario))
 
-    if (has_type_col) {
-      baseline_scenarios <- sort(unique(
-        rv$scenarios$scenario[tolower(rv$scenarios$scenario_type) == "baseline"]
-      ))
-      target_scenarios <- sort(unique(
-        rv$scenarios$scenario[tolower(rv$scenarios$scenario_type) == "target"]
-      ))
-      if (length(baseline_scenarios) == 0) baseline_scenarios <- all_scenarios
-      if (length(target_scenarios) == 0) target_scenarios <- all_scenarios
-    } else {
-      baseline_scenarios <- all_scenarios
-      target_scenarios <- all_scenarios
-    }
+    # Both dropdowns show ALL scenarios (no type-based filtering)
+    baseline_scenarios <- all_scenarios
+    target_scenarios <- all_scenarios
 
     geographies <- sort(unique(rv$scenarios$scenario_geography))
 
     # Determine the primary default baseline (NGFS GCAM 2024 CP preferred)
-    ngfs_gcam_cp_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?CP$", baseline_scenarios, value = TRUE)
+    ngfs_gcam_cp_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?CP$", all_scenarios, value = TRUE)
     bl_default <- if (length(ngfs_gcam_cp_candidates) > 0) {
       ngfs_gcam_cp_candidates[length(ngfs_gcam_cp_candidates)]
-    } else if ("NGFS2023GCAM_CP" %in% baseline_scenarios) {
+    } else if ("NGFS2023GCAM_CP" %in% all_scenarios) {
       "NGFS2023GCAM_CP"
     } else {
-      baseline_scenarios[1]
+      all_scenarios[1]
     }
 
-    ngfs_gcam_nz_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?NZ2050$", target_scenarios, value = TRUE)
+    ngfs_gcam_nz_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?NZ2050$", all_scenarios, value = TRUE)
     tgt_default <- if (length(ngfs_gcam_nz_candidates) > 0) {
       ngfs_gcam_nz_candidates[length(ngfs_gcam_nz_candidates)]
-    } else if ("NGFS2023GCAM_NZ2050" %in% target_scenarios) {
+    } else if ("NGFS2023GCAM_NZ2050" %in% all_scenarios) {
       "NGFS2023GCAM_NZ2050"
     } else {
-      target_scenarios[1]
+      all_scenarios[1]
     }
 
     geo_default <- if ("Global" %in% geographies) "Global" else geographies[1]
 
-    # Build flat labeled choices
-    baseline_labels <- sapply(baseline_scenarios, function(s) {
-      paste0(scenario_label(s), "  [", s, "]")
-    }, USE.NAMES = FALSE)
-    rv$baseline_choices <- setNames(baseline_scenarios, baseline_labels)
-
-    target_labels <- sapply(target_scenarios, function(s) {
-      paste0(scenario_label(s), "  [", s, "]")
-    }, USE.NAMES = FALSE)
-    rv$target_choices <- setNames(target_scenarios, target_labels)
+    # Build grouped choices (by climate category, newest first, no bracket codes)
+    rv$baseline_choices <- build_scenario_choices(baseline_scenarios)
+    rv$target_choices <- build_scenario_choices(target_scenarios)
 
     rv$baseline_default <- bl_default
     rv$target_default <- tgt_default
@@ -1834,6 +1910,104 @@ server <- function(input, output, session) {
              icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
              color = if (val > 0) "green" else if (val < 0) "red" else "blue")
   })
+
+  # ============================================
+  # Section headers for results tabs
+  # ============================================
+
+  output$summary_header <- renderUI({
+    req(rv$results)
+    df <- rv$results
+    n_co <- length(unique(df$company_id))
+    n_sectors <- if ("sector" %in% names(df)) length(unique(df$sector)) else 0
+    total_exp <- if ("exposure_value_usd" %in% names(df)) sum(df$exposure_value_usd, na.rm = TRUE) else 0
+    div(class = "section-header section-header--dark",
+      fluidRow(
+        column(8,
+          h4(icon("chart-pie"), " Portfolio Summary", class = "section-title"),
+          tags$small(paste0(n_co, " companies | ", n_sectors, " sectors | Total exposure: $",
+                           format_number(total_exp)), class = "opacity-85")
+        ),
+        column(4, class = "text-right",
+          downloadButton("download_summary_csv", "Export CSV", class = "btn-sm btn-export")
+        )
+      )
+    )
+  })
+
+  output$pd_analysis_header <- renderUI({
+    req(rv$results)
+    df <- rv$results
+    n_co <- length(unique(df$company_id))
+    n_sectors <- if ("sector" %in% names(df)) length(unique(df$sector)) else 0
+    avg_pd <- if ("pd_shock" %in% names(df)) smart_round(mean(df$pd_shock, na.rm = TRUE) * 100) else "N/A"
+    div(class = "section-header section-header--dark",
+      fluidRow(
+        column(8,
+          h4(icon("shield-alt"), " Credit Risk Analysis", class = "section-title"),
+          tags$small(paste0(n_co, " companies | ", n_sectors, " sectors | Avg shocked PD: ",
+                           avg_pd, "%"), class = "opacity-85")
+        ),
+        column(4, class = "text-right",
+          downloadButton("download_pd_csv", "Export CSV", class = "btn-sm btn-export")
+        )
+      )
+    )
+  })
+
+  output$npv_analysis_header <- renderUI({
+    req(rv$results)
+    df <- rv$results
+    n_co <- length(unique(df$company_id))
+    total_exp <- if ("exposure_value_usd" %in% names(df)) sum(df$exposure_value_usd, na.rm = TRUE) else 0
+    avg_npv <- if ("crispy_perc_value_change" %in% names(df)) smart_round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100) else "N/A"
+    div(class = "section-header section-header--dark",
+      fluidRow(
+        column(8,
+          h4(icon("dollar-sign"), " NPV Impact Analysis", class = "section-title"),
+          tags$small(paste0(n_co, " companies | Total exposure: $", format_number(total_exp),
+                           " | Avg NPV change: ", avg_npv, "%"), class = "opacity-85")
+        ),
+        column(4, class = "text-right",
+          downloadButton("download_npv_csv", "Export CSV", class = "btn-sm btn-export")
+        )
+      )
+    )
+  })
+
+  # Download handlers for section headers
+  output$download_summary_csv <- downloadHandler(
+    filename = function() paste0("trisk_summary_", Sys.Date(), ".csv"),
+    content = function(file) {
+      req(rv$results)
+      write.csv(rv$results, file, row.names = FALSE)
+    }
+  )
+
+  output$download_pd_csv <- downloadHandler(
+    filename = function() paste0("trisk_pd_analysis_", Sys.Date(), ".csv"),
+    content = function(file) {
+      req(rv$results)
+      pd_cols <- c("company_id", "company_name", "sector", "technology", "country_iso2",
+                   "exposure_value_usd", "term", "loss_given_default", "pd_baseline", "pd_shock")
+      pd_cols <- intersect(pd_cols, names(rv$results))
+      if (length(pd_cols) == 0) pd_cols <- names(rv$results)
+      write.csv(rv$results[, pd_cols, drop = FALSE], file, row.names = FALSE)
+    }
+  )
+
+  output$download_npv_csv <- downloadHandler(
+    filename = function() paste0("trisk_npv_analysis_", Sys.Date(), ".csv"),
+    content = function(file) {
+      req(rv$results)
+      npv_cols <- c("company_id", "company_name", "sector", "technology", "country_iso2",
+                    "exposure_value_usd", "term", "crispy_perc_value_change",
+                    "net_present_value_baseline", "net_present_value_shock")
+      npv_cols <- intersect(npv_cols, names(rv$results))
+      if (length(npv_cols) == 0) npv_cols <- names(rv$results)
+      write.csv(rv$results[, npv_cols, drop = FALSE], file, row.names = FALSE)
+    }
+  )
 
   # ============================================
   # Results - Summary table

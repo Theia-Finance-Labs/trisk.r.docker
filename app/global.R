@@ -642,18 +642,25 @@ build_scenario_choices <- function(scenario_codes) {
   labels <- sapply(scenario_codes, scenario_label, USE.NAMES = FALSE)
   categories <- sapply(scenario_codes, scenario_category, USE.NAMES = FALSE)
 
-  # Named vector: label -> code (for selectInput)
-  named_choices <- setNames(scenario_codes, paste0(labels, "  [", scenario_codes, "]"))
+  # Named vector: human label -> code (for selectInput)
+  named_choices <- setNames(scenario_codes, labels)
 
   # Group by category
   groups <- split(named_choices, categories[match(named_choices, scenario_codes)])
 
-  # Sort groups in logical order
+  # Sort within each group by year descending (newest first)
+  sort_by_year_desc <- function(codes) {
+    years <- as.integer(gsub(".*?(\\d{4}).*", "\\1", codes))
+    years[is.na(years)] <- 0L
+    codes[order(-years, names(codes))]
+  }
+
+  # Assemble groups in logical order
   group_order <- c("\U0001F7E2 Orderly", "\U0001F7E1 Disorderly",
                    "\U0001F7E0 Too Little, Too Late", "\U0001F534 Hot House World", "\u2753 Other")
   ordered_groups <- list()
   for (g in group_order) {
-    if (g %in% names(groups)) ordered_groups[[g]] <- sort(groups[[g]])
+    if (g %in% names(groups)) ordered_groups[[g]] <- sort_by_year_desc(groups[[g]])
   }
   ordered_groups
 }

@@ -491,12 +491,19 @@ table.dataTable th { font-size: var(--fs-xs) !important; }
   padding: 15px;
   margin-top: 15px;
   box-shadow: var(--shadow-sm);
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .portfolio-aggregate h4 {
   margin-top: 0;
   color: var(--fg-muted);
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .agg-value {
@@ -911,13 +918,7 @@ hr { border-color: var(--border-light); }
   display: block;
 }
 
-/* --- Horizon analysis header bar --- */
-.horizon-header {
-  margin-bottom: 15px;
-  padding: 12px;
-  background: #F0E6EA;
-  border-radius: var(--radius-md);
-}
+/* --- Horizon analysis header bar (replaced by section-header--dark) --- */
 
 /* --- Compact alert (config warnings) --- */
 .alert-compact {
@@ -1258,6 +1259,65 @@ hr { border-color: var(--border-light); }
 
 [data-theme="dark"] .help-block {
   color: var(--fg-muted) !important;
+}
+
+/* Dark mode: headings */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+  color: var(--fg-primary);
+}
+
+/* Dark mode: box headers (primary/info use hardcoded #F7F5F6 in light) */
+[data-theme="dark"] .box.box-solid.box-primary > .box-header {
+  background-color: var(--bg-sidebar) !important;
+}
+
+[data-theme="dark"] .box.box-solid.box-info > .box-header {
+  background-color: var(--bg-sidebar) !important;
+}
+
+/* Dark mode: box-success (upload success state) — keep dark header in both themes */
+[data-theme="dark"] .box.box-solid.box-success > .box-header {
+  background-color: #1A1A2E !important;
+  border-color: var(--status-success) !important;
+  color: var(--fg-on-dark) !important;
+}
+[data-theme="dark"] .box.box-solid.box-success > .box-header .box-title {
+  color: var(--fg-on-dark) !important;
+}
+[data-theme="dark"] .box.box-solid.box-success {
+  border-color: var(--status-success) !important;
+}
+
+/* Upload box: green left accent on success in both themes */
+.box.box-solid.box-success {
+  border-left: 4px solid var(--status-success) !important;
+}
+
+/* Dark mode: selectize optgroup header */
+[data-theme="dark"] .selectize-dropdown .optgroup-header {
+  color: var(--fg-secondary) !important;
+  background-color: var(--bg-sidebar) !important;
+  border-color: var(--border-light) !important;
+}
+
+/* Dark mode: selectize items */
+[data-theme="dark"] .selectize-input .item {
+  color: var(--fg-primary) !important;
+}
+
+/* Dark mode: portfolio aggregate card titles */
+[data-theme="dark"] .portfolio-aggregate h4 {
+  color: var(--fg-secondary);
+}
+
+/* Dark mode: box-title explicitly */
+[data-theme="dark"] .box-title {
+  color: var(--fg-primary) !important;
 }
 
 /* Theme toggle button */

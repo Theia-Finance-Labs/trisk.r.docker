@@ -64,17 +64,17 @@ setup_results_horizon <- function(input, output, session, rv) {
 
     tagList(
       # Header with summary
-      tags$div(class = "horizon-header",
+      div(class = "section-header section-header--dark",
         fluidRow(
           column(8,
-            tags$h4(class = "section-title mb-4",
-                    icon("chart-area"), " Multi-Horizon Risk Analysis"),
-            tags$p(class = "m-0 fs-13 fg-secondary",
-                   paste0(length(years), " shock years analyzed: ",
-                          paste(years, collapse = ", "),
-                          " | ", nrow(rv$results_by_year[[1]]), " companies"))
+            h4(icon("chart-area"), " Multi-Horizon Risk Analysis",
+               class = "section-title"),
+            tags$small(paste0(length(years), " shock years: ",
+                             paste(years, collapse = ", "),
+                             " | ", nrow(rv$results_by_year[[1]]), " companies"),
+                      class = "opacity-85")
           ),
-          column(4, class = "text-right pt-8",
+          column(4, class = "text-right",
             downloadButton("download_horizon_csv", "Export Multi-Horizon CSV",
                           class = "btn-sm btn-export")
           )

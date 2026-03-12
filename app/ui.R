@@ -166,89 +166,13 @@ ui <- dashboardPage(
         ),
         fluidRow(
           # Portfolio Upload
-          box(
-            title = "Portfolio Data",
-            status = "primary",
-            solidHeader = TRUE,
-            width = 6,
-            fileInput("portfolio_file", "Upload Portfolio CSV",
-                      accept = c(".csv", ".CSV"),
-                      placeholder = "No file selected"),
-            helpText("Required columns: company_id, company_name, country_iso2,
-                     exposure_value_usd, term, loss_given_default"),
-            uiOutput("portfolio_status"),
-            uiOutput("portfolio_audit"),
-            downloadLink("download_portfolio_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default mb-8"),
-            div(class = "data-preview", DTOutput("portfolio_preview"))
-          ),
-
-          # Assets Upload
-          box(
-            title = "Assets Data",
-            status = "primary",
-            solidHeader = TRUE,
-            width = 6,
-            fileInput("assets_file", "Upload Assets CSV",
-                      accept = c(".csv", ".CSV"),
-                      placeholder = "No file selected"),
-            helpText("Company-level production and asset data with production trajectories"),
-            uiOutput("assets_status"),
-            uiOutput("assets_audit"),
-            downloadLink("download_assets_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default mb-8"),
-            div(class = "data-preview", DTOutput("assets_preview"))
-          )
+          uiOutput("portfolio_upload_box"),
+          uiOutput("assets_upload_box")
         ),
 
         fluidRow(
-          # Financial Upload
-          box(
-            title = "Financial Features Data",
-            status = "primary",
-            solidHeader = TRUE,
-            width = 6,
-            fileInput("financial_file", "Upload Financial Features CSV",
-                      accept = c(".csv", ".CSV"),
-                      placeholder = "No file selected"),
-            helpText("PD, net profit margin, debt/equity ratio, volatility per company"),
-            uiOutput("financial_status"),
-            uiOutput("financial_audit"),
-            downloadLink("download_financial_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default mb-8"),
-            div(class = "data-preview", DTOutput("financial_preview"))
-          ),
-
-          # Scenarios Status
-          box(
-            title = "Scenarios Data",
-            status = if (!is.null(scenarios_data_preloaded)) "success" else "warning",
-            solidHeader = TRUE,
-            width = 6,
-            if (!is.null(scenarios_data_preloaded)) {
-              tagList(
-                tags$p(class = "status-ok",
-                  icon("check-circle"),
-                  strong(" Pre-loaded scenarios available")
-                ),
-                tags$p(paste("Total scenarios:", length(unique(scenarios_data_preloaded$scenario)))),
-                tags$p(paste("Geographies:", paste(unique(scenarios_data_preloaded$scenario_geography), collapse = ", "))),
-                hr(),
-                tags$p("Or upload custom scenarios:"),
-                fileInput("scenarios_file", NULL, accept = c(".csv", ".CSV"))
-              )
-            } else {
-              tagList(
-                tags$p(class = "status-missing",
-                  icon("exclamation-triangle"),
-                  strong(" No pre-loaded scenarios")
-                ),
-                fileInput("scenarios_file", "Upload Scenarios CSV",
-                          accept = c(".csv", ".CSV")),
-                helpText("Scenarios are pre-loaded at build time. Upload here only to override with custom data.")
-              )
-            }
-          )
+          uiOutput("financial_upload_box"),
+          uiOutput("scenarios_upload_box")
         ),
 
         fluidRow(
@@ -510,6 +434,7 @@ ui <- dashboardPage(
             title = "Portfolio Results",
 
             tabPanel("Summary",
+              uiOutput("summary_header"),
               DTOutput("results_summary_table"),
               fluidRow(
                 box(width = 6, plotlyOutput("plot_sector_npv", height = "400px")),
@@ -517,7 +442,8 @@ ui <- dashboardPage(
               )
             ),
 
-            tabPanel("Exposures PD Analysis",
+            tabPanel("Exposure PD Analysis",
+              uiOutput("pd_analysis_header"),
               tags$div(class = "fs-12 fg-secondary mb-8",
                 tags$span("Color key: "),
                 tags$span("Green", class = "legend-badge legend-badge--green"),
@@ -530,28 +456,25 @@ ui <- dashboardPage(
               DTOutput("pd_table")
             ),
 
-            # Concentration Risk tab (moved up per feedback)
-            tabPanel("Concentration",
+            tabPanel("Risk Concentration",
               uiOutput("concentration_ui")
             ),
 
-            tabPanel("Exposures NPV",
-              DTOutput("npv_table")
-            ),
-
-            # Horizon Analysis tab (only populated when multi-year run is available)
-            tabPanel("Horizon Analysis",
-              uiOutput("horizon_analysis_ui")
-            ),
-
-            # Attribution / Waterfall tab (before Scenario Comparison per feedback)
             tabPanel("Attribution",
               uiOutput("attribution_ui")
             ),
 
-            # Scenario Comparison tab (only populated when multi-scenario run is available)
+            tabPanel("Horizon Analysis",
+              uiOutput("horizon_analysis_ui")
+            ),
+
             tabPanel("Scenario Comparison",
               uiOutput("scenario_comparison_ui")
+            ),
+
+            tabPanel("Exposure NPV Analysis",
+              uiOutput("npv_analysis_header"),
+              DTOutput("npv_table")
             )
           )
         )

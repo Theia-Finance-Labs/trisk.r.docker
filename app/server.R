@@ -90,26 +90,24 @@ server <- function(input, output, session) {
       rv$financial <- load_mock_data("financial")
       if (!is.null(rv$financial)) log_message(paste("  Financial:", nrow(rv$financial), "rows"))
 
-      # Only load test scenarios if no scenarios are already loaded (e.g. from GCS download)
-      if (is.null(rv$scenarios)) {
-        rv$scenarios <- load_mock_data("scenarios")
-        if (!is.null(rv$scenarios)) log_message(paste("  Scenarios: loaded testdata,", nrow(rv$scenarios), "rows"))
-      } else {
-        log_message(paste("  Scenarios: keeping existing data (", length(unique(rv$scenarios$scenario)), "scenarios)"))
-      }
+      # Always load demo scenarios/carbon so demo data works as a cohesive package.
+      # The demo portfolio + assets are designed to work with demo scenarios, not the
+      # pre-bundled GCS scenarios. Users can still upload their own scenarios separately.
+      rv$scenarios <- load_mock_data("scenarios")
+      if (!is.null(rv$scenarios)) log_message(paste("  Scenarios:", nrow(rv$scenarios), "rows,", length(unique(rv$scenarios$scenario)), "scenarios"))
 
-      # Same for carbon - keep pre-loaded if available
-      if (is.null(rv$carbon)) {
-        rv$carbon <- load_mock_data("carbon")
-        if (!is.null(rv$carbon)) log_message(paste("  Carbon: loaded testdata,", nrow(rv$carbon), "rows"))
-      } else {
-        log_message(paste("  Carbon: keeping existing data (", nrow(rv$carbon), "rows)"))
-      }
+      rv$carbon <- load_mock_data("carbon")
+      if (!is.null(rv$carbon)) log_message(paste("  Carbon:", nrow(rv$carbon), "rows"))
 
       rv$portfolio <- load_mock_data("portfolio")
       if (!is.null(rv$portfolio)) log_message(paste("  Portfolio:", nrow(rv$portfolio), "rows"))
 
       loaded <- sum(!sapply(list(rv$assets, rv$financial, rv$scenarios, rv$carbon, rv$portfolio), is.null))
+
+      # Clear existing scenario pairs so the scenario observer auto-creates
+      # fresh pairs with demo-compatible defaults (demo uses NGFS2023 names,
+      # which differ from pre-bundled GCS NGFS2024 names).
+      clear_all_pairs()
 
       if (loaded == 5) {
         showNotification("All demo data loaded successfully! Go to Configure.", type = "message", duration = 5)
@@ -2113,6 +2111,118 @@ server <- function(input, output, session) {
   })
 
   # ============================================
+  # Summary tab - Unified value cards row (6 KPI cards)
+  # ============================================
+
+  output$value_cards_row <- renderUI({
+    # Helper to safely pick first available column
+    safe_col <- function(df, ...) {
+      candidates <- c(...)
+      for (col in candidates) {
+        if (col %in% names(df)) return(df[[col]])
+      }
+      return(NULL)
+    }
+    # Helper to build a single portfolio-aggregate card
+    make_card <- function(title, value_text, color_class = "neutral", tooltip = title) {
+      column(2,
+        div(class = "portfolio-aggregate",
+          h4(title, title = tooltip),
+          tags$span(class = paste("agg-value", color_class), value_text)
+        )
+      )
+    }
+
+    if (is.null(rv$results)) {
+      return(fluidRow(
+        make_card("Companies Analyzed", "---"),
+        make_card("Total Exposure", "---"),
+        make_card("Max PD Shock (%)", "---"),
+        make_card("PD Change (pp)", "---"),
+        make_card("PD Change (%)", "---"),
+        make_card("Total EL Change", "---")
+      ))
+    }
+
+    df <- rv$results
+    has_pd <- all(c("pd_baseline", "pd_shock") %in% names(df))
+    has_el <- all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))
+    has_exp <- "exposure_value_usd" %in% names(df)
+
+    # 1. Companies Analyzed
+    n_companies <- {
+      col <- safe_col(df, "company_id", "company_name")
+      if (!is.null(col)) length(unique(col)) else nrow(df)
+    }
+
+    # 2. Total Exposure
+    total_exposure <- {
+      col <- safe_col(df, "exposure_value_usd", "exposure")
+      if (!is.null(col)) sum(col, na.rm = TRUE) else 0
+    }
+
+    # 3. Max PD Shock
+    max_pd <- {
+      col <- safe_col(df, "pd_shock", "crispy_pd_shock")
+      if (!is.null(col)) max(col, na.rm = TRUE) * 100 else 0
+    }
+    max_pd_class <- if (max_pd > 5) "negative" else "neutral"
+
+    # 4. PD Change (pp) — exposure-weighted
+    pd_change_pp <- 0
+    if (has_pd) {
+      exp_col <- if (has_exp) df$exposure_value_usd else rep(1, nrow(df))
+      total_exp <- sum(exp_col, na.rm = TRUE)
+      if (total_exp > 0) {
+        pd_change_pp <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp * 100
+      }
+    }
+    pd_pp_class <- if (pd_change_pp > 0.01) "negative" else if (pd_change_pp < -0.01) "positive" else "neutral"
+
+    # 5. PD Change (%) — exposure-weighted relative
+    pd_change_pct <- NA_real_
+    if (has_pd && has_exp) {
+      exp_col <- df$exposure_value_usd
+      total_exp <- sum(exp_col, na.rm = TRUE)
+      if (total_exp > 0) {
+        weighted_pd_baseline <- sum(df$pd_baseline * exp_col, na.rm = TRUE) / total_exp
+        if (weighted_pd_baseline != 0) {
+          weighted_pd_change <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp
+          pd_change_pct <- weighted_pd_change / weighted_pd_baseline * 100
+        }
+      }
+    }
+    pd_pct_class <- if (!is.na(pd_change_pct) && pd_change_pct > 0.01) "negative" else
+      if (!is.na(pd_change_pct) && pd_change_pct < -0.01) "positive" else "neutral"
+
+    # 6. Total EL Change
+    el_change <- 0
+    if (has_el) {
+      el_change <- sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)
+    }
+    el_class <- if (el_change > 0) "negative" else if (el_change < 0) "positive" else "neutral"
+
+    fluidRow(
+      make_card("Companies Analyzed", as.character(n_companies),
+                tooltip = "Number of unique companies in the portfolio"),
+      make_card("Total Exposure", format_number(total_exposure),
+                tooltip = "Sum of all loan exposure amounts in USD"),
+      make_card("Max PD Shock (%)",
+                paste0(display_round(max_pd), "%"), max_pd_class,
+                tooltip = "Highest single-company probability of default under shock scenario"),
+      make_card("PD Change (pp)",
+                paste0(display_round(pd_change_pp), " pp"), pd_pp_class,
+                tooltip = "Exposure-weighted portfolio PD change in percentage points"),
+      make_card("PD Change (%)",
+                if (!is.na(pd_change_pct)) paste0(smart_round(pd_change_pct), "%") else "N/A",
+                pd_pct_class,
+                tooltip = "Exposure-weighted portfolio PD change as percentage of baseline PD"),
+      make_card("Total EL Change", format_number(el_change), el_class,
+                tooltip = "Total change in expected loss across the portfolio")
+    )
+  })
+
+  # ============================================
   # Summary plots - Sector-level NPV and PD
   # ============================================
 
@@ -2133,7 +2243,18 @@ server <- function(input, output, session) {
       labs(title = "NPV Change by Sector", x = "", y = "Average NPV Change (%)") +
       trisk_plot_theme()
 
-    ggplotly(p)
+    tc <- plotly_theme_colors(input)
+    ggplotly(p) %>%
+      layout(
+        showlegend = FALSE,
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL
+      ) %>%
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   output$plot_sector_pd <- renderPlotly({
@@ -2159,7 +2280,17 @@ server <- function(input, output, session) {
       trisk_plot_theme() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-    ggplotly(p)
+    tc <- plotly_theme_colors(input)
+    ggplotly(p) %>%
+      layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL
+      ) %>%
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ============================================
@@ -3441,6 +3572,7 @@ server <- function(input, output, session) {
   output$attr_marginal_contribution <- renderPlotly({
     ad <- attribution_data()
     req(ad)
+    tc <- plotly_theme_colors(input)
 
     company_df <- ad$company %>%
       mutate(abs_contribution = abs(pd_contribution)) %>%
@@ -3453,40 +3585,70 @@ server <- function(input, output, session) {
       mutate(
         share_pct = abs_contribution / total_abs * 100,
         direction = ifelse(pd_contribution >= 0, "Risk Increase", "Risk Decrease")
-      )
-
-    # Cumulative share for visual ordering
-    company_df <- company_df %>%
+      ) %>%
       arrange(desc(share_pct))
 
-    colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
+    # Build hierarchical data: sector parents + company children
+    # Plotly treemaps require every value in `parents` to exist in `labels`
+    sectors <- unique(company_df$sector)
 
-    hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+    # Sector-level parent nodes (parent = "" means root)
+    sector_labels <- as.character(sectors)
+    sector_parents <- rep("", length(sectors))
+    sector_values <- vapply(sectors, function(s) {
+      sum(company_df$share_pct[company_df$sector == s])
+    }, numeric(1))
+    sector_colors <- rep("#888888", length(sectors))
+    sector_text <- paste0(
+      sector_labels,
+      "\nTotal share: ", round(sector_values, 1), "%"
+    )
+
+    # Company-level child nodes (parent = sector name)
+    company_labels <- as.character(company_df$company_label)
+    company_parents <- as.character(company_df$sector)
+    company_values <- company_df$share_pct
+    company_colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
+    company_text <- paste0(
+      as.character(company_df$company_label),
+      "\nSector: ", as.character(company_df$sector),
       "\nShare of total PD change: ", round(company_df$share_pct, 1), "%",
       "\nDirection: ", company_df$direction,
       "\nContribution: ", round(company_df$pd_contribution * 100, 4), " pp"
     )
 
+    # Combine sector + company into single vectors
+    all_labels <- c(sector_labels, company_labels)
+    all_parents <- c(sector_parents, company_parents)
+    all_values <- c(sector_values, company_values)
+    all_colors <- c(sector_colors, company_colors)
+    all_text <- c(sector_text, company_text)
+
     plot_ly(
-      labels = company_df$company_label,
-      values = company_df$share_pct,
-      parents = company_df$sector,
+      labels = all_labels,
+      parents = all_parents,
+      values = all_values,
       type = "treemap",
+      branchvalues = "total",
       marker = list(
-        colors = colors,
+        colors = all_colors,
         line = list(color = "white", width = 1)
       ),
-      text = hover_text,
+      text = all_text,
       hoverinfo = "text",
       textinfo = "label+percent parent",
       textfont = list(size = 11)
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         margin = list(l = 5, r = 5, t = 5, b = 5)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Sector × Technology Attribution Heatmap ----

@@ -52,6 +52,15 @@ TRISK_HEX_RED   <- "#F53D3F"
 TRISK_HEX_GREEN <- "#5D9324"
 TRISK_HEX_GREY  <- "#BAB6B5"
 
+# Fixed sector colour palette — used across all sector-coloured plots
+SECTOR_COLORS <- c(
+  "Oil&Gas"    = "#8B4513",   # Brown
+  "Coal"       = "#1A1A1A",   # Black (slightly off for visibility on dark bg)
+  "Power"      = "#2E86C1",   # Blue
+  "Automotive" = "#E74C3C",   # Red
+  "Steel"      = "#F1C40F"    # Yellow
+)
+
 #' TRISK ggplot2 theme — font families are browser-rendered via ggplotly()
 trisk_plot_theme <- function() {
   theme_minimal(base_size = 12, base_family = "Inter") +
@@ -152,8 +161,9 @@ make_header_tooltips <- function(col_names) {
 # Configuration
 # ============================================
 
-# Cap upload size to 50 MB (Shiny default is 5 MB).
-options(shiny.maxRequestSize = 50 * 1024^2)  # 50 MB — sufficient for CSV portfolios
+# Cap upload size to 200 MB (Shiny default is 5 MB).
+# Scenario files can be 50-60 MB; allow headroom for larger datasets.
+options(shiny.maxRequestSize = 200 * 1024^2)  # 200 MB
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic
@@ -177,6 +187,54 @@ config_defaults <- function() {
     carbon_price_model = "no_carbon_tax",
     shock_years        = c(2025, 2030, 2035)
   )
+}
+
+# ============================================
+# Sector-aware scenario defaults
+# ============================================
+
+#' Maps portfolio sectors to their recommended default scenario pairs.
+#' Each entry defines which sectors the pair covers, plus the default
+#' baseline and target scenario codes.
+#' "core" is always shown; others appear when their sectors are detected.
+SECTOR_SCENARIO_DEFAULTS <- list(
+  core = list(
+    label      = "Core Energy (NGFS)",
+    sectors    = c("Oil&Gas", "Coal", "Power"),
+    baseline   = "NGFS2024GCAM_CP",
+    target     = "NGFS2024GCAM_NZ2050",
+    always_show = TRUE,
+    tooltip    = NULL
+  ),
+  automotive = list(
+    label      = "Automotive (IPR)",
+    sectors    = c("Automotive"),
+    baseline   = "IPR2023Automotive_baseline",
+    target     = "IPR2023Automotive_FPS",
+    always_show = FALSE,
+    tooltip    = "Default scenario for Automotive sector \u2014 not covered by NGFS scenarios"
+  ),
+  steel = list(
+    label      = "Steel (Mission Possible)",
+    sectors    = c("Steel"),
+    baseline   = "mission_possible_Steel_baseline",
+    target     = "mission_possible_Steel_NZ",
+    always_show = FALSE,
+    tooltip    = "Default scenario for Steel sector \u2014 not covered by NGFS scenarios"
+  )
+)
+
+#' Given a character vector of portfolio sector names, return which keys
+#' of SECTOR_SCENARIO_DEFAULTS should be active (always includes "core").
+detect_scenario_groups <- function(portfolio_sectors) {
+  groups <- character()
+  for (key in names(SECTOR_SCENARIO_DEFAULTS)) {
+    entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+    if (entry$always_show || any(entry$sectors %in% portfolio_sectors)) {
+      groups <- c(groups, key)
+    }
+  }
+  groups
 }
 
 # ============================================
@@ -650,7 +708,7 @@ build_scenario_choices <- function(scenario_codes) {
 
   # Sort within each group by year descending (newest first)
   sort_by_year_desc <- function(codes) {
-    years <- as.integer(gsub(".*?(\\d{4}).*", "\\1", codes))
+    years <- suppressWarnings(as.integer(gsub(".*?(\\d{4}).*", "\\1", codes)))
     years[is.na(years)] <- 0L
     codes[order(-years, names(codes))]
   }
@@ -703,31 +761,53 @@ scenario_family <- function(code) {
 #' @return The baseline scenario code to use for this target
 baseline_for_scenario <- function(target_code, available_baselines, default_baseline) {
   family <- scenario_family(target_code)
+  parsed <- parse_scenario_code(target_code)
+
+  # For NGFS targets, match by IAM within same vintage
+  if (!is.null(parsed) && parsed$family == "NGFS" && !is.null(parsed$iam)) {
+    # Look for baseline with same vintage + IAM (e.g., NGFS2024REMIND_CP)
+    iam_pattern <- paste0("NGFS", parsed$vintage, "[_]?", parsed$iam, "[_]?CP$")
+    iam_match <- grep(iam_pattern, available_baselines, value = TRUE)
+    if (length(iam_match) > 0) return(iam_match[1])
+    # Fallback to any NGFS baseline with same vintage
+    vintage_pattern <- paste0("NGFS", parsed$vintage, ".*CP$")
+    vintage_match <- grep(vintage_pattern, available_baselines, value = TRUE)
+    if (length(vintage_match) > 0) return(vintage_match[1])
+  }
 
   # For GECO targets, look for a GECO baseline in the same family
   if (grepl("^GECO", target_code)) {
     family_baselines <- available_baselines[sapply(available_baselines, function(b) {
       scenario_family(b) == family
     })]
-    # Prefer CP (Current Policies) within the family
-    cp_match <- grep("[_]CP$", family_baselines, value = TRUE)
+    # Prefer CP/CurPol within the family
+    cp_match <- grep("(CP|CurPol)$", family_baselines, value = TRUE)
     if (length(cp_match) > 0) return(cp_match[1])
-    # Otherwise use any baseline from this family
     if (length(family_baselines) > 0) return(family_baselines[1])
+  }
+
+  # For IPR targets, look for the IPR _baseline variant with same vintage
+  if (grepl("^IPR", target_code)) {
+    if (!is.null(parsed)) {
+      ipr_pattern <- paste0("IPR", parsed$vintage, ".*baseline$")
+      ipr_match <- grep(ipr_pattern, available_baselines, value = TRUE)
+      if (length(ipr_match) > 0) return(ipr_match[1])
+    }
+    ipr_baselines <- grep("^IPR.*baseline$", available_baselines, value = TRUE)
+    if (length(ipr_baselines) > 0) return(ipr_baselines[1])
   }
 
   # For Mission Possible targets, look for the _baseline variant
   if (grepl("^mission_possible", target_code)) {
     mp_baseline <- paste0(family, "_baseline")
     if (mp_baseline %in% available_baselines) return(mp_baseline)
-    # Also try matching by family prefix
     family_baselines <- available_baselines[sapply(available_baselines, function(b) {
       scenario_family(b) == family
     })]
     if (length(family_baselines) > 0) return(family_baselines[1])
   }
 
-  # Default: use NGFS GCAM 2024 CP (or whatever the user selected as default)
+  # Default: use the user's selected baseline
   default_baseline
 }
 
@@ -738,6 +818,144 @@ build_baseline_map <- function(target_scenarios, available_baselines, default_ba
     baseline_for_scenario(tgt, available_baselines, default_baseline)
   }, USE.NAMES = TRUE)
   mapping
+}
+
+# ============================================
+# Scenario sensitivity helpers
+# ============================================
+
+#' Parse a scenario code into structured components.
+#' @return list(family, vintage, iam, pathway, family_prefix) or NULL if unparseable
+parse_scenario_code <- function(code) {
+  # NGFS pattern: NGFS{year}[_]{model}[_]{pathway}
+  m <- regmatches(code, regexec("^NGFS(\\d{4})[_]?(GCAM|MESSAGE|REMIND)[_]?(.+)$", code))[[1]]
+  if (length(m) == 4) {
+    return(list(family = "NGFS", vintage = m[2], iam = m[3], pathway = m[4],
+                family_prefix = paste0("NGFS", m[2])))
+  }
+  # GECO pattern: GECO{year}_{pathway}
+  m <- regmatches(code, regexec("^GECO(\\d{4})[_](.+)$", code))[[1]]
+  if (length(m) == 3) {
+    return(list(family = "GECO", vintage = m[2], iam = NA_character_, pathway = m[3],
+                family_prefix = paste0("GECO", m[2])))
+  }
+  # IPR pattern: IPR{year}[Automotive]_{pathway}
+  m <- regmatches(code, regexec("^IPR(\\d{4})(Automotive)?[_](.+)$", code))[[1]]
+  if (length(m) == 4) {
+    suffix <- if (nzchar(m[3])) m[3] else ""
+    return(list(family = "IPR", vintage = m[2], iam = NA_character_, pathway = m[4],
+                family_prefix = paste0("IPR", m[2], suffix)))
+  }
+  # mission_possible pattern
+  m <- regmatches(code, regexec("^mission_possible[_](.+)[_](baseline|NZ)$", code))[[1]]
+  if (length(m) == 3) {
+    return(list(family = "MissionPossible", vintage = NA_character_, iam = NA_character_,
+                pathway = m[3], family_prefix = paste0("mission_possible_", m[2])))
+  }
+  NULL
+}
+
+#' Map pathway codes to human-readable policy types.
+#' Cross-provider: pathways with equivalent climate ambition are grouped together.
+POLICY_TYPE_MAP <- list(
+  "Net Zero"            = c("NZ2050", "NZ"),
+  "Below 2\u00B0C"      = c("B2DS", "1.5C", "1.5C-Unif"),
+  "Current Policies"    = c("CP", "CurPol", "baseline"),
+  "Low Demand"          = c("LD"),
+  "Delayed Transition"  = c("DT"),
+  "Fragmented World"    = c("FW"),
+  "NDC"                 = c("NDC", "NDC-LTS"),
+  "Forecast Policy"     = c("FPS"),
+  "Required Policy"     = c("RPS")
+)
+
+#' Get the policy type label for a pathway code.
+pathway_to_policy_type <- function(pathway_code) {
+  for (pt in names(POLICY_TYPE_MAP)) {
+    if (pathway_code %in% POLICY_TYPE_MAP[[pt]]) return(pt)
+  }
+  pathway_code
+}
+
+#' Build sensitivity scenario groups from all available targets.
+#' Groups by (policy_type, vintage) with cross-provider support.
+#' @param primary_target The user's selected target scenario code
+#' @param all_targets Character vector of all available target scenario codes
+#' @return list of groups, each with policy_type, vintage, scenarios, etc.
+build_sensitivity_groups <- function(primary_target, all_targets) {
+  primary_parsed <- parse_scenario_code(primary_target)
+  if (is.null(primary_parsed)) return(NULL)
+
+  primary_policy <- pathway_to_policy_type(primary_parsed$pathway)
+
+  # Parse all targets and classify
+  parsed_list <- lapply(all_targets, function(code) {
+    p <- parse_scenario_code(code)
+    if (is.null(p)) return(NULL)
+    p$code <- code
+    p$policy_type <- pathway_to_policy_type(p$pathway)
+    p
+  })
+  parsed_list <- Filter(Negate(is.null), parsed_list)
+
+  # Group by (policy_type, vintage)
+  group_keys <- unique(sapply(parsed_list, function(p) {
+    paste0(p$policy_type, "||", ifelse(is.na(p$vintage), "none", p$vintage))
+  }))
+
+  groups <- list()
+  for (gk in sort(group_keys)) {
+    parts <- strsplit(gk, "\\|\\|")[[1]]
+    pt <- parts[1]
+    vint <- if (parts[2] == "none") NA_character_ else parts[2]
+
+    members <- Filter(function(p) {
+      p$policy_type == pt && identical(
+        ifelse(is.na(p$vintage), "none", p$vintage),
+        ifelse(is.na(vint), "none", vint)
+      )
+    }, parsed_list)
+
+    codes <- sapply(members, function(m) m$code)
+    families <- unique(sapply(members, function(m) m$family))
+    iams <- unique(na.omit(sapply(members, function(m) m$iam)))
+
+    label <- if (!is.na(vint)) paste0(pt, " (", vint, ")") else pt
+    if (length(families) > 1) {
+      label <- paste0(label, " \u2014 ", paste(families, collapse = ", "))
+    }
+
+    groups[[gk]] <- list(
+      key         = gk,
+      policy_type = pt,
+      vintage     = vint,
+      label       = label,
+      scenarios   = codes,
+      families    = families,
+      iams        = iams,
+      n_scenarios = length(codes),
+      is_primary  = primary_target %in% codes
+    )
+  }
+
+  list(
+    groups         = groups,
+    primary        = primary_target,
+    primary_policy = primary_policy,
+    primary_vintage = primary_parsed$vintage
+  )
+}
+
+#' Extract a result data.frame from raw run_trisk_on_portfolio output.
+extract_result_df <- function(raw) {
+  if (is.data.frame(raw)) return(raw)
+  if (is.list(raw)) {
+    if ("portfolio_results_tech_detail" %in% names(raw)) return(raw$portfolio_results_tech_detail)
+    if ("portfolio_results" %in% names(raw)) return(raw$portfolio_results)
+    df_idx <- which(sapply(raw, is.data.frame))
+    if (length(df_idx) > 0) return(raw[[df_idx[1]]])
+  }
+  stop("Could not extract a data.frame from analysis results")
 }
 
 #' Calculate expected loss: EL = -EAD * PD (follows trisk.analysis convention)
@@ -826,6 +1044,7 @@ source(file.path("modules", "mod_results_concentration.R"))
 source(file.path("modules", "mod_results_attribution.R"))
 source(file.path("modules", "mod_results_horizon.R"))
 source(file.path("modules", "mod_results_scenarios.R"))
+source(file.path("modules", "mod_sensitivity.R"))
 
 message("\n========================================")
 message("TRISK Shiny App Initialized (1in1000)")

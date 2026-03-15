@@ -79,8 +79,8 @@ ui <- dashboardPage(
                class = "font-heading"),
             p("TRISK helps financial institutions assess the impact of climate transition
               scenarios on their loan portfolios. It uses forward-looking scenario analysis
-              to estimate changes in company-level Net Present Value (NPV) and Probability
-              of Default (PD) under different climate policy pathways."),
+              to estimate changes in company-level Probability of Default (PD) and Expected Loss (EL)
+              under different climate policy pathways."),
             div(class = "guidance-wrapper",
               tags$button(class = "guidance-toggle-btn",
                 tags$span("How to use this tool"),
@@ -90,8 +90,8 @@ ui <- dashboardPage(
                 tags$ol(
                   tags$li(strong("Upload Data:"), " Upload your portfolio, assets, and financial data (or load demo data from the trisk.model package)."),
                   tags$li(strong("Configure:"), " Select baseline (business-as-usual) and target (transition goal) climate scenarios, set model parameters and shock year."),
-                  tags$li(strong("Run:"), " Execute the stress test. The model computes NPV and PD under both scenarios for each company-sector-technology combination."),
-                  tags$li(strong("Review Results:"), " Examine NPV changes, PD shifts, Expected Loss changes, and exposure impacts across your portfolio."),
+                  tags$li(strong("Run:"), " Execute the stress test. The model computes PD and Expected Loss under both scenarios for each company-sector-technology combination."),
+                  tags$li(strong("Review Results:"), " Examine PD shifts, Expected Loss changes, and exposure impacts across your portfolio."),
                   tags$li(strong("Integrate:"), " Combine TRISK outputs with your institution's internal PD and Expected Loss estimates using absolute, relative, or Z-score (Basel IRB) methods."),
                   tags$li(strong("Download:"), " Export all results as Excel, CSV, or JSON for your records and reporting.")
                 )
@@ -418,9 +418,8 @@ ui <- dashboardPage(
                 p("The value boxes below show portfolio-level headline metrics. The tabs contain
                   detailed breakdowns:"),
                 tags$ul(
-                  tags$li(strong("Summary:"), " Sector/technology breakdown with average NPV change and PD."),
-                  tags$li(strong("Exposures PD:"), " Per-company PD baseline vs shock, PD change, Expected Loss change, with color-coded columns."),
-                  tags$li(strong("Exposures NPV:"), " Per-company NPV baseline vs shock and percentage value change.")
+                  tags$li(strong("Summary:"), " Sector/technology breakdown with PD shock and exposure data."),
+                  tags$li(strong("Exposures PD:"), " Per-company PD baseline vs shock, PD change, Expected Loss change, with color-coded columns.")
                 ),
                 p("Positive PD/EL changes (red) indicate increased risk under the transition scenario.
                   Negative changes (green) indicate decreased risk.")
@@ -438,7 +437,7 @@ ui <- dashboardPage(
 
             tabPanel("Summary",
               uiOutput("summary_header"),
-              tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Portfolio-level summary of TRISK stress test results. Shows average NPV change and PD shock by sector and technology, exposure-weighted across your loan book."),
+              tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Portfolio-level summary of TRISK stress test results. Shows PD shock by sector and technology, exposure-weighted across your loan book."),
               DTOutput("results_summary_table")
             ),
 
@@ -461,7 +460,20 @@ ui <- dashboardPage(
               fluidRow(
                 box(width = 12, plotlyOutput("plot_pd_sector_enhanced", height = "420px"))
               ),
-              DTOutput("pd_table")
+              DTOutput("pd_table"),
+              hr(),
+              h5(icon("chart-bar"), " PD Distribution", class = "fw-600 font-heading mt-16"),
+              tags$p(class = "fs-12 fg-secondary mb-8",
+                tags$i(class = "fa fa-info-circle mr-6"),
+                "Distribution of PD change across portfolio companies. ",
+                tags$span("Red", style = "color:#F53D3F;font-weight:600;"),
+                " = PD increased (higher default risk) | ",
+                tags$span("Green", style = "color:#3D8B5E;font-weight:600;"),
+                " = PD decreased (lower default risk)."
+              ),
+              fluidRow(
+                box(width = 12, plotlyOutput("plot_pd_distribution", height = "350px"))
+              )
             ),
 
             tabPanel("Risk Concentration",

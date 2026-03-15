@@ -2017,19 +2017,23 @@ server <- function(input, output, session) {
   # Portfolio-level EL Change value box
   output$vb_el_change <- renderValueBox({
     if (is.null(rv$results)) {
-      return(valueBox("---", "EL Change (USD)", icon = icon("exclamation-circle"), color = "blue"))
+      return(valueBox("---", "Total EL Change", icon = icon("exclamation-circle"), color = "blue"))
     }
     val <- 0
     df <- rv$results
     if (all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))) {
       val <- sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)
     }
-    valueBox(tags$span(format_number(val),
-                       title = paste0("Full precision: ", round(val, 4)),
+    # EL is negative by convention (loss). Display absolute value.
+    # When EL increases (val more negative), that's BAD = RED
+    display_val <- format_number(abs(val))
+    is_increase <- val < 0  # more negative = EL increased
+    valueBox(tags$span(display_val,
+                       title = paste0("Full precision: ", round(abs(val), 2)),
                        style = "cursor: help;"),
-             "EL Change (USD)",
-             icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
-             color = if (val > 0) "green" else if (val < 0) "red" else "blue")
+             "Total EL Change",
+             icon = if (is_increase) icon("arrow-up") else icon("arrow-down"),
+             color = if (is_increase) "red" else "green")
   })
 
   # ============================================
@@ -2304,6 +2308,72 @@ server <- function(input, output, session) {
     dt
   })
 
+  # ---- PD Distribution: horizontal bar chart of PD change per company ----
+  output$plot_pd_distribution <- renderPlotly({
+    req(rv$results)
+    df <- rv$results
+
+    req("pd_baseline" %in% names(df), "pd_shock" %in% names(df))
+
+    tc <- plotly_theme_colors(input)
+
+    has_company_name <- "company_name" %in% names(df) && any(!is.na(df$company_name))
+    id_col <- if (has_company_name) "company_name" else "company_id"
+    sector_col <- if ("sector" %in% names(df)) "sector" else NULL
+
+    plot_df <- df %>%
+      mutate(
+        pd_change = pd_shock - pd_baseline,
+        pd_change_bps = pd_change * 10000,
+        company_label = if (has_company_name) as.character(.data[[id_col]])
+                        else paste0("Company ", .data[[id_col]]),
+        direction = ifelse(pd_change >= 0, "PD Increase (Deterioration)", "PD Decrease (Improvement)")
+      ) %>%
+      filter(!is.na(pd_change), is.finite(pd_change)) %>%
+      arrange(pd_change)
+
+    req(nrow(plot_df) > 0)
+
+    # Build hover text
+    hover_text <- paste0(
+      htmltools::htmlEscape(as.character(plot_df$company_label)),
+      if (!is.null(sector_col)) paste0("\nSector: ", htmltools::htmlEscape(as.character(plot_df[[sector_col]]))) else "",
+      "\nPD Baseline: ", smart_round(plot_df$pd_baseline * 100), "%",
+      "\nPD Shock: ", smart_round(plot_df$pd_shock * 100), "%",
+      "\nPD Change: ", ifelse(plot_df$pd_change >= 0, "+", ""),
+      round(plot_df$pd_change_bps, 1), " bps"
+    )
+
+    colors <- ifelse(plot_df$pd_change >= 0, BRAND_CORAL, STATUS_GREEN)
+
+    plot_df$company_factor <- factor(plot_df$company_label, levels = plot_df$company_label)
+    plot_df$bar_color <- ifelse(plot_df$pd_change >= 0, "PD Increase", "PD Decrease")
+
+    p <- ggplot(plot_df, aes(x = company_factor, y = pd_change_bps, fill = bar_color,
+                             text = hover_text)) +
+      geom_col(width = 0.6) +
+      geom_hline(yintercept = 0, color = "#999", linewidth = 0.5) +
+      scale_fill_manual(values = c("PD Increase" = BRAND_CORAL, "PD Decrease" = STATUS_GREEN),
+                        guide = "none") +
+      labs(y = "PD Change (basis points)", x = "") +
+      coord_flip() +
+      trisk_plot_theme() +
+      theme(axis.text.y = element_text(size = 10))
+
+    ggplotly(p, tooltip = "text") %>%
+      layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
+        margin = list(l = 140, r = 60, t = 10, b = 50),
+        showlegend = FALSE
+      ) %>%
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
+  })
+
   # ============================================
   # Portfolio-level PD & EL aggregates (Exposures PD tab)
   # ============================================
@@ -2483,7 +2553,8 @@ server <- function(input, output, session) {
     if (has_el) {
       el_change <- sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)
     }
-    el_class <- if (el_change > 0) "negative" else if (el_change < 0) "positive" else "neutral"
+    # EL is negative by convention; more negative = EL increased = BAD
+    el_class <- if (el_change < 0) "negative" else if (el_change > 0) "positive" else "neutral"
 
     fluidRow(
       make_card("Companies Analyzed", as.character(n_companies),
@@ -2497,7 +2568,7 @@ server <- function(input, output, session) {
                 if (!is.na(pd_change_pct)) paste0(smart_round(pd_change_pct), "%") else "N/A",
                 pd_pct_class,
                 tooltip = "Exposure-weighted portfolio PD change as percentage of baseline PD"),
-      make_card("Total EL Change", format_number(el_change), el_class,
+      make_card("Total EL Change", format_number(abs(el_change)), el_class,
                 tooltip = "Total change in expected loss across the portfolio")
     )
   })
@@ -2896,6 +2967,20 @@ server <- function(input, output, session) {
             plotlyOutput("horizon_term_structure", height = "380px"))
       ),
 
+      # Row 4: Risk Migration Matrix + Company PD Trajectories
+      fluidRow(
+        box(width = 6, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
+            collapsible = TRUE,
+            tags$p(style = "font-size: 12px; color: #666;",
+                   "How companies migrate between PD risk buckets from the earliest to latest shock year. Analogous to a credit rating transition matrix."),
+            plotlyOutput("horizon_migration_heatmap", height = "380px")),
+        box(width = 6, title = "Company PD Trajectories", status = "warning", solidHeader = FALSE,
+            collapsible = TRUE,
+            tags$p(style = "font-size: 12px; color: #666;",
+                   "Individual company PD paths across shock years (thin lines) vs portfolio average (bold). Shows dispersion of risk outcomes."),
+            plotlyOutput("horizon_company_trajectories", height = "380px"))
+      ),
+
       # Row 5: Year-over-year table
       fluidRow(
         box(width = 12, title = "Year-over-Year Metrics", status = "info", solidHeader = FALSE,
@@ -2915,7 +3000,7 @@ server <- function(input, output, session) {
             line = list(color = BRAND_CORAL, width = 3),
             marker = list(color = BRAND_CORAL, size = 10),
             hovertemplate = "Year: %{x}<br>Avg PD: %{y:.4f}%<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5),
+      layout(xaxis = list(title = "Shock Year", tickvals = agg$shock_year, ticktext = as.character(agg$shock_year)),
              yaxis = list(title = "Avg PD (Shock) %"),
              margin = list(t = 10))
   })
@@ -2930,7 +3015,7 @@ server <- function(input, output, session) {
             line = list(color = STATUS_BLUE, width = 3),
             marker = list(color = STATUS_BLUE, size = 10),
             hovertemplate = "Year: %{x}<br>Avg NPV Change: %{y:.2f}%<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5),
+      layout(xaxis = list(title = "Shock Year", tickvals = agg$shock_year, ticktext = as.character(agg$shock_year)),
              yaxis = list(title = "Avg NPV Change %"),
              margin = list(t = 10))
   })
@@ -2940,13 +3025,13 @@ server <- function(input, output, session) {
     hd <- horizon_data()
     req(hd)
     agg <- hd %>% group_by(shock_year) %>%
-      summarise(total_el = sum(expected_loss_shock, na.rm = TRUE), .groups = "drop")
+      summarise(total_el = sum(abs(expected_loss_shock), na.rm = TRUE), .groups = "drop")
     plot_ly(agg, x = ~shock_year, y = ~total_el, type = "scatter", mode = "lines+markers",
             line = list(color = STATUS_RED, width = 3),
             marker = list(color = STATUS_RED, size = 10),
-            hovertemplate = "Year: %{x}<br>Total EL: %{y:,.0f}<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5),
-             yaxis = list(title = "Total EL (Shock)"),
+            hovertemplate = "Year: %{x}<br>Total EL: $%{y:,.0f}<extra></extra>") %>%
+      layout(xaxis = list(title = "Shock Year", tickvals = agg$shock_year, ticktext = as.character(agg$shock_year)),
+             yaxis = list(title = "Total Expected Loss ($)"),
              margin = list(t = 10))
   })
 
@@ -2963,23 +3048,19 @@ server <- function(input, output, session) {
     p <- plot_ly(agg, x = ~shock_year, y = ~avg_pd, color = ~sector,
                  type = "scatter", mode = "lines+markers",
                  hovertemplate = "%{fullData.name}<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5),
+      layout(xaxis = list(title = "Shock Year", tickvals = unique(agg$shock_year), ticktext = as.character(unique(agg$shock_year))),
              yaxis = list(title = "Avg PD (Shock) %"),
              legend = list(orientation = "h", y = -0.2),
              margin = list(t = 10, b = 60))
     p
   })
 
-  # ---- REMOVED: Company trajectories (spaghetti) — visual noise, sector facet chart is clearer ----
-  # ---- REMOVED: Risk migration matrix — too simplistic without bank rating grades ----
-  # ---- REMOVED: Animated scatter — can't be printed/exported for ICAAP ----
-  # Original code preserved in git history (commit before this cleanup)
-
-  if (FALSE) { # START REMOVED BLOCK
+  # ---- Horizon: Company PD Trajectories (spaghetti plot) ----
   output$horizon_company_trajectories <- renderPlotly({
     hd <- horizon_data()
     req(hd)
-    id_col <- if ("company_name" %in% names(hd)) "company_name" else "company_id"
+    id_col <- if ("company_name" %in% names(hd) && any(!is.na(hd$company_name))) "company_name" else "company_id"
+    all_years <- sort(unique(hd$shock_year))
 
     company_data <- hd %>%
       group_by(across(all_of(id_col)), shock_year) %>%
@@ -3008,7 +3089,7 @@ server <- function(input, output, session) {
                          marker = list(size = 8, color = BRAND_CORAL),
                          name = "Portfolio Avg", legendgroup = "avg",
                          hovertemplate = "Portfolio Avg<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>")
-    p %>% layout(xaxis = list(title = "Shock Year", dtick = 5),
+    p %>% layout(xaxis = list(title = "Shock Year", tickvals = all_years, ticktext = as.character(all_years)),
                  yaxis = list(title = "PD (Shock) %"),
                  legend = list(orientation = "h", y = -0.15),
                  margin = list(t = 10, b = 50))
@@ -3023,7 +3104,7 @@ server <- function(input, output, session) {
     first_year <- rv$results_by_year[[as.character(years[1])]]
     last_year <- rv$results_by_year[[as.character(years[length(years)])]]
 
-    # Assign risk buckets
+    # Assign risk buckets (aligned with Basel IRB rating grades)
     pd_bucket <- function(pd) {
       cut(pd, breaks = c(-Inf, 0.001, 0.005, 0.01, 0.05, Inf),
           labels = c("Very Low\n(<0.1%)", "Low\n(0.1-0.5%)", "Medium\n(0.5-1%)",
@@ -3049,47 +3130,10 @@ server <- function(input, output, session) {
             type = "heatmap",
             colorscale = list(c(0, "#F5F0F2"), c(0.5, "#EF7173"), c(1, "#C0393B")),
             hovertemplate = "From: %{y}<br>To: %{x}<br>Count: %{z}<extra></extra>") %>%
-      layout(xaxis = list(title = paste0("Risk Bucket (", years[length(years)], ")"), tickangle = 0),
-             yaxis = list(title = paste0("Risk Bucket (", years[1], ")"), autorange = "reversed"),
+      layout(xaxis = list(title = paste0("PD Bucket (", years[length(years)], ")"), tickangle = 0),
+             yaxis = list(title = paste0("PD Bucket (", years[1], ")"), autorange = "reversed"),
              margin = list(t = 10, l = 100, b = 80))
   })
-
-  # ---- Horizon: Animated scatter (NPV vs PD by year) ----
-  output$horizon_animated <- renderPlotly({
-    hd <- horizon_data()
-    req(hd)
-    if (!"crispy_perc_value_change" %in% names(hd)) return(plotly_empty())
-    id_col <- if ("company_name" %in% names(hd)) "company_name" else "company_id"
-    has_sector <- "sector" %in% names(hd)
-
-    plot_df <- hd %>%
-      mutate(npv_pct = crispy_perc_value_change * 100,
-             pd_pct = pd_shock * 100,
-             exp_size = sqrt(exposure_value_usd) / 100,
-             hover_label = htmltools::htmlEscape(as.character(get(id_col))))
-
-    if (has_sector) {
-      p <- plot_ly(plot_df, x = ~npv_pct, y = ~pd_pct, size = ~exp_size,
-                   color = ~sector, frame = ~shock_year,
-                   text = ~paste0(hover_label, "\nNPV: ", round(npv_pct, 2), "%\nPD: ", round(pd_pct, 4), "%"),
-                   hoverinfo = "text",
-                   type = "scatter", mode = "markers",
-                   marker = list(opacity = 0.7, sizemode = "diameter", sizeref = 2))
-    } else {
-      p <- plot_ly(plot_df, x = ~npv_pct, y = ~pd_pct, size = ~exp_size,
-                   frame = ~shock_year,
-                   text = ~paste0(hover_label, "\nNPV: ", round(npv_pct, 2), "%\nPD: ", round(pd_pct, 4), "%"),
-                   hoverinfo = "text",
-                   type = "scatter", mode = "markers",
-                   marker = list(opacity = 0.7, color = BRAND_CORAL, sizemode = "diameter", sizeref = 2))
-    }
-    p %>% layout(xaxis = list(title = "NPV Change %"),
-                 yaxis = list(title = "PD (Shock) %"),
-                 margin = list(t = 10)) %>%
-      animation_opts(frame = 800, transition = 400, redraw = FALSE) %>%
-      animation_slider(currentvalue = list(prefix = "Shock Year: "))
-  })
-  } # END REMOVED BLOCK
 
   # ---- Horizon: PD Term Structure ----
   output$horizon_term_structure <- renderPlotly({
@@ -3144,7 +3188,8 @@ server <- function(input, output, session) {
                   name = "Portfolio Avg",
                   hovertemplate = "Year: %{x}<br>Avg PD: %{y:.4f}%<br>(IQR band shown)<extra></extra>")
     }
-    p %>% layout(xaxis = list(title = "Shock Year", dtick = 5),
+    all_years <- unique(portfolio_agg$shock_year)
+    p %>% layout(xaxis = list(title = "Shock Year", tickvals = all_years, ticktext = as.character(all_years)),
                  yaxis = list(title = "PD (Shock) %"),
                  legend = list(orientation = "h", y = -0.2),
                  margin = list(t = 10, b = 50))
@@ -3163,8 +3208,8 @@ server <- function(input, output, session) {
         `Avg PD (%)` = round(mean(df$pd_shock, na.rm = TRUE) * 100, 4),
         `Max PD (%)` = round(max(df$pd_shock, na.rm = TRUE) * 100, 4),
         `Avg NPV Change (%)` = round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2),
-        `Total EL` = round(sum(df$expected_loss_shock, na.rm = TRUE), 0),
-        `Total EL Change` = round(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE), 0),
+        `Total EL ($)` = round(sum(abs(df$expected_loss_shock), na.rm = TRUE), 0),
+        `EL Change ($)` = round(abs(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)), 0),
         Companies = nrow(df),
         check.names = FALSE
       )
@@ -3939,7 +3984,18 @@ server <- function(input, output, session) {
         )
       ),
 
-      # Row 3: (Sector×Tech heatmap + EL waterfall removed — PD waterfall + movers are clearer)
+      # Row 3: EL Waterfall (complements PD waterfall with dollar-impact view)
+      if (ad$has_el) fluidRow(
+        column(12,
+          div(class = "card-surface", style = "margin-bottom: 16px;",
+            h5(icon("money-bill-wave"), " Expected Loss Waterfall by Sector",
+               style = "font-weight: 600; margin-top: 0;"),
+            tags$small("Shows each sector's contribution to the total Expected Loss increase. Red bars = EL increased (more provisioning needed), green = EL decreased.",
+                      style = "color: #666; display: block; margin-bottom: 10px;"),
+            plotlyOutput("attr_el_waterfall", height = "400px")
+          )
+        )
+      ),
 
       # Row 4: Attribution summary table
       fluidRow(
@@ -4015,11 +4071,19 @@ server <- function(input, output, session) {
   # ---- Top Company Risk Movers (horizontal bar chart) ----
   output$attr_company_movers <- renderPlotly({
     ad <- attribution_data()
-    req(ad)
+    req(ad, ad$company)
+    req(nrow(ad$company) > 0)
+    req(all(c("company_label", "sector", "pd_change", "exposure_value_usd",
+              "weight", "pd_contribution") %in% names(ad$company)))
+
+    tc <- plotly_theme_colors(input)
 
     company_df <- ad$company %>%
+      filter(!is.na(pd_contribution), is.finite(pd_contribution)) %>%
       arrange(desc(abs(pd_contribution))) %>%
       head(15)
+
+    req(nrow(company_df) > 0)
 
     # Sort by contribution for display (largest positive at top)
     company_df <- company_df %>%
@@ -4028,8 +4092,8 @@ server <- function(input, output, session) {
     colors <- ifelse(company_df$pd_contribution >= 0, BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      htmltools::htmlEscape(as.character(company_df$company_label)),
+      "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(company_df$weight * 100, 1), "%",
@@ -4049,13 +4113,19 @@ server <- function(input, output, session) {
       textposition = "outside"
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         xaxis = list(title = "Contribution to Portfolio PD Change (pp)", zeroline = TRUE,
-                     zerolinecolor = "#999", zerolinewidth = 1),
-        yaxis = list(title = "", tickfont = list(size = 10)),
+                     zerolinecolor = "#999", zerolinewidth = 1, gridcolor = tc$gridcolor),
+        yaxis = list(title = "", tickfont = list(size = 10), gridcolor = tc$gridcolor),
         margin = list(l = 120, r = 50, t = 10, b = 50),
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- REMOVED: attr_marginal_contribution — redundant with company movers ----
@@ -4259,6 +4329,61 @@ server <- function(input, output, session) {
   })
 
   } # END REMOVED ATTRIBUTION BLOCK
+
+  # ---- Expected Loss Attribution by Sector (waterfall) ----
+  output$attr_el_waterfall <- renderPlotly({
+    ad <- attribution_data()
+    req(ad, ad$has_el)
+
+    sector_df <- ad$sector %>%
+      filter(!is.na(el_change)) %>%
+      arrange(desc(abs(el_change)))
+
+    if (nrow(sector_df) == 0) {
+      return(plotly_empty() %>% layout(title = "No EL data available"))
+    }
+
+    total_el_change <- sum(sector_df$el_change, na.rm = TRUE)
+
+    # Negate el_change so increases in loss display as positive (upward) bars
+    # el_change is negative when loss increases (EL = -(EAD*PD)), so -el_change > 0 for increased loss
+    wf_labels <- c(sector_df$sector, "Total EL\nIncrease")
+    wf_values <- c(-sector_df$el_change, -total_el_change)
+    wf_measure <- c(rep("relative", nrow(sector_df)), "total")
+
+    hover_text <- c(
+      paste0(sector_df$sector,
+             "\nEL ", ifelse(sector_df$el_change < 0, "Increase", "Decrease"),
+             ": $", format(round(abs(sector_df$el_change)), big.mark = ","),
+             "\nExposure: $", format(round(sector_df$total_exposure), big.mark = ","),
+             "\nCompanies: ", sector_df$n_companies),
+      paste0("Total EL ", ifelse(total_el_change < 0, "Increase", "Decrease"),
+             ": $", format(round(abs(total_el_change)), big.mark = ","))
+    )
+
+    plot_ly(
+      x = wf_labels,
+      y = wf_values,
+      type = "waterfall",
+      measure = wf_measure,
+      text = hover_text,
+      hoverinfo = "text",
+      connector = list(line = list(color = "#DDD0D4", width = 1, dash = "dot")),
+      # Positive bars (EL increased) = red; negative bars (EL decreased) = green
+      increasing = list(marker = list(color = STATUS_RED)),
+      decreasing = list(marker = list(color = STATUS_GREEN)),
+      totals = list(marker = list(color = "#333333")),
+      textposition = "outside",
+      texttemplate = "$%{y:,.0f}"
+    ) %>%
+      layout(
+        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11)),
+        yaxis = list(title = "Expected Loss Increase ($)", tickformat = "$,.0f"),
+        margin = list(b = 100, t = 30),
+        showlegend = FALSE
+      ) %>%
+      config(displayModeBar = FALSE)
+  })
 
   # ---- Detailed Attribution Table ----
   output$attr_detail_table <- renderDT({

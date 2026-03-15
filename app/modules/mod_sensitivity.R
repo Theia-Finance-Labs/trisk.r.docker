@@ -57,14 +57,29 @@ setup_sensitivity <- function(input, output, session, rv) {
     core_baseline <- rv$results$baseline_scenario[1]
 
     # ---- Section 1: Scenario Trajectories ----
+    # Get all available scenarios for the selector
+    all_scenarios <- sort(unique(rv$scenarios$scenario))
+    scenario_choices <- setNames(all_scenarios, sapply(all_scenarios, scenario_label))
+
     trajectory_section <- tagList(
       div(class = "section-header section-header--dark",
         fluidRow(
-          column(8,
+          column(4,
             h4(icon("chart-line"), " Scenario Trajectories", class = "section-title"),
             tags$small(paste0("Business-as-usual: ", scenario_label(core_baseline),
                              " \u2192 Transition goal: ", scenario_label(core_target)),
                       class = "opacity-85")
+          ),
+          column(4,
+            selectizeInput("trajectory_scenarios", "Display scenarios:",
+              choices = scenario_choices,
+              selected = c(core_baseline, core_target),
+              multiple = TRUE,
+              options = list(
+                plugins = list("remove_button"),
+                placeholder = "Select scenarios to display..."
+              )
+            )
           ),
           column(4, class = "text-right",
             radioButtons("trajectory_level", NULL,
@@ -177,12 +192,24 @@ setup_sensitivity <- function(input, output, session, rv) {
     level <- input$trajectory_level %||% "sector"
     shock_years <- sort(as.integer(names(rv$results_by_year)))
 
-    # Filter scenarios data to baseline + target, selected geography
+    # Use selected scenarios or fall back to baseline + target
+    selected_scenarios <- input$trajectory_scenarios
+    if (is.null(selected_scenarios) || length(selected_scenarios) == 0) {
+      selected_scenarios <- c(core_baseline, core_target)
+    }
+
+    # Filter scenarios data to selected scenarios + geography
     traj_data <- rv$scenarios %>%
       dplyr::filter(
-        .data$scenario %in% c(core_baseline, core_target),
+        .data$scenario %in% selected_scenarios,
         .data$scenario_geography == selected_geo
       )
+
+    # Only show sectors present in the portfolio
+    if (!is.null(rv$detected_sectors) && length(rv$detected_sectors) > 0) {
+      traj_data <- traj_data %>%
+        dplyr::filter(.data$sector %in% rv$detected_sectors)
+    }
 
     req(nrow(traj_data) > 0, "scenario_pathway" %in% names(traj_data))
 
@@ -190,12 +217,65 @@ setup_sensitivity <- function(input, output, session, rv) {
     traj_data <- traj_data %>%
       dplyr::mutate(
         pathway_value = suppressWarnings(as.numeric(.data$scenario_pathway)),
-        scenario_label = ifelse(.data$scenario == core_baseline, "Baseline", "Target"),
+        scenario_label = sapply(.data$scenario, scenario_label),
         year = as.integer(.data$scenario_year)
       ) %>%
       dplyr::filter(!is.na(.data$pathway_value))
 
     req(nrow(traj_data) > 0)
+
+    # ---- Build shock trajectory ----
+    # Shock trajectory: follows baseline before shock year, then jumps to target
+    # Always compute from original scenarios data (not filtered by user selection)
+    shock_year_primary <- shock_years[1]
+
+    shock_source <- rv$scenarios %>%
+      dplyr::filter(
+        .data$scenario %in% c(core_baseline, core_target),
+        .data$scenario_geography == selected_geo
+      )
+    # Apply same portfolio sector filter
+    if (!is.null(rv$detected_sectors) && length(rv$detected_sectors) > 0) {
+      shock_source <- shock_source %>%
+        dplyr::filter(.data$sector %in% rv$detected_sectors)
+    }
+    shock_source <- shock_source %>%
+      dplyr::mutate(
+        pathway_value = suppressWarnings(as.numeric(.data$scenario_pathway)),
+        year = as.integer(.data$scenario_year)
+      ) %>%
+      dplyr::filter(!is.na(.data$pathway_value))
+
+    baseline_data <- shock_source %>% dplyr::filter(.data$scenario == core_baseline)
+    target_data   <- shock_source %>% dplyr::filter(.data$scenario == core_target)
+
+    shock_data <- NULL
+    if (nrow(baseline_data) > 0 && nrow(target_data) > 0) {
+      # Pre-shock: baseline data up to and including shock year
+      pre_shock <- baseline_data %>%
+        dplyr::filter(.data$year <= shock_year_primary)
+      # Post-shock: target data from shock year onward
+      post_shock <- target_data %>%
+        dplyr::filter(.data$year >= shock_year_primary)
+
+      # Combine: the shock year may have two values (baseline + target) showing the jump
+      shock_data <- dplyr::bind_rows(pre_shock, post_shock) %>%
+        dplyr::mutate(
+          scenario_label = paste0("Shock (", shock_year_primary, ")"),
+          scenario = "___shock___"
+        ) %>%
+        dplyr::distinct()
+    }
+
+    # Combine main + shock trajectory data
+    if (!is.null(shock_data) && nrow(shock_data) > 0) {
+      traj_data <- dplyr::bind_rows(traj_data, shock_data)
+    }
+
+    # Build display label for each scenario
+    shock_label <- if (!is.null(shock_data) && nrow(shock_data) > 0) {
+      paste0("Shock (", shock_year_primary, ")")
+    } else NULL
 
     if (level == "sector") {
       # Aggregate by sector
@@ -218,6 +298,33 @@ setup_sensitivity <- function(input, output, session, rv) {
     pathway_units <- unique(na.omit(traj_data$pathway_unit))
     y_label <- if (length(pathway_units) == 1) pathway_units[1] else "Pathway Value"
 
+    # ---- Build color & linetype scales dynamically ----
+    all_labels <- unique(plot_data$scenario_label)
+    baseline_label <- scenario_label(core_baseline)
+    target_label <- scenario_label(core_target)
+
+    # Assign colors: baseline=grey, target=red, shock=dark coral, others from palette
+    color_map <- setNames(rep(NA_character_, length(all_labels)), all_labels)
+    linetype_map <- setNames(rep("solid", length(all_labels)), all_labels)
+
+    color_map[baseline_label] <- "#888888"
+    linetype_map[baseline_label] <- "dashed"
+    color_map[target_label] <- TRISK_HEX_RED
+    linetype_map[target_label] <- "solid"
+    if (!is.null(shock_label) && shock_label %in% all_labels) {
+      color_map[shock_label] <- BRAND_CORAL_DK
+      linetype_map[shock_label] <- "longdash"
+    }
+
+    # Fill remaining scenarios with SCENARIO_COLORS palette
+    remaining <- all_labels[is.na(color_map)]
+    palette_idx <- 1
+    for (lbl in remaining) {
+      color_map[lbl] <- SCENARIO_COLORS[((palette_idx - 1) %% length(SCENARIO_COLORS)) + 1]
+      linetype_map[lbl] <- "solid"
+      palette_idx <- palette_idx + 1
+    }
+
     p <- ggplot(plot_data, aes(
       x = year, y = pathway_value, color = scenario_label,
       linetype = scenario_label,
@@ -229,10 +336,8 @@ setup_sensitivity <- function(input, output, session, rv) {
     )) +
       geom_line(linewidth = 0.8) +
       geom_point(size = 1.2, alpha = 0.5) +
-      scale_color_manual(values = c("Baseline" = "#888888", "Target" = TRISK_HEX_RED),
-                        name = "Scenario") +
-      scale_linetype_manual(values = c("Baseline" = "dashed", "Target" = "solid"),
-                           name = "Scenario")
+      scale_color_manual(values = color_map, name = "Scenario") +
+      scale_linetype_manual(values = linetype_map, name = "Scenario")
 
     # Add shock year markers
     for (yr in shock_years) {
@@ -246,11 +351,17 @@ setup_sensitivity <- function(input, output, session, rv) {
       p <- p + facet_wrap(~ tech_label, scales = "free_y", ncol = 3)
     }
 
+    n_selected <- length(selected_scenarios)
+    subtitle_text <- paste0(
+      n_selected, " scenario", if (n_selected != 1) "s" else "",
+      " | Shock trajectory at year ", shock_year_primary,
+      " | Dotted blue = shock year(s): ", paste(shock_years, collapse = ", ")
+    )
+
     p <- p +
       labs(
         title = "Scenario Trajectories",
-        subtitle = paste0("Baseline vs Target | Dotted blue = shock year(s): ",
-                         paste(shock_years, collapse = ", ")),
+        subtitle = subtitle_text,
         x = "Year", y = y_label
       ) +
       trisk_plot_theme() +

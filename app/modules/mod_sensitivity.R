@@ -88,29 +88,15 @@ setup_sensitivity <- function(input, output, session, rv) {
         tags$p("The selected scenario has no sibling scenarios for sensitivity analysis.")
       )
     } else {
-      # Build checkbox group UI
-      group_checkboxes <- lapply(names(config$groups), function(gk) {
+      # Build checkbox choices with rich labels
+      group_choices <- setNames(names(config$groups), sapply(names(config$groups), function(gk) {
         g <- config$groups[[gk]]
-        label_html <- tags$span(
-          tags$strong(g$label),
-          tags$small(paste0(" (", g$n_scenarios, " scenarios",
-                           if (length(g$iams) > 0) paste0(": ", paste(g$iams, collapse = ", ")) else "",
-                           ")"),
-                    style = "color: #999; margin-left: 6px;"),
-          if (g$is_primary) tags$span(class = "label label-danger",
-                                      style = "margin-left: 8px; font-size: 10px;",
-                                      "YOUR SCENARIO") else NULL
-        )
-        tags$div(style = "margin-bottom: 6px;",
-          tags$label(style = "display: flex; align-items: center; gap: 8px; cursor: pointer;",
-            tags$input(type = "checkbox",
-              name = "sensitivity_groups",
-              value = gk,
-              checked = if (g$is_primary) "checked" else NULL),
-            label_html
-          )
-        )
-      })
+        paste0(g$label, " (", g$n_scenarios, " scenarios",
+               if (length(g$iams) > 0) paste0(": ", paste(g$iams, collapse = ", ")) else "",
+               ")", if (g$is_primary) " \u2605 YOUR SCENARIO" else "")
+      }))
+      # Pre-select primary group
+      selected_groups <- names(config$groups)[sapply(config$groups, function(g) g$is_primary)]
 
       tagList(
         div(class = "section-header section-header--dark",
@@ -124,8 +110,7 @@ setup_sensitivity <- function(input, output, session, rv) {
             column(4, class = "text-right",
               actionButton("run_sensitivity", "Run Sensitivity Analysis",
                           icon = icon("play"),
-                          class = "btn-danger btn-lg",
-                          disabled = if (rv$sensitivity_running) "disabled" else NULL)
+                          class = "btn-danger btn-lg")
             )
           )
         ),
@@ -135,9 +120,9 @@ setup_sensitivity <- function(input, output, session, rv) {
               "Each group contains scenarios with the same policy ambition level. ",
               "Check the groups you want to include in the sensitivity analysis."
             ),
-            tags$div(class = "sensitivity-group-list",
-                    style = "column-count: 2; column-gap: 24px;",
-              do.call(tagList, group_checkboxes)
+            checkboxGroupInput("sensitivity_groups", NULL,
+              choices = group_choices,
+              selected = selected_groups
             ),
             tags$hr(),
             tags$small(class = "fg-muted",
@@ -304,14 +289,18 @@ setup_sensitivity <- function(input, output, session, rv) {
     core_sectors <- SECTOR_SCENARIO_DEFAULTS[["core"]]$sectors
     selected_geo <- input$scenario_geography %||% "Global"
 
-    # Read selected groups from checkboxes via JS
-    # Since checkboxes are raw HTML, we need to read them via session$input
-    # We'll collect all groups that have the is_primary flag or use JS
-    # Fallback: run all groups (simpler, always works)
-    selected_scenarios <- unique(unlist(lapply(config$groups, function(g) g$scenarios)))
+    # Get selected groups from checkboxGroupInput
+    selected_keys <- input$sensitivity_groups
+    if (is.null(selected_keys) || length(selected_keys) == 0) {
+      showNotification("Please select at least one policy group.", type = "warning")
+      return()
+    }
+    selected_scenarios <- unique(unlist(lapply(
+      config$groups[selected_keys], function(g) g$scenarios
+    )))
 
-    rv$sensitivity_running <- TRUE
-    on.exit(rv$sensitivity_running <- FALSE)
+    shinyjs::disable("run_sensitivity")
+    on.exit(shinyjs::enable("run_sensitivity"))
 
     withProgress(message = "Running sensitivity analysis...", value = 0, {
       all_results <- list()
@@ -340,7 +329,7 @@ setup_sensitivity <- function(input, output, session, rv) {
 
           tryCatch({
             bl <- baseline_for_scenario(scen, rv$available_baselines, core_baseline)
-            geo_result <- geo_for_scenario(bl, selected_geo)
+            geo_result <- geo_for_scenario(scen, selected_geo)
 
             portfolio_subset <- rv$portfolio %>%
               dplyr::filter(.data$sector %in% core_sectors)
@@ -395,10 +384,12 @@ setup_sensitivity <- function(input, output, session, rv) {
       # Compute per-scenario summary
       if (nrow(rv$sensitivity_results) > 0) {
         primary_code <- config$primary
+        has_exposure <- "exposure_value_usd" %in% names(rv$sensitivity_results)
+        has_el_diff  <- "expected_loss_difference" %in% names(rv$sensitivity_results)
+        has_npv      <- "crispy_perc_value_change" %in% names(rv$sensitivity_results)
 
         rv$sensitivity_summary <- rv$sensitivity_results %>%
           dplyr::mutate(
-            # Use absolute PD change in basis points — robust for small baselines
             pd_change_bps = (.data$pd_shock - .data$pd_baseline) * 10000
           ) %>%
           dplyr::group_by(.data$sensitivity_scenario, .data$shock_year) %>%
@@ -408,12 +399,12 @@ setup_sensitivity <- function(input, output, session, rv) {
             policy_type = pathway_to_policy_type(
               parse_scenario_code(.data$sensitivity_scenario[1])$pathway %||% ""
             ),
-            avg_pd_change = if ("exposure_value_usd" %in% names(.))
+            avg_pd_change = if (has_exposure)
               weighted.mean(.data$pd_change_bps, .data$exposure_value_usd, na.rm = TRUE)
             else mean(.data$pd_change_bps, na.rm = TRUE),
-            total_el_change = if ("expected_loss_difference" %in% names(.))
+            total_el_change = if (has_el_diff)
               sum(.data$expected_loss_difference, na.rm = TRUE) else NA_real_,
-            avg_npv_change = if ("crispy_perc_value_change" %in% names(.))
+            avg_npv_change = if (has_npv)
               mean(.data$crispy_perc_value_change, na.rm = TRUE) * 100 else NA_real_,
             n_companies = dplyr::n_distinct(.data$company_id),
             is_primary = .data$sensitivity_scenario[1] == primary_code,
@@ -461,11 +452,14 @@ setup_sensitivity <- function(input, output, session, rv) {
     req(rv$sensitivity_summary)
     ss <- rv$sensitivity_summary
     primary_val <- mean(ss$avg_pd_change[ss$is_primary], na.rm = TRUE)
+    use_violin <- min(table(ss$policy_type)) >= 3
 
-    p <- ggplot(ss, aes(x = policy_type, y = avg_pd_change)) +
-      geom_violin(fill = "#C5E1A5", color = TRISK_HEX_GREEN, alpha = 0.3,
-                  linewidth = 0.5, scale = "width") +
-      geom_jitter(aes(
+    p <- ggplot(ss, aes(x = policy_type, y = avg_pd_change))
+    if (use_violin) {
+      p <- p + geom_violin(fill = "#C5E1A5", color = TRISK_HEX_GREEN, alpha = 0.3,
+                            linewidth = 0.5, scale = "width")
+    }
+    p <- p + geom_jitter(aes(
         color = is_primary, size = is_primary,
         text = paste0(scenario_label_text,
                      "\nPD Change: ", round(avg_pd_change, 0), " bps",
@@ -507,10 +501,13 @@ setup_sensitivity <- function(input, output, session, rv) {
     req(nrow(ss) > 0)
     primary_val <- mean(ss$total_el_change[ss$is_primary], na.rm = TRUE)
 
-    p <- ggplot(ss, aes(x = policy_type, y = total_el_change)) +
-      geom_violin(fill = "#B3D4FC", color = "#2E86C1", alpha = 0.3,
-                  linewidth = 0.5, scale = "width") +
-      geom_jitter(aes(
+    use_violin_el <- min(table(ss$policy_type)) >= 3
+    p <- ggplot(ss, aes(x = policy_type, y = total_el_change))
+    if (use_violin_el) {
+      p <- p + geom_violin(fill = "#B3D4FC", color = "#2E86C1", alpha = 0.3,
+                            linewidth = 0.5, scale = "width")
+    }
+    p <- p + geom_jitter(aes(
         color = is_primary, size = is_primary,
         text = paste0(scenario_label_text,
                      "\nEL Change: $", format(round(total_el_change), big.mark = ","),
@@ -556,10 +553,13 @@ setup_sensitivity <- function(input, output, session, rv) {
     req(nrow(ss) > 0)
     primary_val <- mean(ss$avg_npv_change[ss$is_primary], na.rm = TRUE)
 
-    p <- ggplot(ss, aes(x = policy_type, y = avg_npv_change)) +
-      geom_violin(fill = "#F8D7DA", color = TRISK_HEX_RED, alpha = 0.3,
-                  linewidth = 0.5, scale = "width") +
-      geom_jitter(aes(
+    use_violin_npv <- min(table(ss$policy_type)) >= 3
+    p <- ggplot(ss, aes(x = policy_type, y = avg_npv_change))
+    if (use_violin_npv) {
+      p <- p + geom_violin(fill = "#F8D7DA", color = TRISK_HEX_RED, alpha = 0.3,
+                            linewidth = 0.5, scale = "width")
+    }
+    p <- p + geom_jitter(aes(
         color = is_primary, size = is_primary,
         text = paste0(scenario_label_text,
                      "\nNPV Change: ", round(avg_npv_change, 1), "%",

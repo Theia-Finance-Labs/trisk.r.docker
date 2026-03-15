@@ -44,8 +44,7 @@ server <- function(input, output, session) {
     # Scenario sensitivity analysis
     sensitivity_config = NULL,     # list from find_sensitivity_scenarios()
     sensitivity_results = NULL,    # flat dataframe with all scenario results
-    sensitivity_summary = NULL,    # per-scenario aggregated KPIs
-    sensitivity_running = FALSE
+    sensitivity_summary = NULL     # per-scenario aggregated KPIs
   )
 
   # ============================================

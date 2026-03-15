@@ -75,7 +75,8 @@ RUN R -e "\
   pak::pak(c( \
     'httpuv', 'htmltools', 'shiny', 'shinydashboard', 'shinyWidgets', \
     'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'data.table', 'writexl', \
-    'jsonlite', 'dplyr', 'tidyr' \
+    'jsonlite', 'dplyr', 'tidyr', \
+    'rmarkdown', 'knitr' \
   ), ask = FALSE, upgrade = FALSE)"
 
 # Verify core packages load

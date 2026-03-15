@@ -1,0 +1,159 @@
+---
+title: "TRISK Climate Transition Risk Report"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M %Z')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    self_contained: true
+params:
+  results: NULL
+  config: NULL
+  run_id: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(dplyr)
+```
+
+## Executive Summary
+
+**Run ID:** `r params$run_id`
+**Generated:** `r format(Sys.time(), '%Y-%m-%d %H:%M %Z')`
+
+```{r summary_metrics}
+df <- params$results
+n_companies <- if ("company_id" %in% names(df)) length(unique(df$company_id)) else nrow(df)
+total_exposure <- if ("exposure_value_usd" %in% names(df)) sum(df$exposure_value_usd, na.rm = TRUE) else NA
+
+avg_npv <- if ("crispy_perc_value_change" %in% names(df)) {
+  mean(df$crispy_perc_value_change, na.rm = TRUE) * 100
+} else NA
+
+max_pd <- if ("pd_shock" %in% names(df)) {
+  max(df$pd_shock, na.rm = TRUE) * 100
+} else NA
+
+format_num <- function(x) {
+  if (is.na(x)) return("N/A")
+  if (abs(x) >= 1e9) return(paste0(format(round(x / 1e9, 2), scientific = FALSE), "B"))
+  if (abs(x) >= 1e6) return(paste0(format(round(x / 1e6, 2), scientific = FALSE), "M"))
+  if (abs(x) >= 1e3) return(paste0(format(round(x / 1e3, 2), scientific = FALSE), "K"))
+  format(round(x, 2), scientific = FALSE)
+}
+```
+
+| Metric | Value |
+|--------|-------|
+| Companies Analyzed | `r n_companies` |
+| Total Exposure (USD) | `r format_num(total_exposure)` |
+| Average NPV Change | `r if (!is.na(avg_npv)) paste0(round(avg_npv, 2), "%") else "N/A"` |
+| Maximum PD Shock | `r if (!is.na(max_pd)) paste0(round(max_pd, 2), "%") else "N/A"` |
+
+---
+
+## Sector Analysis
+
+### NPV Change by Sector
+
+```{r sector_npv, fig.width=8, fig.height=5}
+if (all(c("sector", "crispy_perc_value_change") %in% names(df))) {
+  sector_data <- df %>%
+    group_by(sector) %>%
+    summarise(avg_npv_change = mean(crispy_perc_value_change, na.rm = TRUE) * 100,
+              .groups = "drop") %>%
+    arrange(avg_npv_change)
+
+  ggplot(sector_data, aes(x = reorder(sector, avg_npv_change), y = avg_npv_change,
+                          fill = avg_npv_change < 0)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_manual(values = c("TRUE" = "#F53D3F", "FALSE" = "#5D9324"), guide = "none") +
+    labs(title = "NPV Change by Sector", x = "", y = "Average NPV Change (%)") +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+          panel.grid.minor = element_blank())
+} else {
+  cat("Sector NPV data not available.")
+}
+```
+
+### PD by Sector: Baseline vs Shock
+
+```{r sector_pd, fig.width=8, fig.height=5}
+if (all(c("sector", "pd_baseline", "pd_shock") %in% names(df))) {
+  sector_pd <- df %>%
+    group_by(sector) %>%
+    summarise(avg_pd_baseline = mean(pd_baseline, na.rm = TRUE) * 100,
+              avg_pd_shock = mean(pd_shock, na.rm = TRUE) * 100,
+              .groups = "drop") %>%
+    tidyr::pivot_longer(cols = c(avg_pd_baseline, avg_pd_shock),
+                        names_to = "scenario", values_to = "pd") %>%
+    mutate(scenario = ifelse(scenario == "avg_pd_baseline", "Baseline", "Shock"))
+
+  ggplot(sector_pd, aes(x = sector, y = pd, fill = scenario)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    scale_fill_manual(values = c("Baseline" = "#5D9324", "Shock" = "#F53D3F")) +
+    labs(title = "PD by Sector: Baseline vs Shock", x = "", y = "Avg PD (%)") +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.grid.minor = element_blank())
+} else {
+  cat("Sector PD data not available.")
+}
+```
+
+---
+
+## PD Results
+
+```{r pd_table}
+pd_cols <- c("company_id", "company_name", "sector", "technology",
+             "exposure_value_usd", "pd_baseline", "pd_shock")
+pd_cols <- intersect(pd_cols, names(df))
+if (length(pd_cols) > 0) {
+  display <- df[, pd_cols, drop = FALSE]
+  if ("pd_baseline" %in% names(display)) display$pd_baseline <- round(display$pd_baseline, 4)
+  if ("pd_shock" %in% names(display)) display$pd_shock <- round(display$pd_shock, 4)
+  if (all(c("pd_baseline", "pd_shock") %in% names(display))) {
+    display$PD_Change <- round(display$pd_shock - display$pd_baseline, 4)
+  }
+  knitr::kable(head(display, 50), caption = "Top 50 companies by portfolio order")
+} else {
+  cat("PD data not available.")
+}
+```
+
+---
+
+## Configuration
+
+```{r config_table}
+cfg <- params$config
+if (!is.null(cfg)) {
+  config_df <- data.frame(
+    Parameter = names(cfg),
+    Value = sapply(cfg, function(v) paste(v, collapse = ", ")),
+    stringsAsFactors = FALSE
+  )
+  knitr::kable(config_df, caption = "Analysis configuration parameters")
+} else {
+  cat("Configuration data not available.")
+}
+```
+
+---
+
+## Disclaimer
+
+This report was generated by the TRISK Climate Transition Risk Stress Testing tool.
+The results are based on the scenarios and assumptions configured at the time of analysis.
+They should be interpreted in conjunction with professional judgment and are not a substitute
+for regulatory capital calculations. All model outputs are subject to the limitations
+described in the TRISK methodology documentation.
+
+*Report generated by TRISK Desktop*

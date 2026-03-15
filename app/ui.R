@@ -14,7 +14,12 @@ ui <- dashboardPage(
       tags$br(),
       tags$span("Climate Transition Risk Stress Testing", class = "header-subtitle")
     ),
-    titleWidth = 320
+    titleWidth = 320,
+    tags$li(class = "dropdown",
+      tags$button(id = "theme-toggle-btn",
+                  class = "theme-toggle",
+                  "\u263E Dark")
+    )
   ),
 
   # ============================================
@@ -29,8 +34,9 @@ ui <- dashboardPage(
       menuItem("2. Configure Analysis", tabName = "config", icon = icon("sliders-h")),
       menuItem("3. Run Analysis", tabName = "run", icon = icon("play")),
       menuItem("4. Portfolio Results", tabName = "results", icon = icon("chart-line")),
-      menuItem("5. Integrate PD/EL (optional)", tabName = "integration", icon = icon("exchange-alt")),
-      menuItem("6. Download", tabName = "download", icon = icon("download")),
+      menuItem("5. Scenario Sensitivity", tabName = "sensitivity", icon = icon("chart-bar")),
+      menuItem("6. Integrate PD/EL (optional)", tabName = "integration", icon = icon("exchange-alt")),
+      menuItem("7. Download", tabName = "download", icon = icon("download")),
       hr(),
       menuItem("Documentation", tabName = "docs", icon = icon("book")),
       menuItem("About", tabName = "about", icon = icon("info-circle"))
@@ -54,8 +60,8 @@ ui <- dashboardPage(
       # Caddy reverse proxy (see Caddyfile). Do not add a <meta> CSP here —
       # HTTP headers are more secure and support frame-ancestors.
       tags$link(rel = "stylesheet", href = "fonts.css"),
-      tags$link(rel = "stylesheet", href = "trisk.css"),
-      tags$script(src = "trisk.js")
+      tags$link(rel = "stylesheet", href = paste0("trisk.css?v=", as.integer(Sys.time()))),
+      tags$script(src = paste0("trisk.js?v=", as.integer(Sys.time())))
     ),
 
     tabItems(
@@ -161,97 +167,23 @@ ui <- dashboardPage(
         ),
         fluidRow(
           # Portfolio Upload
-          box(
-            title = "Portfolio Data",
-            status = "primary",
-            solidHeader = TRUE,
-            width = 6,
-            fileInput("portfolio_file", "Upload Portfolio CSV",
-                      accept = c(".csv", ".CSV"),
-                      placeholder = "No file selected"),
-            helpText("Required columns: company_id, company_name, country_iso2,
-                     exposure_value_usd, term, loss_given_default"),
-            uiOutput("portfolio_status"),
-            uiOutput("portfolio_audit"),
-            downloadLink("download_portfolio_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default mb-8"),
-            div(class = "data-preview", DTOutput("portfolio_preview"))
-          ),
-
-          # Assets Upload
-          box(
-            title = "Assets Data",
-            status = "primary",
-            solidHeader = TRUE,
-            width = 6,
-            fileInput("assets_file", "Upload Assets CSV",
-                      accept = c(".csv", ".CSV"),
-                      placeholder = "No file selected"),
-            helpText("Company-level production and asset data with production trajectories"),
-            uiOutput("assets_status"),
-            uiOutput("assets_audit"),
-            downloadLink("download_assets_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default mb-8"),
-            div(class = "data-preview", DTOutput("assets_preview"))
-          )
+          uiOutput("portfolio_upload_box"),
+          uiOutput("assets_upload_box")
         ),
 
         fluidRow(
-          # Financial Upload
-          box(
-            title = "Financial Features Data",
-            status = "primary",
-            solidHeader = TRUE,
-            width = 6,
-            fileInput("financial_file", "Upload Financial Features CSV",
-                      accept = c(".csv", ".CSV"),
-                      placeholder = "No file selected"),
-            helpText("PD, net profit margin, debt/equity ratio, volatility per company"),
-            uiOutput("financial_status"),
-            uiOutput("financial_audit"),
-            downloadLink("download_financial_template", "Download Template CSV",
-                         class = "btn btn-xs btn-default mb-8"),
-            div(class = "data-preview", DTOutput("financial_preview"))
-          ),
-
-          # Scenarios Status
-          box(
-            title = "Scenarios Data",
-            status = if (!is.null(scenarios_data_preloaded)) "success" else "warning",
-            solidHeader = TRUE,
-            width = 6,
-            if (!is.null(scenarios_data_preloaded)) {
-              tagList(
-                tags$p(class = "status-ok",
-                  icon("check-circle"),
-                  strong(" Pre-loaded scenarios available")
-                ),
-                tags$p(paste("Total scenarios:", length(unique(scenarios_data_preloaded$scenario)))),
-                tags$p(paste("Geographies:", paste(unique(scenarios_data_preloaded$scenario_geography), collapse = ", "))),
-                hr(),
-                tags$p("Or upload custom scenarios:"),
-                fileInput("scenarios_file", NULL, accept = c(".csv", ".CSV"))
-              )
-            } else {
-              tagList(
-                tags$p(class = "status-missing",
-                  icon("exclamation-triangle"),
-                  strong(" No pre-loaded scenarios")
-                ),
-                fileInput("scenarios_file", "Upload Scenarios CSV",
-                          accept = c(".csv", ".CSV")),
-                helpText("Scenarios are pre-loaded at build time. Upload here only to override with custom data.")
-              )
-            }
-          )
+          uiOutput("financial_upload_box"),
+          uiOutput("scenarios_upload_box")
         ),
 
         fluidRow(
           box(
-            title = "Data Upload Summary",
+            title = "Data Quality Overview",
             status = "info",
             solidHeader = TRUE,
             width = 12,
+            uiOutput("data_quality_dashboard"),
+            hr(),
             uiOutput("upload_summary"),
             conditionalPanel(
               condition = "output.has_data_issues",
@@ -291,57 +223,55 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            title = "Scenario Selection",
+            title = "Scenarios",
             status = "warning",
             solidHeader = TRUE,
             width = 6,
-            selectizeInput("baseline_scenario", "Baseline Scenario(s)",
-                           choices = NULL, selected = NULL,
-                           multiple = TRUE,
-                           options = list(
-                             plugins = list("remove_button"),
-                             placeholder = "Select one or more baseline scenarios..."
-                           )),
-            helpText("Select the baseline(s) for your analysis. Each target scenario is matched to its ",
-                     "family baseline (e.g. GECO targets use GECO baseline, Mission Possible uses its own). ",
-                     "The first selected baseline is the default for unmatched targets."),
 
-            h5("Target (Shock) Scenario(s)",
-               class = "font-heading fw-600 mb-4"),
-            selectizeInput("target_scenarios", NULL,
-                           choices = NULL, selected = NULL,
-                           multiple = TRUE,
-                           options = list(
-                             plugins = list("remove_button"),
-                             placeholder = "Select one or more target scenarios..."
-                           )),
-            helpText("Select one or more target scenarios. Multiple scenarios enable the ",
-                     tags$b("Scenario Comparison"), " tab with distribution analysis."),
-            # Quick-select buttons by NGFS category
-            div(class = "mb-12",
-              tags$small(tags$b("Quick select:"), class = "mr-6"),
-              actionButton("sel_orderly", HTML("&#x1F7E2; Orderly"),
-                           class = "btn btn-default btn-xs btn-tag"),
-              actionButton("sel_disorderly", HTML("&#x1F7E1; Disorderly"),
-                           class = "btn btn-default btn-xs btn-tag"),
-              actionButton("sel_hotthouse", HTML("&#x1F534; Hot House"),
-                           class = "btn btn-default btn-xs btn-tag"),
-              actionButton("sel_all_targets", "All",
-                           class = "btn btn-default btn-xs btn-tag"),
-              actionButton("sel_clear_targets", "Clear",
-                           class = "btn btn-default btn-xs btn-tag")
-            ),
+            # Dynamic sector-aware scenario rows (generated by server.R)
+            uiOutput("scenario_rows_ui"),
 
             selectInput("scenario_geography", "Scenario Geography",
                         choices = NULL, selected = NULL),
             hr(),
             uiOutput("scenario_info"),
             uiOutput("scenario_warnings")
+
+            # --- MULTI-SCENARIO PAIR SYSTEM (temporarily disabled) ---
+            # The pair system below supports multiple baseline-target pairs
+            # and quick-select buttons. Commented out for single-scenario testing.
+            # Re-enable by uncommenting this block and removing the single dropdowns above.
+            #
+            # fluidRow(
+            #   column(5, tags$label("Baseline", class = "control-label")),
+            #   column(5, tags$label("Target (Shock)", class = "control-label")),
+            #   column(2)
+            # ),
+            # div(id = "scenario_pairs_container"),
+            # div(class = "mb-8",
+            #   actionButton("add_pair", "Add Scenario Pair", icon = icon("plus"),
+            #                class = "btn btn-default btn-sm")
+            # ),
+            # div(class = "mb-12",
+            #   tags$small(tags$b("Quick select:"), class = "mr-6"),
+            #   actionButton("sel_ngfs_nz", HTML("&#x1F30D; Latest NGFS Net Zero"),
+            #                class = "btn btn-default btn-xs btn-tag"),
+            #   actionButton("sel_sector", HTML("&#x1F3ED; Single-Sector Scenarios"),
+            #                class = "btn btn-default btn-xs btn-tag"),
+            #   actionButton("sel_ipr", HTML("&#x1F4CA; Latest IPR Scenario"),
+            #                class = "btn btn-default btn-xs btn-tag"),
+            #   actionButton("sel_clear_targets", "Clear",
+            #                class = "btn btn-default btn-xs btn-tag")
+            # ),
+            # helpText("Quick-select loads curated scenario pairs. ",
+            #          "Multiple pairs enable the ",
+            #          tags$b("Scenario Comparison"), " tab."),
+            # --- END MULTI-SCENARIO PAIR SYSTEM ---
           ),
 
           column(width = 6,
             box(
-              title = "Required: Shock Years",
+              title = "Shock Scenario Year",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -361,7 +291,7 @@ ui <- dashboardPage(
               status = "warning",
               solidHeader = TRUE,
               collapsible = TRUE,
-              collapsed = TRUE,
+              collapsed = FALSE,
               width = 12,
               fluidRow(
                 column(8, sliderInput("risk_free_rate", "Risk-Free Rate",
@@ -497,14 +427,7 @@ ui <- dashboardPage(
             )
           )
         ),
-        fluidRow(
-          valueBoxOutput("vb_companies", width = 2),
-          valueBoxOutput("vb_total_exposure", width = 2),
-          valueBoxOutput("vb_avg_npv_change", width = 2),
-          valueBoxOutput("vb_max_pd_shock", width = 2),
-          valueBoxOutput("vb_pd_change", width = 2),
-          valueBoxOutput("vb_el_change", width = 2)
-        ),
+        uiOutput("value_cards_row"),
         # Run History panel (collapsible)
         uiOutput("run_history_panel"),
         fluidRow(
@@ -513,45 +436,71 @@ ui <- dashboardPage(
             title = "Portfolio Results",
 
             tabPanel("Summary",
+              uiOutput("summary_header"),
               DTOutput("results_summary_table"),
               fluidRow(
-                box(width = 6, plotlyOutput("plot_sector_npv", height = "400px")),
-                box(width = 6, plotlyOutput("plot_sector_pd", height = "400px"))
+                box(width = 12, plotlyOutput("plot_sector_pd", height = "400px"))
               )
             ),
 
-            tabPanel("Exposures PD",
-              DTOutput("pd_table"),
-              hr(),
-              h4("Portfolio-Level Aggregates"),
-              uiOutput("pd_portfolio_summary")
+            tabPanel("Exposure PD Analysis",
+              uiOutput("pd_analysis_header"),
+              tags$div(class = "fs-12 fg-secondary mb-8",
+                tags$span("Bar chart: "),
+                tags$span("Red", style = "color:#F53D3F;font-weight:600;"),
+                tags$span(" = PD increase (deterioration) | "),
+                tags$span("Green", style = "color:#5D9324;font-weight:600;"),
+                tags$span(" = PD decrease (improvement)"),
+                tags$span(" \u00a0\u00b7\u00a0 ", style = "color:#AAA;"),
+                tags$span("Sectors: "),
+                tags$span("\u25cf", style = "color:#8B4513;"), tags$span(" Oil&Gas "),
+                tags$span("\u25cf", style = "color:#1A1A1A;"), tags$span(" Coal "),
+                tags$span("\u25cf", style = "color:#2E86C1;"), tags$span(" Power "),
+                tags$span("\u25cf", style = "color:#E74C3C;"), tags$span(" Automotive "),
+                tags$span("\u25cf", style = "color:#F1C40F;"), tags$span(" Steel")
+              ),
+              fluidRow(
+                box(width = 6, plotlyOutput("plot_pd_sector_enhanced", height = "420px")),
+                box(width = 6, plotlyOutput("plot_pd_distribution", height = "420px"))
+              ),
+              fluidRow(
+                box(width = 12, plotlyOutput("plot_pd_vs_exposure", height = "380px"))
+              ),
+              DTOutput("pd_table")
             ),
 
-            tabPanel("Exposures NPV",
-              DTOutput("npv_table")
+            tabPanel("Risk Concentration",
+              uiOutput("concentration_ui")
             ),
 
-            # Horizon Analysis tab (only populated when multi-year run is available)
-            tabPanel("Horizon Analysis",
-              uiOutput("horizon_analysis_ui")
-            ),
-
-            # Scenario Comparison tab (only populated when multi-scenario run is available)
-            tabPanel("Scenario Comparison",
-              uiOutput("scenario_comparison_ui")
-            ),
-
-            # Attribution / Waterfall tab
             tabPanel("Attribution",
               uiOutput("attribution_ui")
             ),
 
-            # Concentration Risk tab
-            tabPanel("Concentration",
-              uiOutput("concentration_ui")
+            tabPanel("Horizon Analysis",
+              uiOutput("horizon_analysis_ui")
+            ),
+
+            # --- SCENARIO COMPARISON TAB (temporarily disabled) ---
+            # Requires multi-scenario pair system. Re-enable when multi-pair is restored.
+            # tabPanel("Scenario Comparison",
+            #   uiOutput("scenario_comparison_ui")
+            # ),
+            # --- END SCENARIO COMPARISON TAB ---
+
+            tabPanel("Exposure NPV Analysis",
+              uiOutput("npv_analysis_header"),
+              DTOutput("npv_table")
             )
           )
         )
+      ),
+
+      # ============================================
+      # Scenario Sensitivity Tab
+      # ============================================
+      tabItem(tabName = "sensitivity",
+        uiOutput("sensitivity_content_ui")
       ),
 
       # ============================================
@@ -563,7 +512,7 @@ ui <- dashboardPage(
             width = 12,
             div(class = "guidance-wrapper",
               tags$button(class = "guidance-toggle-btn",
-                tags$span("Step 5: Integrate TRISK results with your internal estimates"),
+                tags$span("Step 6: Integrate TRISK results with your internal estimates"),
                 tags$span(class = "chevron", HTML("&#9660;"))
               ),
               div(class = "guidance-content",
@@ -743,7 +692,7 @@ ui <- dashboardPage(
             width = 12,
             div(class = "guidance-wrapper",
               tags$button(class = "guidance-toggle-btn",
-                tags$span("Step 6: Download your results"),
+                tags$span("Step 7: Download your results"),
                 tags$span(class = "chevron", HTML("&#9660;"))
               ),
               div(class = "guidance-content",
@@ -771,7 +720,11 @@ ui <- dashboardPage(
             downloadButton("download_json", "Download Results (JSON)",
                           class = "btn-info"),
             hr(),
-            helpText("Excel format includes multiple sheets with detailed breakdowns.")
+            downloadButton("download_report_html", "Download HTML Report",
+                          class = "btn-success"),
+            br(), br(),
+            helpText("Excel format includes multiple sheets with detailed breakdowns. ",
+                     "The HTML report provides a self-contained summary suitable for sharing.")
           ),
 
           box(

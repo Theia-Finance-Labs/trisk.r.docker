@@ -53,7 +53,7 @@ setup_results_summary <- function(input, output, session, rv) {
   }) %>% bindCache(rv$run_id)
 
   # ============================================
-  # Results outputs - Value boxes (6 boxes)
+  # Results outputs - Unified value cards row
   # ============================================
 
   safe_col <- function(df, ...) {
@@ -64,98 +64,104 @@ setup_results_summary <- function(input, output, session, rv) {
     return(NULL)
   }
 
-  output$vb_companies <- renderValueBox({
-    if (is.null(rv$results)) {
-      return(valueBox("---", "Companies Analyzed", icon = icon("building"), color = "blue"))
-    }
-    n <- {
-      col <- safe_col(rv$results, "company_id", "company_name")
-      if (!is.null(col)) length(unique(col)) else nrow(rv$results)
-    }
-    valueBox(as.character(n), "Companies Analyzed", icon = icon("building"), color = "blue")
-  })
+  # Helper to build a single portfolio-aggregate card
+  make_card <- function(title, value_text, color_class = "neutral", tooltip = title) {
+    column(2,
+      div(class = "portfolio-aggregate",
+        h4(title, title = tooltip),
+        tags$span(class = paste("agg-value", color_class), value_text)
+      )
+    )
+  }
 
-  output$vb_total_exposure <- renderValueBox({
+  output$value_cards_row <- renderUI({
     if (is.null(rv$results)) {
-      return(valueBox("---", "Total Exposure (USD)", icon = icon("dollar-sign"), color = "green"))
+      return(fluidRow(
+        make_card("Companies Analyzed", "---"),
+        make_card("Total Exposure", "---"),
+        make_card("Max PD Shock (%)", "---"),
+        make_card("PD Change (pp)", "---"),
+        make_card("PD Change (%)", "---"),
+        make_card("Total EL Change", "---")
+      ))
     }
-    val <- {
-      col <- safe_col(rv$results, "exposure_value_usd", "exposure")
+
+    df <- rv$results
+    has_pd <- all(c("pd_baseline", "pd_shock") %in% names(df))
+    has_el <- all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))
+    has_exp <- "exposure_value_usd" %in% names(df)
+
+    # 1. Companies Analyzed
+    n_companies <- {
+      col <- safe_col(df, "company_id", "company_name")
+      if (!is.null(col)) length(unique(col)) else nrow(df)
+    }
+
+    # 2. Total Exposure
+    total_exposure <- {
+      col <- safe_col(df, "exposure_value_usd", "exposure")
       if (!is.null(col)) sum(col, na.rm = TRUE) else 0
     }
-    valueBox(format_number(val), "Total Exposure (USD)", icon = icon("dollar-sign"), color = "green")
-  })
 
-  output$vb_avg_npv_change <- renderValueBox({
-    if (is.null(rv$results)) {
-      return(valueBox("---", "Average NPV Change (%)", icon = icon("chart-line"), color = "blue"))
-    }
-    val <- {
-      col <- safe_col(rv$results, "crispy_perc_value_change", "net_present_value_change", "npv_change")
-      if (!is.null(col)) mean(col, na.rm = TRUE) * 100 else 0
-    }
-    valueBox(tags$span(paste0(display_round(val), "%"),
-                       title = paste0("Full precision: ", smart_round(val), "%"),
-                       class = "cursor-help"),
-             "Average NPV Change (%)",
-             icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
-             color = if (val < 0) "red" else "blue")
-  })
-
-  output$vb_max_pd_shock <- renderValueBox({
-    if (is.null(rv$results)) {
-      return(valueBox("---", "Maximum PD Shock (%)", icon = icon("chart-bar"), color = "blue"))
-    }
-    val <- {
-      col <- safe_col(rv$results, "pd_shock", "crispy_pd_shock")
+    # 3. Max PD Shock
+    max_pd <- {
+      col <- safe_col(df, "pd_shock", "crispy_pd_shock")
       if (!is.null(col)) max(col, na.rm = TRUE) * 100 else 0
     }
-    valueBox(tags$span(paste0(display_round(val), "%"),
-                       title = paste0("Full precision: ", smart_round(val), "%"),
-                       class = "cursor-help"),
-             "Maximum PD Shock (%)",
-             icon = if (val > 5) icon("exclamation-triangle") else icon("arrow-up"),
-             color = if (val > 5) "red" else "blue")
-  })
+    max_pd_class <- if (max_pd > 5) "negative" else "neutral"
 
-  # Portfolio-level PD Change value box
-  output$vb_pd_change <- renderValueBox({
-    if (is.null(rv$results)) {
-      return(valueBox("---", "PD Change, Exposure-Weighted (percentage points)", icon = icon("balance-scale"), color = "blue"))
-    }
-    val <- 0
-    df <- rv$results
-    if (all(c("pd_baseline", "pd_shock") %in% names(df))) {
-      exp_col <- if ("exposure_value_usd" %in% names(df)) df$exposure_value_usd else rep(1, nrow(df))
+    # 4. PD Change (pp) — exposure-weighted
+    pd_change_pp <- 0
+    if (has_pd) {
+      exp_col <- if (has_exp) df$exposure_value_usd else rep(1, nrow(df))
       total_exp <- sum(exp_col, na.rm = TRUE)
       if (total_exp > 0) {
-        val <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp * 100
+        pd_change_pp <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp * 100
       }
     }
-    valueBox(tags$span(paste0(display_round(val), " pp"),
-                       title = paste0("Full precision: ", smart_round(val), " pp"),
-                       class = "cursor-help"),
-             "PD Change, Exposure-Weighted (percentage points)",
-             icon = if (val > 0) icon("arrow-up") else icon("arrow-down"),
-             color = if (val > 0.01) "red" else if (val < -0.01) "green" else "blue")
-  })
+    pd_pp_class <- if (pd_change_pp > 0.01) "negative" else if (pd_change_pp < -0.01) "positive" else "neutral"
 
-  # Portfolio-level EL Change value box
-  output$vb_el_change <- renderValueBox({
-    if (is.null(rv$results)) {
-      return(valueBox("---", "EL Change (USD)", icon = icon("exclamation-circle"), color = "blue"))
+    # 5. PD Change (%) — exposure-weighted relative
+    pd_change_pct <- NA_real_
+    if (has_pd && has_exp) {
+      exp_col <- df$exposure_value_usd
+      total_exp <- sum(exp_col, na.rm = TRUE)
+      if (total_exp > 0) {
+        weighted_pd_baseline <- sum(df$pd_baseline * exp_col, na.rm = TRUE) / total_exp
+        if (weighted_pd_baseline != 0) {
+          weighted_pd_change <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp
+          pd_change_pct <- weighted_pd_change / weighted_pd_baseline * 100
+        }
+      }
     }
-    val <- 0
-    df <- rv$results
-    if (all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))) {
-      val <- sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)
+    pd_pct_class <- if (!is.na(pd_change_pct) && pd_change_pct > 0.01) "negative" else
+      if (!is.na(pd_change_pct) && pd_change_pct < -0.01) "positive" else "neutral"
+
+    # 6. Total EL Change
+    el_change <- 0
+    if (has_el) {
+      el_change <- sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)
     }
-    valueBox(tags$span(format_number(val),
-                       title = paste0("Full precision: ", round(val, 4)),
-                       class = "cursor-help"),
-             "EL Change (USD)",
-             icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
-             color = if (val > 0) "green" else if (val < 0) "red" else "blue")
+    el_class <- if (el_change > 0) "negative" else if (el_change < 0) "positive" else "neutral"
+
+    fluidRow(
+      make_card("Companies Analyzed", as.character(n_companies),
+                tooltip = "Number of unique companies in the portfolio"),
+      make_card("Total Exposure", format_number(total_exposure),
+                tooltip = "Sum of all loan exposure amounts in USD"),
+      make_card("Max PD Shock (%)",
+                paste0(display_round(max_pd), "%"), max_pd_class,
+                tooltip = "Highest single-company probability of default under shock scenario"),
+      make_card("PD Change (pp)",
+                paste0(display_round(pd_change_pp), " pp"), pd_pp_class,
+                tooltip = "Exposure-weighted portfolio PD change in percentage points"),
+      make_card("PD Change (%)",
+                if (!is.na(pd_change_pct)) paste0(smart_round(pd_change_pct), "%") else "N/A",
+                pd_pct_class,
+                tooltip = "Exposure-weighted portfolio PD change as percentage of baseline PD"),
+      make_card("Total EL Change", format_number(el_change), el_class,
+                tooltip = "Total change in expected loss across the portfolio")
+    )
   })
 
   # ============================================
@@ -173,7 +179,8 @@ setup_results_summary <- function(input, output, session, rv) {
         num_cols <- names(summary_df)[sapply(summary_df, is.numeric)]
         if (length(num_cols) > 0) summary_df[num_cols] <- lapply(summary_df[num_cols], smart_round)
         datatable(summary_df, options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE,
-                        columnDefs = list(list(width = '80px', targets = '_all'))), rownames = FALSE)
+                        columnDefs = list(list(width = '80px', targets = '_all')),
+                        headerCallback = make_header_tooltips(names(summary_df))), rownames = FALSE)
       } else {
         datatable(head(df, 50), options = list(pageLength = 20, scrollX = TRUE), rownames = FALSE)
       }
@@ -198,7 +205,8 @@ setup_results_summary <- function(input, output, session, rv) {
     if (length(num_cols) > 0) npv_df[num_cols] <- lapply(npv_df[num_cols], smart_round)
     datatable(npv_df,
               options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE,
-                             columnDefs = list(list(width = '80px', targets = '_all'))),
+                             columnDefs = list(list(width = '80px', targets = '_all')),
+                             headerCallback = make_header_tooltips(names(npv_df))),
               rownames = FALSE)
   })
 
@@ -252,7 +260,8 @@ setup_results_summary <- function(input, output, session, rv) {
     dt <- datatable(
       display_df,
       options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE,
-                     columnDefs = list(list(width = '80px', targets = '_all'))),
+                     columnDefs = list(list(width = '80px', targets = '_all')),
+                     headerCallback = make_header_tooltips(names(display_df))),
       rownames = FALSE
     )
 
@@ -311,106 +320,7 @@ setup_results_summary <- function(input, output, session, rv) {
     dt
   })
 
-  # ============================================
-  # Portfolio-level PD & EL aggregates (Exposures PD tab)
-  # ============================================
-
-  output$pd_portfolio_summary <- renderUI({
-    req(rv$results)
-    df <- rv$results
-
-    has_pd <- all(c("pd_baseline", "pd_shock") %in% names(df))
-    has_el <- all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))
-    has_exp <- "exposure_value_usd" %in% names(df)
-
-    if (!has_pd) return(tags$p("PD columns not available in results."))
-
-    # Exposure-weighted average PD change
-    if (has_exp) {
-      total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
-      pd_change <- df$pd_shock - df$pd_baseline
-
-      if (total_exposure > 0) {
-        weighted_pd_change <- sum(pd_change * df$exposure_value_usd, na.rm = TRUE) / total_exposure
-        weighted_pd_baseline <- sum(df$pd_baseline * df$exposure_value_usd, na.rm = TRUE) / total_exposure
-        weighted_pd_change_pct <- if (weighted_pd_baseline != 0) {
-          weighted_pd_change / weighted_pd_baseline * 100
-        } else NA_real_
-      } else {
-        weighted_pd_change <- mean(pd_change, na.rm = TRUE)
-        weighted_pd_change_pct <- NA_real_
-        total_exposure <- 0
-      }
-    } else {
-      weighted_pd_change <- mean(df$pd_shock - df$pd_baseline, na.rm = TRUE)
-      weighted_pd_change_pct <- NA_real_
-      total_exposure <- 0
-    }
-
-    pd_class <- if (weighted_pd_change > 0.001) "negative" else if (weighted_pd_change < -0.001) "positive" else "neutral"
-
-    # EL aggregates
-    el_tags <- if (has_el) {
-      total_el_baseline <- sum(df$expected_loss_baseline, na.rm = TRUE)
-      total_el_shock <- sum(df$expected_loss_shock, na.rm = TRUE)
-      total_el_change <- total_el_shock - total_el_baseline
-      total_el_change_pct <- if (total_el_baseline != 0) {
-        total_el_change / total_el_baseline * 100
-      } else NA_real_
-
-      # EL values are negative (losses), so more negative shock = worse = "negative" class
-      el_class <- if (total_el_change < 0) "negative" else if (total_el_change > 0) "positive" else "neutral"
-
-      tagList(
-        column(4,
-          div(class = "portfolio-aggregate",
-            h4("Total EL (Baseline)"),
-            tags$span(class = "agg-value neutral", format_number(total_el_baseline))
-          )
-        ),
-        column(4,
-          div(class = "portfolio-aggregate",
-            h4("Total EL (Shock)"),
-            tags$span(class = paste("agg-value", el_class), format_number(total_el_shock))
-          )
-        ),
-        column(4,
-          div(class = "portfolio-aggregate",
-            h4("Total EL Change"),
-            tags$span(class = paste("agg-value", el_class),
-                     paste0(format_number(total_el_change),
-                            if (!is.na(total_el_change_pct)) paste0(" (", smart_round(total_el_change_pct), "%)") else ""))
-          )
-        )
-      )
-    } else NULL
-
-    tagList(
-      fluidRow(
-        column(4,
-          div(class = "portfolio-aggregate",
-            h4("Exposure-Weighted PD Change (abs)"),
-            tags$span(class = paste("agg-value", pd_class),
-                     paste0(smart_round(weighted_pd_change * 100), " pp"))
-          )
-        ),
-        column(4,
-          div(class = "portfolio-aggregate",
-            h4("Exposure-Weighted PD Change (%)"),
-            tags$span(class = paste("agg-value", pd_class),
-                     if (!is.na(weighted_pd_change_pct)) paste0(smart_round(weighted_pd_change_pct), "%") else "N/A")
-          )
-        ),
-        column(4,
-          div(class = "portfolio-aggregate",
-            h4("Total Exposure"),
-            tags$span(class = "agg-value neutral", format_number(total_exposure))
-          )
-        )
-      ),
-      if (!is.null(el_tags)) fluidRow(el_tags)
-    )
-  })
+  # (pd_portfolio_summary removed — all metrics now in unified value_cards_row above)
 
   # ============================================
   # Summary plots - Sector-level NPV and PD
@@ -429,7 +339,17 @@ setup_results_summary <- function(input, output, session, rv) {
       labs(title = "NPV Change by Sector", x = "", y = "Average NPV Change (%)") +
       trisk_plot_theme()
 
-    ggplotly(p)
+    tc <- plotly_theme_colors(input)
+    ggplotly(p) %>%
+      layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL
+      ) %>%
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   output$plot_sector_pd <- renderPlotly({
@@ -449,7 +369,17 @@ setup_results_summary <- function(input, output, session, rv) {
       trisk_plot_theme() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-    ggplotly(p)
+    tc <- plotly_theme_colors(input)
+    ggplotly(p) %>%
+      layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL
+      ) %>%
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
 }

@@ -4,7 +4,7 @@
     {
       "name": "trisk-shiny",
       "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "up", "--build"],
+      "runtimeArgs": ["compose", "-f", "docker-compose.dev.yml", "up", "--build"],
       "port": 3838,
       "autoPort": false
     }

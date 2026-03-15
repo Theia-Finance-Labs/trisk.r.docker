@@ -276,17 +276,21 @@ setup_results_concentration <- function(input, output, session, rv) {
         )
       ),
 
-      # Row 3: Treemap + Lorenz curve
+      # Row 3: Treemap (full-width, 800px)
       fluidRow(
-        column(6,
+        column(12,
           div(class = "card-surface mb-16",
             h5(icon("project-diagram"), " Exposure Treemap (Sector \u2192 Company)",
                class = "fw-600 mt-0"),
             tags$small("Size = exposure weight, color = PD change magnitude.",
                       class = "card-subtitle"),
-            plotlyOutput("conc_treemap", height = "400px")
+            plotlyOutput("conc_treemap", height = "800px")
           )
-        ),
+        )
+      ),
+
+      # Row 4: Lorenz curve + Risk-return scatter
+      fluidRow(
         column(6,
           div(class = "card-surface mb-16",
             h5(icon("chart-area"), " Lorenz Curve (Exposure Concentration)",
@@ -296,27 +300,27 @@ setup_results_concentration <- function(input, output, session, rv) {
                       class = "card-subtitle"),
             plotlyOutput("conc_lorenz", height = "400px")
           )
-        )
-      ),
-
-      # Row 4: Risk-return scatter + Geographic choropleth
-      fluidRow(
+        ),
         column(6,
           div(class = "card-surface mb-16",
             h5(icon("bullseye"), " Risk-Return Scatter",
                class = "fw-600 mt-0"),
-            tags$small("Each bubble = one company. x = PD change, y = exposure weight, size = abs EL change.",
+            tags$small("Each bubble = one company. x = PD change, y = exposure (USD), size = abs EL change.",
                       class = "card-subtitle"),
             plotlyOutput("conc_scatter", height = "400px")
           )
-        ),
-        column(6,
+        )
+      ),
+
+      # Row 5: Geographic choropleth (full-width, 800px)
+      fluidRow(
+        column(12,
           div(class = "card-surface mb-16",
             h5(icon("globe"), " Geographic Concentration",
                class = "fw-600 mt-0"),
             tags$small("Country-level exposure and PD change.",
                       class = "card-subtitle"),
-            plotlyOutput("conc_geo_map", height = "400px")
+            plotlyOutput("conc_geo_map", height = "800px")
           )
         )
       ),
@@ -340,6 +344,7 @@ setup_results_concentration <- function(input, output, session, rv) {
   output$conc_heatmap <- renderPlotly({
     cd <- concentration_data()
     req(cd)
+    tc <- plotly_theme_colors(input)
 
     metric <- input$conc_heatmap_metric
     dims <- input$conc_heatmap_dims
@@ -464,17 +469,24 @@ setup_results_concentration <- function(input, output, session, rv) {
 
     do.call(plot_ly, trace_args) %>%
       layout(
-        xaxis = list(title = "Sector", tickangle = -30, tickfont = list(size = 10)),
-        yaxis = list(title = row_label, tickfont = list(size = 10)),
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
+        xaxis = list(title = "Sector", tickangle = -30, tickfont = list(size = 10), gridcolor = tc$gridcolor),
+        yaxis = list(title = row_label, tickfont = list(size = 10), gridcolor = tc$gridcolor),
         margin = list(l = 80, b = 80, t = 10)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Top-10 Exposure Donut ----
   output$conc_donut <- renderPlotly({
     cd <- concentration_data()
     req(cd)
+    tc <- plotly_theme_colors(input)
 
     n_top <- min(10, nrow(cd$company))
     company_df <- cd$company %>%
@@ -532,21 +544,28 @@ setup_results_concentration <- function(input, output, session, rv) {
       insidetextorientation = "radial"
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         showlegend = FALSE,
         margin = list(l = 10, r = 10, t = 10, b = 10),
         annotations = list(
           list(text = paste0("<b>Top ", n_top, "</b><br>", round(sum(company_df$weight, na.rm = TRUE) * 100, 1), "%"),
-               x = 0.5, y = 0.5, font = list(size = 14, color = "#333"),
+               x = 0.5, y = 0.5, font = list(size = 14, color = tc$font_color),
                showarrow = FALSE)
         )
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Exposure Treemap (Sector -> Company) ----
   output$conc_treemap <- renderPlotly({
     cd <- concentration_data()
     req(cd)
+    tc <- plotly_theme_colors(input)
 
     # Take top 30 companies by exposure for readability
     top_co <- cd$company %>%
@@ -622,15 +641,22 @@ setup_results_concentration <- function(input, output, session, rv) {
       textfont = list(size = 10)
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         margin = list(l = 5, r = 5, t = 5, b = 5)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Lorenz Curve ----
   output$conc_lorenz <- renderPlotly({
     cd <- concentration_data()
     req(cd)
+    tc <- plotly_theme_colors(input)
 
     lorenz <- cd$lorenz
 
@@ -665,21 +691,28 @@ setup_results_concentration <- function(input, output, session, rv) {
         font = list(size = 16, color = STATUS_BLUE)
       ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         xaxis = list(title = "Cumulative % of Companies (smallest first)",
-                     range = c(0, 100), ticksuffix = "%"),
+                     range = c(0, 100), ticksuffix = "%", gridcolor = tc$gridcolor),
         yaxis = list(title = "Cumulative % of Exposure",
-                     range = c(0, 100), ticksuffix = "%"),
+                     range = c(0, 100), ticksuffix = "%", gridcolor = tc$gridcolor),
         showlegend = TRUE,
         legend = list(x = 0.05, y = 0.95),
         margin = list(l = 60, r = 20, t = 10, b = 60)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Risk-Return Scatter (bubble) ----
   output$conc_scatter <- renderPlotly({
     cd <- concentration_data()
     req(cd)
+    tc <- plotly_theme_colors(input)
 
     company_df <- cd$company
 
@@ -709,9 +742,12 @@ setup_results_concentration <- function(input, output, session, rv) {
       if (cd$has_el) paste0("\nEL Change: $", format(round(company_df$el_change), big.mark = ",")) else ""
     )
 
+    # Use absolute exposure (USD) on y-axis for better spread
+    max_exp <- max(company_df$exposure_value_usd, na.rm = TRUE)
+
     plot_ly(
       x = company_df$pd_change * 100,
-      y = company_df$weight * 100,
+      y = company_df$exposure_value_usd,
       type = "scatter",
       mode = "markers",
       marker = list(
@@ -724,17 +760,22 @@ setup_results_concentration <- function(input, output, session, rv) {
       hoverinfo = "text"
     ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         xaxis = list(title = "PD Change (pp)", zeroline = TRUE,
-                     zerolinecolor = "#999", zerolinewidth = 1),
-        yaxis = list(title = "Exposure Weight (%)", zeroline = FALSE),
-        margin = list(l = 60, r = 20, t = 10, b = 60),
+                     zerolinecolor = "#999", zerolinewidth = 1, gridcolor = tc$gridcolor),
+        yaxis = list(title = "Exposure (USD)", zeroline = FALSE, tickformat = "$,.0f",
+                     gridcolor = tc$gridcolor),
+        margin = list(l = 80, r = 20, t = 10, b = 60),
         showlegend = FALSE,
         # Add quadrant shading annotation
         shapes = list(
-          list(type = "rect", x0 = 0, x1 = 100, y0 = 0, y1 = 100,
+          list(type = "rect", x0 = 0, x1 = 100, y0 = 0, y1 = max_exp * 1.1,
                fillcolor = "rgba(232,75,77,0.05)", line = list(width = 0),
                layer = "below"),
-          list(type = "rect", x0 = -100, x1 = 0, y0 = 0, y1 = 100,
+          list(type = "rect", x0 = -100, x1 = 0, y0 = 0, y1 = max_exp * 1.1,
                fillcolor = "rgba(107,159,59,0.05)", line = list(width = 0),
                layer = "below")
         ),
@@ -747,13 +788,16 @@ setup_results_concentration <- function(input, output, session, rv) {
                font = list(size = 10, color = STATUS_GREEN), opacity = 0.6)
         )
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Geographic Choropleth ----
   output$conc_geo_map <- renderPlotly({
     cd <- concentration_data()
     req(cd, cd$has_geo, cd$geo)
+    tc <- plotly_theme_colors(input)
 
     geo_df <- cd$geo
     if (is.null(geo_df) || nrow(geo_df) == 0) {
@@ -828,11 +872,15 @@ setup_results_concentration <- function(input, output, session, rv) {
           )
         ) %>%
         layout(
+          font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+          paper_bgcolor = tc$paper_bgcolor,
+          plot_bgcolor = tc$plot_bgcolor,
+          hoverlabel = PLOTLY_HOVERLABEL,
           barmode = "group",
-          xaxis = list(title = "Country"),
-          yaxis = list(title = "Exposure ($)", side = "left", tickformat = "$,.0f"),
+          xaxis = list(title = "Country", gridcolor = tc$gridcolor),
+          yaxis = list(title = "Exposure ($)", side = "left", tickformat = "$,.0f", gridcolor = tc$gridcolor),
           yaxis2 = list(title = "PD Change (pp)", side = "right", overlaying = "y",
-                        tickformat = ".4f"),
+                        tickformat = ".4f", gridcolor = tc$gridcolor),
           legend = list(orientation = "h", y = 1.12, x = 0.5, xanchor = "center"),
           margin = list(t = 50, b = 50),
           annotations = list(
@@ -841,7 +889,9 @@ setup_results_concentration <- function(input, output, session, rv) {
                  showarrow = FALSE, font = list(size = 11, color = "#999"))
           )
         ) %>%
-        config(displayModeBar = FALSE)
+        config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+               modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+               displaylogo = PLOTLY_CONFIG$displaylogo)
     } else {
       # Full choropleth for many countries
       plot_ly(
@@ -857,17 +907,23 @@ setup_results_concentration <- function(input, output, session, rv) {
         marker = list(line = list(color = "#333", width = 1))
       ) %>%
         layout(
+          font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+          paper_bgcolor = tc$paper_bgcolor,
+          plot_bgcolor = tc$plot_bgcolor,
+          hoverlabel = PLOTLY_HOVERLABEL,
           geo = list(
             showframe = FALSE,
             showcoastlines = TRUE,
             coastlinecolor = "#DDD0D4",
             projection = list(type = "natural earth"),
             fitbounds = "locations",
-            bgcolor = "#FAFAFA"
+            bgcolor = tc$plot_bgcolor
           ),
           margin = list(l = 0, r = 0, t = 10, b = 0)
         ) %>%
-        config(displayModeBar = FALSE)
+        config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+               modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+               displaylogo = PLOTLY_CONFIG$displaylogo)
     }
   })
 
@@ -875,6 +931,7 @@ setup_results_concentration <- function(input, output, session, rv) {
   output$conc_dual_bar <- renderPlotly({
     cd <- concentration_data()
     req(cd)
+    tc <- plotly_theme_colors(input)
 
     sector_df <- cd$sector
 
@@ -908,13 +965,19 @@ setup_results_concentration <- function(input, output, session, rv) {
         )
       ) %>%
       layout(
+        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
+        paper_bgcolor = tc$paper_bgcolor,
+        plot_bgcolor = tc$plot_bgcolor,
+        hoverlabel = PLOTLY_HOVERLABEL,
         barmode = "group",
-        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11)),
-        yaxis = list(title = "PD Contribution (pp = avg PD \u00D7 exposure weight)"),
+        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11), gridcolor = tc$gridcolor),
+        yaxis = list(title = "PD Contribution (pp = avg PD \u00D7 exposure weight)", gridcolor = tc$gridcolor),
         legend = list(orientation = "h", y = 1.12, x = 0.5, xanchor = "center"),
         margin = list(b = 80, t = 50)
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
+             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
+             displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
   # ---- Export Concentration CSV ----

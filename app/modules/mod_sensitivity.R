@@ -198,6 +198,19 @@ setup_sensitivity <- function(input, output, session, rv) {
       selected_scenarios <- c(core_baseline, core_target)
     }
 
+    # Auto-add sector-specific scenarios based on portfolio sectors
+    if (!is.null(rv$detected_sectors) && exists("SECTOR_SCENARIO_DEFAULTS")) {
+      for (key in names(SECTOR_SCENARIO_DEFAULTS)) {
+        entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+        if (!entry$always_show && any(entry$sectors %in% rv$detected_sectors)) {
+          extra <- c(entry$baseline, entry$target)
+          # Only add if these scenarios exist in the data
+          extra <- extra[extra %in% unique(rv$scenarios$scenario)]
+          selected_scenarios <- unique(c(selected_scenarios, extra))
+        }
+      }
+    }
+
     # Filter scenarios data to selected scenarios + geography
     traj_data <- rv$scenarios %>%
       dplyr::filter(
@@ -211,16 +224,18 @@ setup_sensitivity <- function(input, output, session, rv) {
         dplyr::filter(.data$sector %in% rv$detected_sectors)
     }
 
-    req(nrow(traj_data) > 0, "scenario_pathway" %in% names(traj_data))
+    # Use fair_share_perc if available, otherwise fall back to scenario_pathway
+    pathway_col <- if ("fair_share_perc" %in% names(traj_data)) "fair_share_perc" else "scenario_pathway"
+    req(nrow(traj_data) > 0, pathway_col %in% names(traj_data))
 
-    # Convert scenario_pathway to numeric
+    # Convert pathway to numeric and cut off at 2050
     traj_data <- traj_data %>%
       dplyr::mutate(
-        pathway_value = suppressWarnings(as.numeric(.data$scenario_pathway)),
+        pathway_value = suppressWarnings(as.numeric(.data[[pathway_col]])),
         scenario_label = sapply(.data$scenario, scenario_label),
         year = as.integer(.data$scenario_year)
       ) %>%
-      dplyr::filter(!is.na(.data$pathway_value))
+      dplyr::filter(!is.na(.data$pathway_value), .data$year <= 2050)
 
     req(nrow(traj_data) > 0)
 
@@ -241,10 +256,10 @@ setup_sensitivity <- function(input, output, session, rv) {
     }
     shock_source <- shock_source %>%
       dplyr::mutate(
-        pathway_value = suppressWarnings(as.numeric(.data$scenario_pathway)),
+        pathway_value = suppressWarnings(as.numeric(.data[[pathway_col]])),
         year = as.integer(.data$scenario_year)
       ) %>%
-      dplyr::filter(!is.na(.data$pathway_value))
+      dplyr::filter(!is.na(.data$pathway_value), .data$year <= 2050)
 
     baseline_data <- shock_source %>% dplyr::filter(.data$scenario == core_baseline)
     target_data   <- shock_source %>% dplyr::filter(.data$scenario == core_target)
@@ -295,8 +310,12 @@ setup_sensitivity <- function(input, output, session, rv) {
     }
 
     # Determine units for y-axis
-    pathway_units <- unique(na.omit(traj_data$pathway_unit))
-    y_label <- if (length(pathway_units) == 1) pathway_units[1] else "Pathway Value"
+    if (pathway_col == "fair_share_perc") {
+      y_label <- "Fair Share (%)"
+    } else {
+      pathway_units <- unique(na.omit(traj_data$pathway_unit))
+      y_label <- if (length(pathway_units) == 1) pathway_units[1] else "Production"
+    }
 
     # ---- Build color & linetype scales dynamically ----
     all_labels <- unique(plot_data$scenario_label)

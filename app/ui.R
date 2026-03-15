@@ -358,8 +358,7 @@ ui <- dashboardPage(
                 tags$ol(
                   tags$li("Match your portfolio companies to the assets database by company_id (or fuzzy-match by company_name)."),
                   tags$li("For each matched company-sector-technology, compute production trajectories under baseline and shock scenarios."),
-                  tags$li("Calculate Net Present Value (NPV) under both scenarios using a DCF model."),
-                  tags$li("Derive Probability of Default (PD) changes from NPV shifts using the Merton structural model."),
+                  tags$li("Derive Probability of Default (PD) changes under both scenarios using the Merton structural model."),
                   tags$li("Compute Expected Loss = -(Exposure at Default x PD) for both scenarios.")
                 )
               )
@@ -419,7 +418,10 @@ ui <- dashboardPage(
                   detailed breakdowns:"),
                 tags$ul(
                   tags$li(strong("Summary:"), " Sector/technology breakdown with PD shock and exposure data."),
-                  tags$li(strong("Exposures PD:"), " Per-company PD baseline vs shock, PD change, Expected Loss change, with color-coded columns.")
+                  tags$li(strong("Credit Risk (PD):"), " Per-company PD baseline vs shock, PD change, Expected Loss, PD distribution chart."),
+                  tags$li(strong("Risk Concentration:"), " HHI, Lorenz curve, heatmaps, and risk-return scatter."),
+                  tags$li(strong("Attribution:"), " Decomposition of portfolio risk by sector, technology, and company."),
+                  tags$li(strong("Horizon Analysis:"), " Multi-year risk evolution with term structure and migration matrix (requires 2+ shock years).")
                 ),
                 p("Positive PD/EL changes (red) indicate increased risk under the transition scenario.
                   Negative changes (green) indicate decreased risk.")
@@ -477,7 +479,14 @@ ui <- dashboardPage(
             ),
 
             tabPanel("Risk Concentration",
-              uiOutput("concentration_ui")
+              uiOutput("concentration_ui"),
+              div(class = "card-surface", style = "margin-bottom: 16px;",
+                h5(icon("bullseye"), " Risk-Return Scatter",
+                   style = "font-weight: 600; margin-top: 0;"),
+                tags$small("Each bubble = one company. x = PD change, y = exposure weight, size = abs EL change.",
+                          style = "color: #666; display: block; margin-bottom: 10px;"),
+                plotlyOutput("conc_scatter", height = "400px")
+              )
             ),
 
             tabPanel("Attribution",
@@ -832,7 +841,7 @@ ui <- dashboardPage(
                 div(class = "metric-card metric-danger",
                   tags$small("Layer 3", class = "card-subtitle"),
                   h4("Financial Risk", class = "section-title"),
-                  p("Discounted cash flow model derives NPV change (market risk). An adjusted Merton structural model converts equity loss into PD change (credit risk).", class = "fs-12 fg-secondary")
+                  p("An adjusted Merton structural model derives PD changes from production misalignment. Expected Loss = Exposure at Default x PD.", class = "fs-12 fg-secondary")
                 )
               )
             ),
@@ -869,11 +878,8 @@ ui <- dashboardPage(
 
             # Layer 3 detail
             h4("Layer 3: Financial Risk", class = "font-heading mt-16"),
-            h5("Market Risk (NPV)", class = "font-heading"),
-            p("A discounted cash flow model calculates the net present value of each company under both baseline and shock scenarios. The relative change in valuation represents the market risk: how much equity value a company loses due to the climate transition shock."),
-
-            h5("Credit Risk (PD)", class = "font-heading mt-8"),
-            p("An adjusted Merton structural credit risk model derives the Probability of Default under each scenario. The model uses the company's balance sheet (market value of assets, liability structure, equity volatility) and the DCF-derived equity change to estimate PD shifts."),
+            h5("Credit Risk (PD)", class = "font-heading"),
+            p("An adjusted Merton structural credit risk model derives the Probability of Default under each scenario. The model uses the company's balance sheet (market value of assets, liability structure, equity volatility) and the production misalignment to estimate PD shifts."),
             p(tags$em("Important:"), " The PD changes incorporate the discounted shock effect across the full stress test horizon. They represent the potential range of default risk given a specific transition pathway — not the true probability of a firm defaulting today.", class = "fg-secondary fs-12"),
 
             hr(),
@@ -975,16 +981,6 @@ ui <- dashboardPage(
 
             h3("Output Definitions", class = "font-heading"),
 
-            h4("NPV Results"),
-            tags$table(class = "def-table",
-              tags$tr(tags$td("net_present_value_baseline"), tags$td("Discounted sum of future cash flows under the baseline scenario.")),
-              tags$tr(tags$td("net_present_value_shock"), tags$td("Discounted sum of future cash flows under the shock (target) scenario.")),
-              tags$tr(tags$td("net_present_value_difference"), tags$td("NPV_shock - NPV_baseline. Negative = value loss from climate transition.")),
-              tags$tr(tags$td("crispy_perc_value_change"), tags$td("Percentage NPV change: (NPV_shock - NPV_baseline) / NPV_baseline.")),
-              tags$tr(tags$td("crispy_value_loss"), tags$td("Dollar impact: crispy_perc_value_change x exposure_value_usd."))
-            ),
-
-            hr(),
             h4("PD Results"),
             tags$table(class = "def-table",
               tags$tr(tags$td("pd_baseline"), tags$td("Probability of Default under the baseline (business-as-usual) scenario.")),

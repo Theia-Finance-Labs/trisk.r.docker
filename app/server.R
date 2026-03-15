@@ -1384,6 +1384,20 @@ server <- function(input, output, session) {
           rv$portfolio <- portfolio_enriched
         }
 
+        # ---- ENRICH PORTFOLIO COMPANY NAMES FROM ASSETS ----
+        # Demo portfolio has company_name = NA; assets has actual names (e.g. "Company 1").
+        # Fill in missing company_names from assets so charts show meaningful labels.
+        if ("company_name" %in% names(rv$portfolio) && all(is.na(rv$portfolio$company_name)) &&
+            "company_name" %in% names(rv$assets)) {
+          asset_names <- rv$assets %>%
+            dplyr::distinct(.data$company_id, asset_company_name = .data$company_name)
+          rv$portfolio <- rv$portfolio %>%
+            dplyr::left_join(asset_names, by = "company_id") %>%
+            dplyr::mutate(company_name = dplyr::coalesce(.data$asset_company_name, .data$company_name)) %>%
+            dplyr::select(-"asset_company_name")
+          log_message("  Enriched portfolio company_name from assets data")
+        }
+
         # ---- PREPARE ASSETS FOR RUN ----
         assets_for_run <- rv$assets
 
@@ -1538,7 +1552,7 @@ server <- function(input, output, session) {
         if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
           log_message(paste("  Debug - Result columns:", paste(names(rv$results), collapse = ", ")))
           if ("crispy_perc_value_change" %in% names(rv$results)) {
-            log_message(paste("  Debug - Avg NPV change:", smart_round(mean(rv$results$crispy_perc_value_change, na.rm = TRUE) * 100), "%"))
+            log_message(paste("  Debug - Avg PD shock:", smart_round(mean(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
           }
           if ("pd_shock" %in% names(rv$results)) {
             log_message(paste("  Debug - Max PD shock:", smart_round(max(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
@@ -1644,11 +1658,11 @@ server <- function(input, output, session) {
       }
 
       # Compute key metrics for compact display
-      avg_npv <- if ("crispy_perc_value_change" %in% names(run$results)) {
-        paste0(round(mean(run$results$crispy_perc_value_change, na.rm = TRUE) * 100, 2), "%")
-      } else "N/A"
       avg_pd <- if ("pd_shock" %in% names(run$results)) {
         paste0(round(mean(run$results$pd_shock, na.rm = TRUE) * 100, 4), "%")
+      } else "N/A"
+      total_el <- if (all(c("expected_loss_baseline", "expected_loss_shock") %in% names(run$results))) {
+        format_number(sum(abs(run$results$expected_loss_shock) - abs(run$results$expected_loss_baseline), na.rm = TRUE))
       } else "N/A"
 
       is_selected <- !is.null(rv$compare_run_idx) && rv$compare_run_idx == i
@@ -1672,9 +1686,9 @@ server <- function(input, output, session) {
             tags$span(style = "color: #666;", "Shock: "), cfg$shock_year
           )),
           column(2, tags$div(style = "font-size: 12px;",
-            tags$span(style = "color: #666;", "NPV: "), tags$b(avg_npv),
+            tags$span(style = "color: #666;", "PD: "), tags$b(avg_pd),
             tags$br(),
-            tags$span(style = "color: #666;", "PD: "), tags$b(avg_pd)
+            tags$span(style = "color: #666;", "EL: "), tags$b(total_el)
           )),
           column(2, tags$div(style = "font-size: 12px;",
             tags$span(style = "color: #666;", "Companies: "), run$n_companies,
@@ -1810,11 +1824,6 @@ server <- function(input, output, session) {
     )
 
     # Compute deltas
-    curr_npv <- if ("crispy_perc_value_change" %in% names(curr))
-      mean(curr$crispy_perc_value_change, na.rm = TRUE) * 100 else NA
-    prev_npv <- if ("crispy_perc_value_change" %in% names(prev$results))
-      mean(prev$results$crispy_perc_value_change, na.rm = TRUE) * 100 else NA
-
     curr_pd <- if ("pd_shock" %in% names(curr))
       mean(curr$pd_shock, na.rm = TRUE) * 100 else NA
     prev_pd <- if ("pd_shock" %in% names(prev$results))
@@ -1893,12 +1902,6 @@ server <- function(input, output, session) {
         ),
         tags$tbody(
           tags$tr(
-            tags$td("Average NPV Change"),
-            tags$td(style = "text-align: right;", if (!is.na(prev_npv)) paste0(round(prev_npv, 2), "%") else "N/A"),
-            tags$td(style = "text-align: right;", if (!is.na(curr_npv)) paste0(round(curr_npv, 2), "%") else "N/A"),
-            tags$td(style = "text-align: center;", delta_span(curr_npv, prev_npv, "round2", invert = TRUE))
-          ),
-          tags$tr(
             tags$td("Average PD Shock"),
             tags$td(style = "text-align: right;", if (!is.na(prev_pd)) paste0(round(prev_pd, 4), "%") else "N/A"),
             tags$td(style = "text-align: right;", if (!is.na(curr_pd)) paste0(round(curr_pd, 4), "%") else "N/A"),
@@ -1957,21 +1960,7 @@ server <- function(input, output, session) {
     valueBox(format_number(val), "Total Exposure (USD)", icon = icon("dollar-sign"), color = "green")
   })
 
-  output$vb_avg_npv_change <- renderValueBox({
-    if (is.null(rv$results)) {
-      return(valueBox("---", "Average NPV Change (%)", icon = icon("chart-line"), color = "blue"))
-    }
-    val <- {
-      col <- safe_col(rv$results, "crispy_perc_value_change", "net_present_value_change", "npv_change")
-      if (!is.null(col)) mean(col, na.rm = TRUE) * 100 else 0
-    }
-    valueBox(tags$span(paste0(display_round(val), "%"),
-                       title = paste0("Full precision: ", smart_round(val), "%"),
-                       style = "cursor: help;"),
-             "Average NPV Change (%)",
-             icon = if (val < 0) icon("arrow-down") else icon("arrow-up"),
-             color = if (val < 0) "red" else "blue")
-  })
+  # NPV value box removed — NPV is an intermediate metric, not user-facing
 
   output$vb_max_pd_shock <- renderValueBox({
     if (is.null(rv$results)) {
@@ -2022,14 +2011,13 @@ server <- function(input, output, session) {
     val <- 0
     df <- rv$results
     if (all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))) {
-      val <- sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)
+      # Compute as abs(shock) - abs(baseline) so positive = loss increased (aligns with PD direction)
+      val <- sum(abs(df$expected_loss_shock) - abs(df$expected_loss_baseline), na.rm = TRUE)
     }
-    # EL is negative by convention (loss). Display absolute value.
-    # When EL increases (val more negative), that's BAD = RED
     display_val <- format_number(abs(val))
-    is_increase <- val < 0  # more negative = EL increased
-    valueBox(tags$span(display_val,
-                       title = paste0("Full precision: ", round(abs(val), 2)),
+    is_increase <- val > 0  # positive = EL increased (more expected loss)
+    valueBox(tags$span(paste0(if (is_increase) "+" else "-", display_val),
+                       title = paste0("Full precision: ", round(val, 2)),
                        style = "cursor: help;"),
              "Total EL Change",
              icon = if (is_increase) icon("arrow-up") else icon("arrow-down"),
@@ -2080,25 +2068,7 @@ server <- function(input, output, session) {
     )
   })
 
-  output$npv_analysis_header <- renderUI({
-    req(rv$results)
-    df <- rv$results
-    n_co <- length(unique(df$company_id))
-    total_exp <- if ("exposure_value_usd" %in% names(df)) sum(df$exposure_value_usd, na.rm = TRUE) else 0
-    avg_npv <- if ("crispy_perc_value_change" %in% names(df)) smart_round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100) else "N/A"
-    div(class = "section-header section-header--dark",
-      fluidRow(
-        column(8,
-          h4(icon("dollar-sign"), " NPV Impact Analysis", class = "section-title"),
-          tags$small(paste0(n_co, " companies | Total exposure: $", format_number(total_exp),
-                           " | Avg NPV change: ", avg_npv, "%"), class = "opacity-85")
-        ),
-        column(4, class = "text-right",
-          downloadButton("download_npv_csv", "Export CSV", class = "btn-sm btn-export")
-        )
-      )
-    )
-  })
+  # NPV analysis header removed — NPV tab no longer shown
 
   # Download handlers for section headers
   output$download_summary_csv <- downloadHandler(
@@ -2121,18 +2091,7 @@ server <- function(input, output, session) {
     }
   )
 
-  output$download_npv_csv <- downloadHandler(
-    filename = function() paste0("trisk_npv_analysis_", Sys.Date(), ".csv"),
-    content = function(file) {
-      req(rv$results)
-      npv_cols <- c("company_id", "company_name", "sector", "technology", "country_iso2",
-                    "exposure_value_usd", "term", "crispy_perc_value_change",
-                    "net_present_value_baseline", "net_present_value_shock")
-      npv_cols <- intersect(npv_cols, names(rv$results))
-      if (length(npv_cols) == 0) npv_cols <- names(rv$results)
-      write.csv(rv$results[, npv_cols, drop = FALSE], file, row.names = FALSE)
-    }
-  )
+  # NPV download handler removed
 
   # ============================================
   # Results - Summary table
@@ -2150,14 +2109,6 @@ server <- function(input, output, session) {
             n_rows = n(),
             .groups = "drop"
           )
-
-        npv_col <- intersect(names(df), c("crispy_perc_value_change", "net_present_value_change"))
-        if (length(npv_col) > 0) {
-          avg_npv <- df %>%
-            group_by(sector, technology) %>%
-            summarise(avg_npv_change = smart_round(mean(.data[[npv_col[1]]], na.rm = TRUE) * 100), .groups = "drop")
-          summary_df <- left_join(summary_df, avg_npv, by = c("sector", "technology"))
-        }
 
         pd_shock_col <- intersect(names(df), c("pd_shock", "crispy_pd_shock"))
         if (length(pd_shock_col) > 0) {
@@ -2179,25 +2130,7 @@ server <- function(input, output, session) {
     })
   })
 
-  # ============================================
-  # Exposures NPV table
-  # ============================================
-
-  output$npv_table <- renderDT({
-    req(rv$results)
-    npv_cols <- c("company_id", "company_name", "sector", "technology", "country_iso2",
-                  "exposure_value_usd", "term",
-                  "crispy_perc_value_change", "net_present_value_baseline", "net_present_value_shock")
-    npv_cols <- intersect(npv_cols, names(rv$results))
-    if (length(npv_cols) == 0) npv_cols <- names(rv$results)
-    npv_df <- rv$results[, npv_cols, drop = FALSE]
-    num_cols <- npv_cols[sapply(npv_df, is.numeric)]
-    if (length(num_cols) > 0) npv_df[num_cols] <- lapply(npv_df[num_cols], smart_round)
-    datatable(npv_df,
-              options = list(pageLength = 20, scrollX = TRUE, autoWidth = FALSE,
-                             columnDefs = list(list(width = '80px', targets = '_all'))),
-              rownames = FALSE)
-  })
+  # NPV table removed — NPV tab no longer shown
 
   # ============================================
   # Exposures PD table (with PD change + EL change columns + color)
@@ -2321,12 +2254,23 @@ server <- function(input, output, session) {
     id_col <- if (has_company_name) "company_name" else "company_id"
     sector_col <- if ("sector" %in% names(df)) "sector" else NULL
 
+    # Aggregate to company level (results may have multiple rows per company for different technologies)
     plot_df <- df %>%
+      mutate(
+        company_label = if (has_company_name) as.character(.data[[id_col]])
+                        else paste0("Company ", .data[[id_col]])
+      ) %>%
+      group_by(company_label) %>%
+      summarise(
+        pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
+        pd_shock = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
+        sector = first(sector),
+        .groups = "drop"
+      ) %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         pd_change_bps = pd_change * 10000,
-        company_label = if (has_company_name) as.character(.data[[id_col]])
-                        else paste0("Company ", .data[[id_col]]),
         direction = ifelse(pd_change >= 0, "PD Increase (Deterioration)", "PD Decrease (Improvement)")
       ) %>%
       filter(!is.na(pd_change), is.finite(pd_change)) %>%
@@ -2573,40 +2517,7 @@ server <- function(input, output, session) {
     )
   })
 
-  # ============================================
-  # Summary plots - Sector-level NPV and PD
-  # ============================================
-
-  output$plot_sector_npv <- renderPlotly({
-    req(rv$results)
-    df <- rv$results
-    npv_col <- intersect(names(df), c("crispy_perc_value_change", "net_present_value_change"))
-    req(length(npv_col) > 0, "sector" %in% names(df))
-
-    plot_data <- df %>%
-      group_by(sector) %>%
-      summarise(avg_npv_change = mean(.data[[npv_col[1]]], na.rm = TRUE) * 100, .groups = "drop")
-
-    p <- ggplot(plot_data, aes(x = reorder(sector, avg_npv_change), y = avg_npv_change, fill = avg_npv_change < 0)) +
-      geom_bar(stat = "identity") +
-      coord_flip() +
-      scale_fill_manual(values = c("TRUE" = TRISK_HEX_RED, "FALSE" = TRISK_HEX_GREEN), guide = "none") +
-      labs(title = "NPV Change by Sector", x = "", y = "Average NPV Change (%)") +
-      trisk_plot_theme()
-
-    tc <- plotly_theme_colors(input)
-    ggplotly(p) %>%
-      layout(
-        showlegend = FALSE,
-        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-        paper_bgcolor = tc$paper_bgcolor,
-        plot_bgcolor = tc$plot_bgcolor,
-        hoverlabel = PLOTLY_HOVERLABEL
-      ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
-  })
+  # Sector NPV chart removed — NPV is an intermediate metric
 
   # ---- REMOVED: plot_sector_pd — redundant with summary table ----
   if (FALSE) {
@@ -2941,24 +2852,29 @@ server <- function(input, output, session) {
       ),
       tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Shows how risk evolves across different shock years. A later shock year means companies have longer to accumulate misalignment, amplifying the transition impact."),
 
-      # Row 1: Portfolio-level time-series line charts
+      # Row 1: Year-over-year metrics table (moved to top for quick reference)
       fluidRow(
-        box(width = 4, title = "Average PD (Shock) Over Time", status = "danger", solidHeader = FALSE,
+        box(width = 12, title = "Year-over-Year Metrics", status = "info", solidHeader = FALSE,
+            collapsible = TRUE,
+            DTOutput("horizon_yoy_table"))
+      ),
+
+      # Row 2: Portfolio-level time-series line charts
+      fluidRow(
+        box(width = 6, title = "Average PD (Shock) Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_pd_line", height = "300px")),
-        box(width = 4, title = "Average NPV Change Over Time", status = "danger", solidHeader = FALSE,
-            plotlyOutput("horizon_npv_line", height = "300px")),
-        box(width = 4, title = "Total EL (Shock) Over Time", status = "danger", solidHeader = FALSE,
+        box(width = 6, title = "Total EL (Shock) Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_el_line", height = "300px"))
       ),
 
-      # Row 2: Sector-faceted evolution
+      # Row 3: Sector-faceted evolution
       fluidRow(
         box(width = 12, title = "PD Evolution by Sector", status = "info", solidHeader = FALSE,
             collapsible = TRUE,
             plotlyOutput("horizon_sector_facet", height = "400px"))
       ),
 
-      # Row 3: PD Term Structure
+      # Row 4: PD Term Structure
       fluidRow(
         box(width = 12, title = "PD Term Structure", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
@@ -2967,7 +2883,7 @@ server <- function(input, output, session) {
             plotlyOutput("horizon_term_structure", height = "380px"))
       ),
 
-      # Row 4: Risk Migration Matrix + Company PD Trajectories
+      # Row 5: Risk Migration Matrix + Company PD Trajectories
       fluidRow(
         box(width = 6, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
@@ -2979,13 +2895,6 @@ server <- function(input, output, session) {
             tags$p(style = "font-size: 12px; color: #666;",
                    "Individual company PD paths across shock years (thin lines) vs portfolio average (bold). Shows dispersion of risk outcomes."),
             plotlyOutput("horizon_company_trajectories", height = "380px"))
-      ),
-
-      # Row 5: Year-over-year table
-      fluidRow(
-        box(width = 12, title = "Year-over-Year Metrics", status = "info", solidHeader = FALSE,
-            collapsible = TRUE,
-            DTOutput("horizon_yoy_table"))
       )
     )
   })
@@ -3005,20 +2914,7 @@ server <- function(input, output, session) {
              margin = list(t = 10))
   })
 
-  # ---- Horizon: Portfolio NPV line chart ----
-  output$horizon_npv_line <- renderPlotly({
-    hd <- horizon_data()
-    req(hd)
-    agg <- hd %>% group_by(shock_year) %>%
-      summarise(avg_npv = mean(crispy_perc_value_change, na.rm = TRUE) * 100, .groups = "drop")
-    plot_ly(agg, x = ~shock_year, y = ~avg_npv, type = "scatter", mode = "lines+markers",
-            line = list(color = STATUS_BLUE, width = 3),
-            marker = list(color = STATUS_BLUE, size = 10),
-            hovertemplate = "Year: %{x}<br>Avg NPV Change: %{y:.2f}%<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", tickvals = agg$shock_year, ticktext = as.character(agg$shock_year)),
-             yaxis = list(title = "Avg NPV Change %"),
-             margin = list(t = 10))
-  })
+  # Horizon NPV line chart removed
 
   # ---- Horizon: Portfolio EL line chart ----
   output$horizon_el_line <- renderPlotly({
@@ -3207,9 +3103,8 @@ server <- function(input, output, session) {
         `Shock Year` = yr,
         `Avg PD (%)` = round(mean(df$pd_shock, na.rm = TRUE) * 100, 4),
         `Max PD (%)` = round(max(df$pd_shock, na.rm = TRUE) * 100, 4),
-        `Avg NPV Change (%)` = round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2),
         `Total EL ($)` = round(sum(abs(df$expected_loss_shock), na.rm = TRUE), 0),
-        `EL Change ($)` = round(abs(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE)), 0),
+        `EL Change ($)` = round(sum(abs(df$expected_loss_shock) - abs(df$expected_loss_baseline), na.rm = TRUE), 0),
         Companies = nrow(df),
         check.names = FALSE
       )
@@ -3219,7 +3114,6 @@ server <- function(input, output, session) {
     # Add YoY delta columns
     if (nrow(yoy_df) >= 2) {
       yoy_df$`PD Delta (pp)` <- c(NA, round(diff(yoy_df$`Avg PD (%)`), 4))
-      yoy_df$`NPV Delta (pp)` <- c(NA, round(diff(yoy_df$`Avg NPV Change (%)`), 2))
     }
 
     datatable(yoy_df, options = list(dom = "t", pageLength = 20, scrollX = TRUE,
@@ -3228,10 +3122,7 @@ server <- function(input, output, session) {
       formatStyle("Avg PD (%)",
                   background = styleColorBar(range(yoy_df$`Avg PD (%)`, na.rm = TRUE), BRAND_CORAL_LT),
                   backgroundSize = "98% 60%", backgroundRepeat = "no-repeat",
-                  backgroundPosition = "center") %>%
-      formatStyle("Avg NPV Change (%)",
-                  color = styleInterval(0, c(STATUS_RED, STATUS_GREEN)),
-                  fontWeight = "bold")
+                  backgroundPosition = "center")
   })
 
   # ---- Horizon: CSV Export ----
@@ -3387,17 +3278,12 @@ server <- function(input, output, session) {
         )
       ),
 
-      # Row 5: Exceedance curve + NPV fan chart
+      # Row 5: Exceedance curve
       fluidRow(
-        box(title = "PD Exceedance Curve", width = 6, status = "danger",
+        box(title = "PD Exceedance Curve", width = 12, status = "danger",
             solidHeader = TRUE, collapsible = TRUE,
             tags$small("Probability that portfolio avg PD exceeds a given threshold, across scenarios."),
             plotlyOutput("dist_exceedance", height = "350px")
-        ),
-        box(title = "NPV Change Fan Chart", width = 6, status = "danger",
-            solidHeader = TRUE, collapsible = TRUE,
-            tags$small("Median NPV change with P10\u2013P90 bands across scenarios."),
-            plotlyOutput("dist_npv_fan", height = "350px")
         )
       ),
 
@@ -3426,12 +3312,11 @@ server <- function(input, output, session) {
         rank = row_number(),
         avg_pd_pct = round(avg_pd_shock * 100, 3),
         max_pd_pct = round(max_pd_shock * 100, 3),
-        avg_npv_pct = round(avg_npv_change * 100, 2),
         el_change = round(total_el_change, 0)
       ) %>%
       select(Rank = rank, Scenario = scenario_label, Category = scenario_category,
              `Avg PD (%)` = avg_pd_pct, `Max PD (%)` = max_pd_pct,
-             `NPV Change (%)` = avg_npv_pct, `EL Change ($)` = el_change)
+             `EL Change ($)` = el_change)
 
     datatable(ranking, rownames = FALSE, options = list(
       dom = "t", pageLength = 20, ordering = FALSE,
@@ -3451,13 +3336,13 @@ server <- function(input, output, session) {
     sps_yr <- sps %>% filter(shock_year == latest_yr)
 
     metrics <- data.frame(
-      metric = c("Avg PD (%)", "Max PD (%)", "NPV Change (%)", "EL Change ($K)"),
+      metric = c("Avg PD (%)", "Max PD (%)", "EL Change ($K)"),
       min_val = c(min(sps_yr$avg_pd_shock * 100), min(sps_yr$max_pd_shock * 100),
-                  min(sps_yr$avg_npv_change * 100), min(sps_yr$total_el_change / 1000)),
+                  min(sps_yr$total_el_change / 1000)),
       max_val = c(max(sps_yr$avg_pd_shock * 100), max(sps_yr$max_pd_shock * 100),
-                  max(sps_yr$avg_npv_change * 100), max(sps_yr$total_el_change / 1000)),
+                  max(sps_yr$total_el_change / 1000)),
       median_val = c(median(sps_yr$avg_pd_shock * 100), median(sps_yr$max_pd_shock * 100),
-                     median(sps_yr$avg_npv_change * 100), median(sps_yr$total_el_change / 1000)),
+                     median(sps_yr$total_el_change / 1000)),
       stringsAsFactors = FALSE
     )
     metrics$range <- metrics$max_val - metrics$min_val
@@ -3516,13 +3401,12 @@ server <- function(input, output, session) {
     radar_df <- sps_yr %>%
       mutate(
         pd_norm = normalize(avg_pd_shock),
-        npv_norm = normalize(abs(avg_npv_change)),
         el_norm = normalize(abs(total_el_change)),
         max_pd_norm = normalize(max_pd_shock)
       )
 
-    dims <- c("pd_norm", "npv_norm", "el_norm", "max_pd_norm")
-    dim_labels <- c("Avg PD", "NPV Impact", "EL Impact", "Max PD")
+    dims <- c("pd_norm", "el_norm", "max_pd_norm")
+    dim_labels <- c("Avg PD", "EL Impact", "Max PD")
 
     p <- plot_ly(type = "scatterpolar", fill = "toself")
     colors <- c(BRAND_CORAL, STATUS_BLUE, STATUS_GREEN, "#8B6914", "#888888", "#C0393B")
@@ -3784,15 +3668,11 @@ server <- function(input, output, session) {
         `PD Median (%)` = round(pd_median * 100, 4),
         `PD P75 (%)` = round(pd_p75 * 100, 4),
         `PD P90 (%)` = round(pd_p90 * 100, 4),
-        `NPV P10 (%)` = round(npv_p10 * 100, 2),
-        `NPV Median (%)` = round(npv_median * 100, 2),
-        `NPV P90 (%)` = round(npv_p90 * 100, 2),
         `EL Median ($)` = round(el_median, 0),
         `EL P90 ($)` = round(el_p90, 0)
       ) %>%
       select(`Shock Year`, `N Scenarios`,
              `PD P10 (%)`, `PD P25 (%)`, `PD Median (%)`, `PD P75 (%)`, `PD P90 (%)`,
-             `NPV P10 (%)`, `NPV Median (%)`, `NPV P90 (%)`,
              `EL Median ($)`, `EL P90 ($)`)
 
     datatable(display_df, rownames = FALSE, options = list(
@@ -3836,13 +3716,14 @@ server <- function(input, output, session) {
     # --- Company-level attribution ---
     # After portfolio enrichment, results may have multiple rows per company
     # (one per technology). Aggregate to true company-level for attribution.
-    company_label_col <- if (has_company && "company_name" %in% names(df)) "company_name" else "company_id"
+    has_valid_company_name_attr <- "company_name" %in% names(df) && any(!is.na(df$company_name))
+    company_label_col <- if (has_valid_company_name_attr) "company_name" else "company_id"
     row_df <- df %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
         pd_contribution = pd_change * weight,
-        company_label = htmltools::htmlEscape(.data[[company_label_col]]),
+        company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]])),
         el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
         npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
       )
@@ -4089,6 +3970,14 @@ server <- function(input, output, session) {
     company_df <- company_df %>%
       arrange(pd_contribution)
 
+    # Disambiguate labels: append sector if any company appears in multiple sectors
+    company_df <- company_df %>%
+      mutate(display_label = if (any(duplicated(company_label))) {
+        paste0(company_label, " (", sector, ")")
+      } else {
+        company_label
+      })
+
     colors <- ifelse(company_df$pd_contribution >= 0, BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
@@ -4102,7 +3991,7 @@ server <- function(input, output, session) {
     )
 
     plot_ly(
-      y = factor(company_df$company_label, levels = company_df$company_label),
+      y = factor(company_df$display_label, levels = company_df$display_label),
       x = company_df$pd_contribution * 100,
       type = "bar",
       orientation = "h",
@@ -4335,9 +4224,11 @@ server <- function(input, output, session) {
     ad <- attribution_data()
     req(ad, ad$has_el)
 
+    # Sort for clean waterfall cascade: EL increases first (el_change < 0 means loss increased,
+    # so -el_change > 0), then decreases. This prevents bars from "hovering" in the middle.
     sector_df <- ad$sector %>%
       filter(!is.na(el_change)) %>%
-      arrange(desc(abs(el_change)))
+      arrange(el_change)
 
     if (nrow(sector_df) == 0) {
       return(plotly_empty() %>% layout(title = "No EL data available"))
@@ -4377,7 +4268,8 @@ server <- function(input, output, session) {
       texttemplate = "$%{y:,.0f}"
     ) %>%
       layout(
-        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11)),
+        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11),
+                     categoryorder = "array", categoryarray = wf_labels),
         yaxis = list(title = "Expected Loss Increase ($)", tickformat = "$,.0f"),
         margin = list(b = 100, t = 30),
         showlegend = FALSE
@@ -4412,9 +4304,7 @@ server <- function(input, output, session) {
     if (ad$has_el) {
       display_df$`EL Change ($)` <- round(detail_df$el_change, 0)
     }
-    if (ad$has_npv) {
-      display_df$`NPV Change (%)` <- round(detail_df$npv_change_pct, 2)
-    }
+    # NPV column removed from attribution detail table
 
     datatable(display_df, rownames = FALSE,
       options = list(
@@ -4482,12 +4372,13 @@ server <- function(input, output, session) {
     total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
 
     # --- Company-level enrichment ---
-    company_label_col <- if (has_company && "company_name" %in% names(df)) "company_name" else "company_id"
+    has_valid_company_name <- "company_name" %in% names(df) && any(!is.na(df$company_name))
+    company_label_col <- if (has_valid_company_name) "company_name" else if ("company_id" %in% names(df)) "company_id" else NULL
     company_df <- df %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
-        company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]]))
+        company_label = if (!is.null(company_label_col)) htmltools::htmlEscape(as.character(.data[[company_label_col]])) else paste0("Company_", row_number())
       )
     # Guard NA labels: replace with row-index fallback
     company_df$company_label <- ifelse(
@@ -4705,8 +4596,7 @@ server <- function(input, output, session) {
                 selectInput("conc_heatmap_metric", NULL,
                            choices = c("PD Change" = "pd_change",
                                       "Exposure ($)" = "exposure",
-                                      "EL Change ($)" = "el_change",
-                                      "NPV Change (%)" = "npv_change"),
+                                      "EL Change ($)" = "el_change"),
                            selected = "pd_change",
                            width = "100%")
               ),
@@ -4734,20 +4624,7 @@ server <- function(input, output, session) {
       ),
 
       # Row 3: (Treemap + Lorenz removed — heatmap + donut are more analytical)
-
-      # Row 4: Risk-return scatter (full width)
-      fluidRow(
-        column(12,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("bullseye"), " Risk-Return Scatter",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Each bubble = one company. x = PD change, y = exposure weight, size = abs EL change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("conc_scatter", height = "400px")
-          )
-        )
-      ),
-
+      # Row 4: Risk-return scatter moved to ui.R (static element avoids renderUI timing issue)
       # Row 5: (Dual bar removed — redundant with summary + waterfall)
     )
   })
@@ -4812,14 +4689,12 @@ server <- function(input, output, session) {
     metric_col <- switch(metric,
       "pd_change" = "avg_pd_change",
       "exposure" = "total_exposure",
-      "el_change" = "el_change",
-      "npv_change" = "npv_change_pct"
+      "el_change" = "el_change"
     )
     metric_label <- switch(metric,
       "pd_change" = "PD Change (pp)",
       "exposure" = "Exposure ($)",
-      "el_change" = "EL Change ($)",
-      "npv_change" = "NPV Change (%)"
+      "el_change" = "EL Change ($)"
     )
 
     # Check if metric column exists
@@ -4856,9 +4731,6 @@ server <- function(input, output, session) {
     # Color scale depends on metric
     if (metric %in% c("pd_change", "el_change")) {
       colorscale <- list(list(0, STATUS_GREEN), list(0.5, "#FFFFFF"), list(1, BRAND_CORAL))
-      use_zmid <- 0
-    } else if (metric == "npv_change") {
-      colorscale <- list(list(0, BRAND_CORAL), list(0.5, "#FFFFFF"), list(1, STATUS_GREEN))
       use_zmid <- 0
     } else {
       # Exposure: sequential scale
@@ -5093,6 +4965,7 @@ server <- function(input, output, session) {
       ) %>%
       config(displayModeBar = FALSE)
   })
+  } # END REMOVED CONCENTRATION BLOCK
 
   # ---- Risk-Return Scatter (bubble) ----
   output$conc_scatter <- renderPlotly({
@@ -5167,6 +5040,7 @@ server <- function(input, output, session) {
       ) %>%
       config(displayModeBar = FALSE)
   })
+  # outputOptions not needed — conc_scatter is now a static element in ui.R
 
   # ---- Geographic Choropleth ----
   output$conc_geo_map <- renderPlotly({
@@ -5288,8 +5162,6 @@ server <- function(input, output, session) {
         config(displayModeBar = FALSE)
     }
   })
-
-  } # END REMOVED CONCENTRATION BLOCK
 
   # ---- REMOVED: conc_dual_bar — redundant with summary + waterfall ----
   if (FALSE) {

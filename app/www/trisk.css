@@ -636,9 +636,9 @@ table.dataTable th { font-size: var(--fs-xs) !important; }
 .section-header small { color: rgba(255,255,255,0.85); }
 
 .section-header--dark { background: linear-gradient(135deg, #1A1A1A, #333); }
-.section-header--purple { background: linear-gradient(135deg, #4A148C, #7B1FA2); }
+.section-header--purple { background: linear-gradient(135deg, #C0393B, #E84B4D); }
 .section-header--green { background: linear-gradient(135deg, #1A4D2E, #2D8B57); }
-.section-header--blue { background: linear-gradient(135deg, #2C3E50, #3498DB); }
+.section-header--blue { background: linear-gradient(135deg, #334155, #4A7FA5); }
 
 .btn-export {
   background: rgba(255,255,255,0.2);
@@ -776,7 +776,7 @@ hr { border-color: var(--border-light); }
    (replacing compound inline styles in ui.R)
    ============================================ */
 
-/* Header title: "TRISK_Desktop_2.1" in the dark header bar */
+/* Header title: "TRISK Desktop 3.0" in the dark header bar */
 .header-title {
   vertical-align: middle;
   font-family: var(--font-heading);
@@ -818,8 +818,8 @@ hr { border-color: var(--border-light); }
 
 /* PD/EL info toggle help buttons */
 .btn-help-toggle {
-  background: #d9edf7;
-  border: 1px solid #bce8f1;
+  background: var(--bg-guidance);
+  border: 1px solid var(--brand-coral-lt);
 }
 
 /* Collapsible info boxes (PD/EL help text), hidden by default */
@@ -850,6 +850,15 @@ hr { border-color: var(--border-light); }
 }
 
 /* About page: "Why 1in1000" feature cards */
+.method-guide-card {
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 16px;
+  height: 100%;
+}
+.method-guide-card h6 { margin-bottom: 8px; }
+
 .about-card {
   background: var(--bg-card);
   border: 1px solid var(--border-light);
@@ -962,7 +971,7 @@ hr { border-color: var(--border-light); }
   margin: 0 2px;
 }
 .legend-badge--green { background: #3D8B3E; }
-.legend-badge--blue  { background: #7AADCA; }
+.legend-badge--blue  { background: #888888; }
 .legend-badge--red   { background: #A83535; }
 
 /* ============================================
@@ -1101,6 +1110,12 @@ hr { border-color: var(--border-light); }
 [data-theme="dark"] .sidebar-menu > li > a:hover {
   background-color: var(--bg-sidebar-active) !important;
   color: var(--fg-primary) !important;
+}
+
+/* Dark mode: invert black logos so they are visible on dark backgrounds */
+[data-theme="dark"] .sidebar-logo,
+[data-theme="dark"] .about-logo {
+  filter: invert(1) brightness(2);
 }
 
 [data-theme="dark"] .box {

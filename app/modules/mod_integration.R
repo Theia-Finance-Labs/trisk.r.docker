@@ -23,9 +23,11 @@ setup_integration <- function(input, output, session, rv) {
       "zscore" = tagList(
         tags$b("Z-Score Integration (Basel IRB)"),
         tags$p(HTML("TRISK-adjusted PD = &Phi;(&Phi;<sup>-1</sup>(Internal_PD) + &Phi;<sup>-1</sup>(PD_shock) - &Phi;<sup>-1</sup>(PD_baseline))")),
-        tags$p("Uses the Vasicek one-factor model approach. Combines PDs in the normal quantile
-               (z-score) space, preserving the non-linear relationship at distribution tails.
-               Recommended for Basel IRB-aligned institutions.")
+        tags$p("Combines PDs in the normal quantile (z-score) space using the Vasicek one-factor
+               model. This preserves non-linear tail behavior — critical for regulatory capital,
+               where the difference between 2% and 5% PD is much larger than 0.1% vs 0.4%."),
+        tags$p(class = "fs-12 fg-secondary", tags$em("Recommended for Basel III/IV IRB banks. Consistent with the
+               single-factor Gaussian copula framework underpinning regulatory capital formulas (CRR Art. 153)."))
       )
     )
     desc
@@ -267,7 +269,7 @@ setup_integration <- function(input, output, session, rv) {
 
     brks_pd <- c(-pd_adj_max, -pd_adj_max * 0.5, -pd_adj_max * 0.1,
                   pd_adj_max * 0.1, pd_adj_max * 0.5, pd_adj_max)
-    clrs_pd <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#7AADCA",
+    clrs_pd <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#BAB6B5",
                  "#C45555", "#8B2020", "#5C0A0A")
 
     num_cols <- which(sapply(display_df, is.numeric)) - 1
@@ -354,6 +356,197 @@ setup_integration <- function(input, output, session, rv) {
       ),
       hr()
     )
+  })
+
+  # Sector/Technology PD Breakdown (collapsible summary table)
+  output$pd_sector_breakdown <- renderUI({
+    req(rv$pd_integration_result)
+    df <- rv$pd_integration_result
+
+    grp_cols <- intersect(c("sector", "technology"), names(df))
+    if (length(grp_cols) == 0) return(NULL)
+
+    grp_col <- grp_cols[1]
+    sectors <- unique(df[[grp_col]])
+
+    breakdown_rows <- lapply(sectors, function(s) {
+      sub_df <- df[df[[grp_col]] == s, , drop = FALSE]
+      n <- nrow(sub_df)
+      avg_internal <- mean(sub_df$Internal_PD, na.rm = TRUE)
+      avg_adjusted <- mean(sub_df$TRISK_Adjusted_PD, na.rm = TRUE)
+      avg_pd_adj <- mean(sub_df$PD_Adjustment, na.rm = TRUE)
+
+      # Direction indicator: red arrow-up for PD increase, green arrow-down
+      # for decrease
+      dir_icon <- if (avg_pd_adj > 1e-6) {
+        tags$span(class = "text-danger", icon("arrow-up"), " ")
+      } else if (avg_pd_adj < -1e-6) {
+        tags$span(class = "text-success", icon("arrow-down"), " ")
+      } else {
+        tags$span(class = "fg-secondary", icon("minus"), " ")
+      }
+
+      tags$tr(
+        tags$td(class = "td-pad fw-600", s),
+        tags$td(class = "td-right", n),
+        tags$td(class = "td-right", smart_round(avg_internal)),
+        tags$td(class = "td-right", smart_round(avg_adjusted)),
+        tags$td(class = "td-right", dir_icon, smart_round(avg_pd_adj)),
+        tags$td(class = "td-right",
+                paste0(smart_round(avg_pd_adj * 100), " pp"))
+      )
+    })
+
+    tagList(
+      tags$div(
+        class = "mb-15",
+        tags$details(
+          tags$summary(
+            class = "breakdown-summary",
+            icon("layer-group"), " PD Breakdown by Sector"
+          ),
+          tags$div(
+            class = "breakdown-body",
+            tags$table(
+              class = "table table-striped table-hover breakdown-table",
+              tags$thead(
+                tags$tr(
+                  class = "breakdown-thead",
+                  tags$th(class = "th-pad", "Sector"),
+                  tags$th(class = "th-right", "Count"),
+                  tags$th(class = "th-right", "Avg Internal PD"),
+                  tags$th(class = "th-right", "Avg Adjusted PD"),
+                  tags$th(class = "th-right", "Avg PD Adj."),
+                  tags$th(class = "th-right", "Avg PD Adj. (pp)")
+                )
+              ),
+              tags$tbody(breakdown_rows)
+            )
+          )
+        )
+      )
+    )
+  })
+
+  # PD Adjustment Bar Chart (plotly)
+  output$pd_adjustment_chart <- renderPlotly({
+    req(rv$pd_integration_result)
+    df <- rv$pd_integration_result
+
+    has_sector <- "sector" %in% names(df)
+    has_company <- "company_name" %in% names(df)
+
+    if (has_sector) {
+      chart_df <- df %>%
+        dplyr::group_by(.data$sector) %>%
+        dplyr::summarise(
+          PD_Adjustment = mean(.data$PD_Adjustment, na.rm = TRUE),
+          n = dplyr::n(),
+          .groups = "drop"
+        ) %>%
+        dplyr::arrange(.data$PD_Adjustment)
+
+      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0,
+                               BRAND_CORAL, STATUS_GREEN)
+      chart_df$hover_text <- paste0(
+        "<b>",
+        htmltools::htmlEscape(as.character(chart_df$sector)),
+        "</b><br>",
+        "Avg PD Adjustment: ",
+        sapply(chart_df$PD_Adjustment, smart_round), "<br>",
+        "Counterparties: ", chart_df$n
+      )
+
+      p <- plot_ly(
+        chart_df,
+        y = ~reorder(sector, PD_Adjustment),
+        x = ~PD_Adjustment,
+        type = "bar",
+        orientation = "h",
+        marker = list(color = ~color),
+        text = ~hover_text,
+        hoverinfo = "text"
+      ) %>%
+        layout(
+          title = list(text = "Avg PD Adjustment by Sector",
+                       font = list(size = 14)),
+          xaxis = list(title = "PD Adjustment", zeroline = TRUE,
+                       zerolinecolor = "#999", zerolinewidth = 1.5),
+          yaxis = list(title = ""),
+          plot_bgcolor = "#FEFEFE",
+          paper_bgcolor = "#FEFEFE",
+          margin = list(l = 120, r = 20, t = 40, b = 40),
+          showlegend = FALSE
+        )
+    } else if (has_company) {
+      chart_df <- df %>%
+        dplyr::arrange(dplyr::desc(abs(.data$PD_Adjustment))) %>%
+        head(15) %>%
+        dplyr::arrange(.data$PD_Adjustment)
+
+      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0,
+                               BRAND_CORAL, STATUS_GREEN)
+      chart_df$hover_text <- paste0(
+        "<b>",
+        htmltools::htmlEscape(as.character(chart_df$company_name)),
+        "</b><br>",
+        "PD Adjustment: ",
+        sapply(chart_df$PD_Adjustment, smart_round)
+      )
+
+      p <- plot_ly(
+        chart_df,
+        y = ~reorder(company_name, PD_Adjustment),
+        x = ~PD_Adjustment,
+        type = "bar",
+        orientation = "h",
+        marker = list(color = ~color),
+        text = ~hover_text,
+        hoverinfo = "text"
+      ) %>%
+        layout(
+          title = list(
+            text = "Top 15 Counterparties by PD Adjustment",
+            font = list(size = 14)
+          ),
+          xaxis = list(title = "PD Adjustment", zeroline = TRUE,
+                       zerolinecolor = "#999", zerolinewidth = 1.5),
+          yaxis = list(title = ""),
+          plot_bgcolor = "#FEFEFE",
+          paper_bgcolor = "#FEFEFE",
+          margin = list(l = 150, r = 20, t = 40, b = 40),
+          showlegend = FALSE
+        )
+    } else {
+      chart_df <- df %>%
+        dplyr::mutate(
+          label = paste0("Row ", dplyr::row_number())
+        ) %>%
+        dplyr::arrange(.data$PD_Adjustment)
+
+      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0,
+                               BRAND_CORAL, STATUS_GREEN)
+
+      p <- plot_ly(
+        chart_df,
+        y = ~reorder(label, PD_Adjustment),
+        x = ~PD_Adjustment,
+        type = "bar",
+        orientation = "h",
+        marker = list(color = ~color)
+      ) %>%
+        layout(
+          title = list(text = "PD Adjustment by Counterparty",
+                       font = list(size = 14)),
+          xaxis = list(title = "PD Adjustment"),
+          yaxis = list(title = ""),
+          plot_bgcolor = "#FEFEFE",
+          paper_bgcolor = "#FEFEFE",
+          showlegend = FALSE
+        )
+    }
+
+    p
   })
 
   # ============================================
@@ -590,7 +783,7 @@ setup_integration <- function(input, output, session, rv) {
 
     brks_adj <- c(-el_adj_max, -el_adj_max * 0.5, -el_adj_max * 0.1,
                    el_adj_max * 0.1, el_adj_max * 0.5, el_adj_max)
-    clrs_adj <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#7AADCA",
+    clrs_adj <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#BAB6B5",
                   "#C45555", "#8B2020", "#5C0A0A")
 
     num_cols <- which(sapply(display_df, is.numeric)) - 1

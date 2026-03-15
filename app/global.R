@@ -49,16 +49,30 @@ STATUS_BLUE      <- "#4A7FA5"  # Muted blue for neutral
 
 # Legacy TRISK colors (kept for chart compatibility)
 TRISK_HEX_RED   <- "#F53D3F"
-TRISK_HEX_GREEN <- "#5D9324"
+TRISK_HEX_GREEN <- "#3D8B5E"
 TRISK_HEX_GREY  <- "#BAB6B5"
 
 # Fixed sector colour palette — used across all sector-coloured plots
 SECTOR_COLORS <- c(
-  "Oil&Gas"    = "#8B4513",   # Brown
-  "Coal"       = "#1A1A1A",   # Black (slightly off for visibility on dark bg)
-  "Power"      = "#2E86C1",   # Blue
-  "Automotive" = "#E74C3C",   # Red
-  "Steel"      = "#F1C40F"    # Yellow
+  "Oil&Gas"    = "#8B6914",   # Warm amber (energy, aligned with brand warmth)
+  "Coal"       = "#1A1A1A",   # Near-black (brand primary)
+  "Power"      = "#4A7FA5",   # Muted steel blue (STATUS_BLUE)
+  "Automotive" = "#C0393B",   # Dark coral (BRAND_CORAL_DK)
+  "Steel"      = "#888888"    # Medium grey (brand grey)
+)
+
+# Scenario comparison palette — derived from 1in1000 brand tones
+SCENARIO_COLORS <- c(
+  "#E84B4D",  # Brand coral (primary)
+  "#4A7FA5",  # Steel blue (neutral)
+  "#3D8B5E",  # Forest green (positive)
+  "#8B6914",  # Warm amber
+  "#888888",  # Medium grey
+  "#C0393B",  # Dark coral
+  "#1A1A1A",  # Near-black
+  "#EF7173",  # Light coral
+  "#6B9F3B",  # Olive green
+  "#BAB6B5"   # Light grey
 )
 
 #' TRISK ggplot2 theme — font families are browser-rendered via ggplotly()

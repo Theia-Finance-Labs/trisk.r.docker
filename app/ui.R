@@ -10,7 +10,7 @@ ui <- dashboardPage(
   # ============================================
   dashboardHeader(
     title = tags$span(
-      tags$span("TRISK_Desktop_2.1", class = "header-title"),
+      tags$span("TRISK Desktop 3.0", class = "header-title"),
       tags$br(),
       tags$span("Climate Transition Risk Stress Testing", class = "header-subtitle")
     ),
@@ -34,15 +34,15 @@ ui <- dashboardPage(
       menuItem("2. Configure Analysis", tabName = "config", icon = icon("sliders-h")),
       menuItem("3. Run Analysis", tabName = "run", icon = icon("play")),
       menuItem("4. Portfolio Results", tabName = "results", icon = icon("chart-line")),
-      menuItem("5. Scenario Sensitivity", tabName = "sensitivity", icon = icon("chart-bar")),
-      menuItem("6. Integrate PD/EL (optional)", tabName = "integration", icon = icon("exchange-alt")),
+      menuItem("5. Scenario Analysis", tabName = "sensitivity", icon = icon("chart-bar")),
+      menuItem("6. Risk Integration", tabName = "integration", icon = icon("exchange-alt")),
       menuItem("7. Download", tabName = "download", icon = icon("download")),
       hr(),
       menuItem("Documentation", tabName = "docs", icon = icon("book")),
       menuItem("About", tabName = "about", icon = icon("info-circle"))
     ),
     tags$div(class = "sidebar-logo-wrap",
-      tags$img(src = "logo-black.png", height = "160px", class = "opacity-60")
+      tags$img(src = "logo-black.png", height = "160px", class = "opacity-60 sidebar-logo")
     )
   ),
 
@@ -89,7 +89,7 @@ ui <- dashboardPage(
               div(class = "guidance-content",
                 tags$ol(
                   tags$li(strong("Upload Data:"), " Upload your portfolio, assets, and financial data (or load demo data from the trisk.model package)."),
-                  tags$li(strong("Configure:"), " Select baseline and target climate scenarios, set model parameters (risk-free rate, discount rate, shock year, etc.)."),
+                  tags$li(strong("Configure:"), " Select baseline (business-as-usual) and target (transition goal) climate scenarios, set model parameters and shock year."),
                   tags$li(strong("Run:"), " Execute the stress test. The model computes NPV and PD under both scenarios for each company-sector-technology combination."),
                   tags$li(strong("Review Results:"), " Examine NPV changes, PD shifts, Expected Loss changes, and exposure impacts across your portfolio."),
                   tags$li(strong("Integrate:"), " Combine TRISK outputs with your institution's internal PD and Expected Loss estimates using absolute, relative, or Z-score (Basel IRB) methods."),
@@ -283,11 +283,12 @@ ui <- dashboardPage(
                                plugins = list("remove_button"),
                                placeholder = "Add shock years (2025\u20132040)..."
                              )),
-              helpText("Add any years between 2025\u20132040. Multiple years enable the ",
-                       tags$b("Horizon Analysis"), " tab for time-series risk evolution.")
+              helpText("The shock year determines ", tags$b("when"), " the climate transition shock occurs \u2014 ",
+                       "the point at which companies are forced from the baseline trajectory onto the target pathway. ",
+                       "Multiple years enable the ", tags$b("Horizon Analysis"), " tab for time-series risk evolution.")
             ),
             box(
-              title = "Advanced Assumptions",
+              title = "Model Parameters",
               status = "warning",
               solidHeader = TRUE,
               collapsible = TRUE,
@@ -437,34 +438,28 @@ ui <- dashboardPage(
 
             tabPanel("Summary",
               uiOutput("summary_header"),
-              DTOutput("results_summary_table"),
-              fluidRow(
-                box(width = 12, plotlyOutput("plot_sector_pd", height = "400px"))
-              )
+              tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Portfolio-level summary of TRISK stress test results. Shows average NPV change and PD shock by sector and technology, exposure-weighted across your loan book."),
+              DTOutput("results_summary_table")
             ),
 
-            tabPanel("Exposure PD Analysis",
+            tabPanel("Credit Risk Analysis",
               uiOutput("pd_analysis_header"),
               tags$div(class = "fs-12 fg-secondary mb-8",
                 tags$span("Bar chart: "),
                 tags$span("Red", style = "color:#F53D3F;font-weight:600;"),
                 tags$span(" = PD increase (deterioration) | "),
-                tags$span("Green", style = "color:#5D9324;font-weight:600;"),
+                tags$span("Green", style = "color:#3D8B5E;font-weight:600;"),
                 tags$span(" = PD decrease (improvement)"),
                 tags$span(" \u00a0\u00b7\u00a0 ", style = "color:#AAA;"),
                 tags$span("Sectors: "),
-                tags$span("\u25cf", style = "color:#8B4513;"), tags$span(" Oil&Gas "),
+                tags$span("\u25cf", style = "color:#8B6914;"), tags$span(" Oil&Gas "),
                 tags$span("\u25cf", style = "color:#1A1A1A;"), tags$span(" Coal "),
-                tags$span("\u25cf", style = "color:#2E86C1;"), tags$span(" Power "),
-                tags$span("\u25cf", style = "color:#E74C3C;"), tags$span(" Automotive "),
-                tags$span("\u25cf", style = "color:#F1C40F;"), tags$span(" Steel")
+                tags$span("\u25cf", style = "color:#4A7FA5;"), tags$span(" Power "),
+                tags$span("\u25cf", style = "color:#C0393B;"), tags$span(" Automotive "),
+                tags$span("\u25cf", style = "color:#888888;"), tags$span(" Steel")
               ),
               fluidRow(
-                box(width = 6, plotlyOutput("plot_pd_sector_enhanced", height = "420px")),
-                box(width = 6, plotlyOutput("plot_pd_distribution", height = "420px"))
-              ),
-              fluidRow(
-                box(width = 12, plotlyOutput("plot_pd_vs_exposure", height = "380px"))
+                box(width = 12, plotlyOutput("plot_pd_sector_enhanced", height = "420px"))
               ),
               DTOutput("pd_table")
             ),
@@ -488,10 +483,12 @@ ui <- dashboardPage(
             # ),
             # --- END SCENARIO COMPARISON TAB ---
 
-            tabPanel("Exposure NPV Analysis",
-              uiOutput("npv_analysis_header"),
-              DTOutput("npv_table")
-            )
+            # --- NPV Analysis tab removed — NPV is intermediate; key data in Summary table ---
+            # tabPanel("Exposure NPV Analysis",
+            #   uiOutput("npv_analysis_header"),
+            #   DTOutput("npv_table")
+            # )
+            NULL  # trailing NULL for clean comma handling
           )
         )
       ),
@@ -512,7 +509,7 @@ ui <- dashboardPage(
             width = 12,
             div(class = "guidance-wrapper",
               tags$button(class = "guidance-toggle-btn",
-                tags$span("Step 6: Integrate TRISK results with your internal estimates"),
+                tags$span("Step 6: Risk Integration — combine TRISK results with your internal estimates"),
                 tags$span(class = "chevron", HTML("&#9660;"))
               ),
               div(class = "guidance-content",
@@ -547,6 +544,43 @@ ui <- dashboardPage(
                   "Upload a CSV with ", tags$code("company_id"), " + ",
                   tags$code("internal_pd"), " (or ", tags$code("internal_el"),
                   ") columns, or edit values directly in the tables below.")
+              )
+            )
+          )
+        ),
+
+        # Method Decision Guide
+        fluidRow(
+          box(
+            width = 12,
+            status = "info",
+            solidHeader = FALSE,
+            div(class = "card-surface",
+              h5(icon("route"), " Which integration method should I choose?",
+                 class = "font-heading mt-0 mb-8"),
+              fluidRow(
+                column(4,
+                  tags$div(class = "method-guide-card",
+                    h6(tags$strong("Absolute Change"), class = "fg-brand-coral mt-0"),
+                    tags$p("Your internal PDs are ", tags$em("point-in-time"), " estimates and you want to overlay the raw climate stress impact as an additive adjustment.", class = "fs-12"),
+                    tags$p(tags$code("Adjusted = Internal + Shock_delta"), class = "fs-11 fg-secondary")
+                  )
+                ),
+                column(4,
+                  tags$div(class = "method-guide-card",
+                    h6(tags$strong("Relative Change"), class = "fg-brand-coral mt-0"),
+                    tags$p("Your internal PDs are ", tags$em("through-the-cycle"), " and you prefer a proportional scaling that respects your existing PD level.", class = "fs-12"),
+                    tags$p(tags$code("Adjusted = Internal \u00d7 (1 + Change%)"), class = "fs-11 fg-secondary")
+                  )
+                ),
+                column(4,
+                  tags$div(class = "method-guide-card",
+                    h6(tags$strong("Z-Score (Basel IRB)"), class = "fg-brand-coral mt-0"),
+                    tags$p("You use ", tags$em("Basel III/IV IRB models"), " with Vasicek framework. Combines PDs in normal quantile space, preserving tail-risk behavior.", class = "fs-12"),
+                    tags$p(tags$code(HTML("Adjusted = &Phi;(&Phi;\u207B\u00B9(Int) + z\u0394)")), class = "fs-11 fg-secondary"),
+                    tags$small("Recommended for regulatory capital calculations.", class = "fg-secondary")
+                  )
+                )
               )
             )
           )
@@ -611,7 +645,12 @@ ui <- dashboardPage(
             br(), br(),
             # Portfolio-Level PD Aggregates — prominent ValueBoxes ABOVE the detail table
             uiOutput("pd_integration_portfolio_summary"),
-            DTOutput("pd_integration_results")
+            DTOutput("pd_integration_results"),
+            # PD Sector Breakdown
+            uiOutput("pd_sector_breakdown"),
+            # PD Adjustment Bar Chart
+            plotlyOutput("pd_adjustment_chart", height = "350px"),
+            br()
           )
         ),
 
@@ -752,6 +791,93 @@ ui <- dashboardPage(
             solidHeader = TRUE,
             width = 12,
 
+            # ============================================
+            # Methodology Overview (from 1in1000 TRISK presentation)
+            # ============================================
+            h3("TRISK Methodology", class = "font-heading"),
+            p("TRISK is an asset-level, bottom-up climate transition risk stress test. It estimates how a late and sudden shift in climate policy would affect company profits, equity values, and default probabilities across your loan portfolio.", class = "fg-secondary"),
+
+            # Three-layer overview
+            h4("The Three-Layer Framework", class = "font-heading mt-16"),
+            p("The model operates in three sequential layers. Each layer transforms the output of the previous one, building from physical production data to financial risk metrics."),
+
+            fluidRow(
+              column(4,
+                div(class = "metric-card metric-info",
+                  tags$small("Layer 1", class = "card-subtitle"),
+                  h4("Scenarios & Trajectories", class = "section-title"),
+                  p("Forward-looking production plans (5-year horizon) are aligned with climate scenarios to construct baseline and target pathways for each company.", class = "fs-12 fg-secondary")
+                )
+              ),
+              column(4,
+                div(class = "metric-card metric-warning",
+                  tags$small("Layer 2", class = "card-subtitle"),
+                  h4("Economic Impact", class = "section-title"),
+                  p("A shock scenario forces misaligned companies to decarbonize. Net profits are calculated from production volume, price, carbon tax, and net profit margin.", class = "fs-12 fg-secondary")
+                )
+              ),
+              column(4,
+                div(class = "metric-card metric-danger",
+                  tags$small("Layer 3", class = "card-subtitle"),
+                  h4("Financial Risk", class = "section-title"),
+                  p("Discounted cash flow model derives NPV change (market risk). An adjusted Merton structural model converts equity loss into PD change (credit risk).", class = "fs-12 fg-secondary")
+                )
+              )
+            ),
+
+            hr(),
+
+            # Layer 1 detail
+            h4("Layer 1: Scenarios & Company Trajectories", class = "font-heading mt-16"),
+            p("TRISK uses the PACTA alignment approach to construct company-level scenario pathways. For each company-technology combination:"),
+            tags$ul(
+              tags$li(tags$strong("Baseline scenario (business-as-usual):"), " Production is extended from the last year of planned data using a business-as-usual trajectory (e.g., NGFS Current Policies). This represents what happens if current climate policies remain unchanged."),
+              tags$li(tags$strong("Target scenario (transition goal):"), " Production is adjusted from the first year of planned data to align with an ambitious climate pathway (e.g., NGFS Net Zero 2050). This represents the end-state goal that companies must eventually reach."),
+              tags$li(tags$strong("Shock scenario (model-computed):"), " At the shock year, the company is forced to migrate from the baseline to the target trajectory. This is not a user-selected scenario \u2014 it is computed by the model as a sudden policy-driven adjustment. Misaligned firms must also compensate for excess historical production above the target pathway.")
+            ),
+            p("This forward-looking approach is essential: a company's risk position depends on its strategic readiness for a climate transition, not just its current production mix.", class = "fg-secondary fs-12"),
+
+            hr(),
+
+            # Layer 2 detail
+            h4("Layer 2: Real Economic Impact", class = "font-heading mt-16"),
+            p("The baseline and shock production trajectories drive the calculation of net profits. The profit equation has four channels:"),
+            tags$div(class = "card-surface mt-8 mb-16",
+              tags$code("Net Profit = Production Volume × (Price − Carbon Tax × Emission Factor) × Net Profit Margin", class = "fs-13")
+            ),
+            tags$ul(
+              tags$li(tags$strong("Production volume"), " — the dominant driver. Shock-scenario production drops sharply for misaligned high-carbon firms."),
+              tags$li(tags$strong("Price"), " — commodity price projections from scenario providers (more subdued impact)."),
+              tags$li(tags$strong("Carbon tax"), " — applied as an emission cost per unit of production for high-carbon technologies, only after the shock year."),
+              tags$li(tags$strong("Net profit margin"), " — converts revenue impact to bottom-line profit impact.")
+            ),
+            p("For increasing (green) technologies, a proximity-to-target adjustment accounts for the capital costs of building out new capacity.", class = "fg-secondary fs-12"),
+
+            hr(),
+
+            # Layer 3 detail
+            h4("Layer 3: Financial Risk", class = "font-heading mt-16"),
+            h5("Market Risk (NPV)", class = "font-heading"),
+            p("A discounted cash flow model calculates the net present value of each company under both baseline and shock scenarios. The relative change in valuation represents the market risk: how much equity value a company loses due to the climate transition shock."),
+
+            h5("Credit Risk (PD)", class = "font-heading mt-8"),
+            p("An adjusted Merton structural credit risk model derives the Probability of Default under each scenario. The model uses the company's balance sheet (market value of assets, liability structure, equity volatility) and the DCF-derived equity change to estimate PD shifts."),
+            p(tags$em("Important:"), " The PD changes incorporate the discounted shock effect across the full stress test horizon. They represent the potential range of default risk given a specific transition pathway — not the true probability of a firm defaulting today.", class = "fg-secondary fs-12"),
+
+            hr(),
+
+            # Key design principles
+            h4("Design Principles", class = "font-heading mt-16"),
+            tags$table(class = "def-table",
+              tags$tr(tags$td("Bottom-up"), tags$td("Starts with granular asset-level data and individual company production plans, then aggregates to portfolio.")),
+              tags$tr(tags$td("Forward-looking"), tags$td("Uses 5-year production plans, not historical emissions. Distinguishes companies planning for transition from those that are not.")),
+              tags$tr(tags$td("Data agnostic"), tags$td("Accepts data from multiple providers (Asset Impact, Asset Resolution, custom data). Not locked to a single vendor.")),
+              tags$tr(tags$td("Multi-scenario"), tags$td("Supports NGFS, IEA, IPR, Oxford-INET, Mission Possible, JRC-GECO scenarios. Different scenarios yield different risk profiles.")),
+              tags$tr(tags$td("Open source"), tags$td("All model code and methodology published openly. No black box — every calculation is auditable."))
+            ),
+
+            hr(),
+
             h3("Input Data Definitions", class = "font-heading"),
 
             h4("Portfolio Data"),
@@ -817,12 +943,12 @@ ui <- dashboardPage(
               tags$tr(tags$td("carbon_tax"), tags$td("Carbon price in USD per tonne CO2."))
             ),
 
-            hr(), hr(),
+            hr(),
 
             h3("Model Parameters", class = "font-heading"),
             tags$table(class = "def-table",
-              tags$tr(tags$td("baseline_scenario"), tags$td("The business-as-usual scenario (e.g. Current Policies).")),
-              tags$tr(tags$td("target_scenario"), tags$td("The climate transition shock scenario (e.g. Net Zero 2050).")),
+              tags$tr(tags$td("baseline_scenario"), tags$td("The business-as-usual scenario representing current climate policies (e.g., NGFS Current Policies).")),
+              tags$tr(tags$td("target_scenario"), tags$td("The climate transition goal scenario (e.g., Net Zero 2050). The model computes a shock trajectory from baseline to target at the shock year.")),
               tags$tr(tags$td("scenario_geography"), tags$td("Regional scope for scenario filtering.")),
               tags$tr(tags$td("shock_year"), tags$td("Year when the climate policy shock is applied in the model.")),
               tags$tr(tags$td("risk_free_rate"), tags$td("Risk-free interest rate used in DCF discounting.")),
@@ -833,7 +959,7 @@ ui <- dashboardPage(
               tags$tr(tags$td("div_netprofit_prop_coef"), tags$td("Coefficient determining how strongly future dividends propagate to company value."))
             ),
 
-            hr(), hr(),
+            hr(),
 
             h3("Output Definitions", class = "font-heading"),
 
@@ -874,7 +1000,7 @@ ui <- dashboardPage(
               tags$tr(tags$td("Z-Score (Basel IRB)"), tags$td(HTML("Adjusted_PD = &Phi;(&Phi;<sup>-1</sup>(Internal_PD) + &Phi;<sup>-1</sup>(PD_shock) - &Phi;<sup>-1</sup>(PD_baseline)). Combines PDs in normal quantile space.")))
             ),
 
-            hr(), hr(),
+            hr(),
             h3("External Resources", class = "font-heading"),
             tags$ul(
               tags$li(tags$a(href = "https://theia-finance-labs.github.io/trisk.model/",
@@ -917,7 +1043,7 @@ ui <- dashboardPage(
                   supervisors, and governments around the world.")
               ),
               column(4, class = "text-center pt-20",
-                tags$img(src = "logo-black.png", height = "80px"),
+                tags$img(src = "logo-black.png", height = "80px", class = "about-logo"),
                 br(), br(),
                 tags$a(href = "https://1in1000.com", "www.1in1000.com", target = "_blank",
                        class = "fg-brand-red fw-600")

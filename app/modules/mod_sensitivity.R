@@ -62,8 +62,8 @@ setup_sensitivity <- function(input, output, session, rv) {
         fluidRow(
           column(8,
             h4(icon("chart-line"), " Scenario Trajectories", class = "section-title"),
-            tags$small(paste0("Baseline: ", scenario_label(core_baseline),
-                             " | Target: ", scenario_label(core_target)),
+            tags$small(paste0("Business-as-usual: ", scenario_label(core_baseline),
+                             " \u2192 Transition goal: ", scenario_label(core_target)),
                       class = "opacity-85")
           ),
           column(4, class = "text-right",
@@ -143,11 +143,7 @@ setup_sensitivity <- function(input, output, session, rv) {
         ),
         uiOutput("sensitivity_summary_cards"),
         fluidRow(
-          box(width = 6, plotlyOutput("plot_sensitivity_pd", height = "400px")),
-          box(width = 6, plotlyOutput("plot_sensitivity_el", height = "400px"))
-        ),
-        fluidRow(
-          box(width = 12, plotlyOutput("plot_sensitivity_npv", height = "380px"))
+          box(width = 12, plotlyOutput("plot_sensitivity_pd", height = "400px"))
         ),
         fluidRow(
           box(width = 12, title = "Scenario Comparison", collapsible = TRUE,
@@ -174,7 +170,7 @@ setup_sensitivity <- function(input, output, session, rv) {
 
   # ---- Trajectory Plot ----
   output$plot_trajectories <- renderPlotly({
-    req(rv$results, rv$scenarios)
+    req(rv$results, rv$scenarios, rv$results_by_year)
     core_target <- rv$results$target_scenario[1]
     core_baseline <- rv$results$baseline_scenario[1]
     selected_geo <- input$scenario_geography %||% "Global"
@@ -233,7 +229,7 @@ setup_sensitivity <- function(input, output, session, rv) {
     )) +
       geom_line(linewidth = 0.8) +
       geom_point(size = 1.2, alpha = 0.5) +
-      scale_color_manual(values = c("Baseline" = "gray50", "Target" = TRISK_HEX_RED),
+      scale_color_manual(values = c("Baseline" = "#888888", "Target" = TRISK_HEX_RED),
                         name = "Scenario") +
       scale_linetype_manual(values = c("Baseline" = "dashed", "Target" = "solid"),
                            name = "Scenario")
@@ -241,7 +237,7 @@ setup_sensitivity <- function(input, output, session, rv) {
     # Add shock year markers
     for (yr in shock_years) {
       p <- p + geom_vline(xintercept = yr, linetype = "dotted",
-                          color = "#2E86C1", linewidth = 0.5, alpha = 0.6)
+                          color = "#4A7FA5", linewidth = 0.5, alpha = 0.6)
     }
 
     if (level == "sector") {
@@ -396,9 +392,10 @@ setup_sensitivity <- function(input, output, session, rv) {
           dplyr::summarise(
             scenario_label_text = scenario_label(.data$sensitivity_scenario[1]),
             category = scenario_category(.data$sensitivity_scenario[1]),
-            policy_type = pathway_to_policy_type(
-              parse_scenario_code(.data$sensitivity_scenario[1])$pathway %||% ""
-            ),
+            policy_type = {
+              parsed <- parse_scenario_code(.data$sensitivity_scenario[1])
+              if (!is.null(parsed)) pathway_to_policy_type(parsed$pathway) else "Other"
+            },
             avg_pd_change = if (has_exposure)
               weighted.mean(.data$pd_change_bps, .data$exposure_value_usd, na.rm = TRUE)
             else mean(.data$pd_change_bps, na.rm = TRUE),
@@ -456,7 +453,7 @@ setup_sensitivity <- function(input, output, session, rv) {
 
     p <- ggplot(ss, aes(x = policy_type, y = avg_pd_change))
     if (use_violin) {
-      p <- p + geom_violin(fill = "#C5E1A5", color = TRISK_HEX_GREEN, alpha = 0.3,
+      p <- p + geom_violin(fill = "#B8D9C5", color = TRISK_HEX_GREEN, alpha = 0.3,
                             linewidth = 0.5, scale = "width")
     }
     p <- p + geom_jitter(aes(
@@ -494,6 +491,8 @@ setup_sensitivity <- function(input, output, session, rv) {
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
+  # ---- REMOVED: EL + NPV violins — PD violin is hero chart; EL/NPV in table ----
+  if (FALSE) {
   # ---- Violin Plot: Expected Loss ----
   output$plot_sensitivity_el <- renderPlotly({
     req(rv$sensitivity_summary)
@@ -504,7 +503,7 @@ setup_sensitivity <- function(input, output, session, rv) {
     use_violin_el <- min(table(ss$policy_type)) >= 3
     p <- ggplot(ss, aes(x = policy_type, y = total_el_change))
     if (use_violin_el) {
-      p <- p + geom_violin(fill = "#B3D4FC", color = "#2E86C1", alpha = 0.3,
+      p <- p + geom_violin(fill = "#C5D9E8", color = "#4A7FA5", alpha = 0.3,
                             linewidth = 0.5, scale = "width")
     }
     p <- p + geom_jitter(aes(
@@ -556,7 +555,7 @@ setup_sensitivity <- function(input, output, session, rv) {
     use_violin_npv <- min(table(ss$policy_type)) >= 3
     p <- ggplot(ss, aes(x = policy_type, y = avg_npv_change))
     if (use_violin_npv) {
-      p <- p + geom_violin(fill = "#F8D7DA", color = TRISK_HEX_RED, alpha = 0.3,
+      p <- p + geom_violin(fill = "#F5E0E1", color = TRISK_HEX_RED, alpha = 0.3,
                             linewidth = 0.5, scale = "width")
     }
     p <- p + geom_jitter(aes(
@@ -594,6 +593,7 @@ setup_sensitivity <- function(input, output, session, rv) {
              modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
+  }
 
   # ---- Comparison Table ----
   output$sensitivity_comparison_table <- DT::renderDT({

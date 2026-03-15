@@ -269,7 +269,7 @@ setup_results_summary <- function(input, output, session, rv) {
     if (has_pd && "PD_Change" %in% names(display_df)) {
       brks_pd <- c(-Inf, -0.05, -0.02, -0.01, -0.005, -0.001, 0.001, 0.005, 0.01, 0.02, 0.05, Inf)
       clrs_pd <- c("#2D6A2E", "#3D8B3E", "#5DAA5E", "#7DC07E", "#A0D8A0",
-                   "#7AADCA",
+                   "#BAB6B5",
                    "#E0A0A0", "#D48080", "#C45555", "#A83535", "#8B2020")
       dt <- dt %>%
         formatStyle("PD_Change",
@@ -280,7 +280,7 @@ setup_results_summary <- function(input, output, session, rv) {
     if (has_pd && "PD_Change_Pct" %in% names(display_df)) {
       brks_pct <- c(-Inf, -50, -20, -10, -5, -1, 1, 5, 10, 20, 50, Inf)
       clrs_pct <- c("#2D6A2E", "#3D8B3E", "#5DAA5E", "#7DC07E", "#A0D8A0",
-                    "#7AADCA",
+                    "#BAB6B5",
                     "#E0A0A0", "#D48080", "#C45555", "#A83535", "#8B2020")
       dt <- dt %>%
         formatStyle("PD_Change_Pct",
@@ -297,7 +297,7 @@ setup_results_summary <- function(input, output, session, rv) {
         brks_el <- c(-Inf, -el_max*0.5, -el_max*0.2, -el_max*0.1, -el_max*0.01,
                      el_max*0.01, el_max*0.1, el_max*0.2, el_max*0.5, Inf)
         clrs_el <- c("#8B2020", "#A83535", "#C45555", "#D48080",
-                     "#7AADCA",
+                     "#BAB6B5",
                      "#7DC07E", "#5DAA5E", "#3D8B3E", "#2D6A2E")
         dt <- dt %>%
           formatStyle("EL_Change",
@@ -309,7 +309,7 @@ setup_results_summary <- function(input, output, session, rv) {
     if (has_el && "EL_Change_Pct" %in% names(display_df)) {
       brks_el_pct <- c(-Inf, -50, -20, -10, -5, -1, 1, 5, 10, 20, 50, Inf)
       clrs_el_pct <- c("#8B2020", "#A83535", "#C45555", "#D48080", "#E0A0A0",
-                       "#7AADCA",
+                       "#BAB6B5",
                        "#A0D8A0", "#7DC07E", "#5DAA5E", "#3D8B3E", "#2D6A2E")
       dt <- dt %>%
         formatStyle("EL_Change_Pct",

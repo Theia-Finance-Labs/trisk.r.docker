@@ -572,7 +572,7 @@ setup_results_attribution <- function(input, output, session, rv) {
         "PD Change (pp)",
         backgroundColor = styleInterval(
           c(-0.01, 0, 0.01, 0.05),
-          c("#c8e6c9", "#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")
+          c("#BAB6B5", "#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")
         ),
         fontWeight = "bold"
       ) %>%
@@ -580,7 +580,7 @@ setup_results_attribution <- function(input, output, session, rv) {
         "Contribution (pp)",
         backgroundColor = styleInterval(
           c(-0.005, 0, 0.005, 0.02),
-          c("#c8e6c9", "#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")
+          c("#BAB6B5", "#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")
         ),
         fontWeight = "bold"
       )

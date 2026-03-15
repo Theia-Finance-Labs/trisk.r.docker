@@ -884,7 +884,7 @@ server <- function(input, output, session) {
           column(6,
             selectizeInput(
               inputId  = bl_id,
-              label    = "Baseline",
+              label    = "Baseline (Business-as-Usual)",
               choices  = baseline_choices,
               selected = bl_selected,
               multiple = FALSE,
@@ -894,7 +894,7 @@ server <- function(input, output, session) {
           column(6,
             selectizeInput(
               inputId  = tgt_id,
-              label    = "Target (Shock)",
+              label    = "Target (Transition Goal)",
               choices  = target_choices,
               selected = tgt_selected,
               multiple = FALSE,
@@ -911,6 +911,15 @@ server <- function(input, output, session) {
             icon("info-circle"),
             " Default scenario not found in loaded data. Please select manually."
           )
+        },
+
+        # Help text explaining baseline vs target vs shock (core row only)
+        if (key == "core") {
+          tags$p(class = "fs-11 fg-secondary mt-4",
+            icon("info-circle"),
+            " The ", tags$b("baseline"), " represents the business-as-usual pathway (e.g., Current Policies). ",
+            "The ", tags$b("target"), " is the climate goal (e.g., Net Zero 2050). ",
+            "The ", tags$b("shock scenario"), " is computed by the model: at the shock year, companies are forced from baseline to target.")
         }
       )
     })
@@ -2244,7 +2253,7 @@ server <- function(input, output, session) {
     if (has_pd && "PD_Change" %in% names(display_df)) {
       brks_pd <- c(-Inf, -0.05, -0.02, -0.01, -0.005, -0.001, 0.001, 0.005, 0.01, 0.02, 0.05, Inf)
       clrs_pd <- c("#2D6A2E", "#3D8B3E", "#5DAA5E", "#7DC07E", "#A0D8A0",
-                   "#7AADCA",
+                   "#BAB6B5",
                    "#E0A0A0", "#D48080", "#C45555", "#A83535", "#8B2020")
       dt <- dt %>%
         formatStyle("PD_Change",
@@ -2255,7 +2264,7 @@ server <- function(input, output, session) {
     if (has_pd && "PD_Change_Pct" %in% names(display_df)) {
       brks_pct <- c(-Inf, -50, -20, -10, -5, -1, 1, 5, 10, 20, 50, Inf)
       clrs_pct <- c("#2D6A2E", "#3D8B3E", "#5DAA5E", "#7DC07E", "#A0D8A0",
-                    "#7AADCA",
+                    "#BAB6B5",
                     "#E0A0A0", "#D48080", "#C45555", "#A83535", "#8B2020")
       dt <- dt %>%
         formatStyle("PD_Change_Pct",
@@ -2272,7 +2281,7 @@ server <- function(input, output, session) {
         brks_el <- c(-Inf, -el_max*0.5, -el_max*0.2, -el_max*0.1, -el_max*0.01,
                      el_max*0.01, el_max*0.1, el_max*0.2, el_max*0.5, Inf)
         clrs_el <- c("#8B2020", "#A83535", "#C45555", "#D48080",
-                     "#7AADCA",
+                     "#BAB6B5",
                      "#7DC07E", "#5DAA5E", "#3D8B3E", "#2D6A2E")
         dt <- dt %>%
           formatStyle("EL_Change",
@@ -2284,7 +2293,7 @@ server <- function(input, output, session) {
     if (has_el && "EL_Change_Pct" %in% names(display_df)) {
       brks_el_pct <- c(-Inf, -50, -20, -10, -5, -1, 1, 5, 10, 20, 50, Inf)
       clrs_el_pct <- c("#8B2020", "#A83535", "#C45555", "#D48080", "#E0A0A0",
-                       "#7AADCA",
+                       "#BAB6B5",
                        "#A0D8A0", "#7DC07E", "#5DAA5E", "#3D8B3E", "#2D6A2E")
       dt <- dt %>%
         formatStyle("EL_Change_Pct",
@@ -2528,6 +2537,8 @@ server <- function(input, output, session) {
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
+  # ---- REMOVED: plot_sector_pd — redundant with summary table ----
+  if (FALSE) {
   output$plot_sector_pd <- renderPlotly({
     req(rv$results)
     df <- rv$results
@@ -2563,6 +2574,7 @@ server <- function(input, output, session) {
              modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
+  }
 
   # ============================================
   # Combined multi-year data (used by PD analysis & horizon plots)
@@ -2652,6 +2664,8 @@ server <- function(input, output, session) {
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
+  # ---- REMOVED: plot_pd_distribution — too sparse for meaningful distribution ----
+  if (FALSE) {
   # Plot 2: PD Distribution — clean density curve with labeled averages
   output$plot_pd_distribution <- renderPlotly({
     req(rv$results_by_year)
@@ -2680,7 +2694,7 @@ server <- function(input, output, session) {
     # Build clean density plot
     p <- ggplot(df, aes(x = pd_change_pct)) +
       # Density curve — light green
-      geom_density(fill = "#C5E1A5", color = TRISK_HEX_GREEN, alpha = 0.3, linewidth = 0.5) +
+      geom_density(fill = "#B8D9C5", color = TRISK_HEX_GREEN, alpha = 0.3, linewidth = 0.5) +
       # Overall average — dashed black
       geom_vline(xintercept = overall_mean, linetype = "dashed",
                  color = "black", linewidth = 0.7, alpha = 0.5) +
@@ -2715,8 +2729,10 @@ server <- function(input, output, session) {
              modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
+  }
 
-  # Plot 3: PD Change (%) vs Exposure — risk concentration scatter
+  # ---- REMOVED: PD vs Exposure scatter — redundant with concentration scatter ----
+  if (FALSE) { # START REMOVED PD SCATTER BLOCK
   output$plot_pd_vs_exposure <- renderPlotly({
     req(rv$results_by_year)
     df <- all_years_data()
@@ -2804,6 +2820,8 @@ server <- function(input, output, session) {
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
+  } # END REMOVED PD SCATTER BLOCK
+
   # ============================================
   # HORIZON ANALYSIS (Multi-Year Time-Series)
   # ============================================
@@ -2850,6 +2868,7 @@ server <- function(input, output, session) {
           )
         )
       ),
+      tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Shows how risk evolves across different shock years. A later shock year means companies have longer to accumulate misalignment, amplifying the transition impact."),
 
       # Row 1: Portfolio-level time-series line charts
       fluidRow(
@@ -2868,28 +2887,13 @@ server <- function(input, output, session) {
             plotlyOutput("horizon_sector_facet", height = "400px"))
       ),
 
-      # Row 3: Company sparklines + Risk migration matrix
+      # Row 3: PD Term Structure
       fluidRow(
-        box(width = 7, title = "Company Risk Trajectories", status = "info", solidHeader = FALSE,
-            collapsible = TRUE,
-            plotlyOutput("horizon_company_trajectories", height = "400px")),
-        box(width = 5, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
+        box(width = 12, title = "PD Term Structure", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
             tags$p(style = "font-size: 12px; color: #666;",
-                   "How companies move between PD risk buckets from earliest to latest horizon."),
-            plotlyOutput("horizon_migration_heatmap", height = "350px"))
-      ),
-
-      # Row 4: Animated chart + Term structure
-      fluidRow(
-        box(width = 7, title = "Animated Portfolio Transition", status = "info", solidHeader = FALSE,
-            collapsible = TRUE,
-            plotlyOutput("horizon_animated", height = "400px")),
-        box(width = 5, title = "PD Term Structure", status = "warning", solidHeader = FALSE,
-            collapsible = TRUE,
-            tags$p(style = "font-size: 12px; color: #666;",
-                   "PD curve across shock years — analogous to a credit term structure."),
-            plotlyOutput("horizon_term_structure", height = "350px"))
+                   "PD curve across shock years — analogous to a credit term structure. Shaded band = interquartile range (P25–P75)."),
+            plotlyOutput("horizon_term_structure", height = "380px"))
       ),
 
       # Row 5: Year-over-year table
@@ -2966,7 +2970,12 @@ server <- function(input, output, session) {
     p
   })
 
-  # ---- Horizon: Company trajectories (spaghetti + mean) ----
+  # ---- REMOVED: Company trajectories (spaghetti) — visual noise, sector facet chart is clearer ----
+  # ---- REMOVED: Risk migration matrix — too simplistic without bank rating grades ----
+  # ---- REMOVED: Animated scatter — can't be printed/exported for ICAAP ----
+  # Original code preserved in git history (commit before this cleanup)
+
+  if (FALSE) { # START REMOVED BLOCK
   output$horizon_company_trajectories <- renderPlotly({
     hd <- horizon_data()
     req(hd)
@@ -3038,7 +3047,7 @@ server <- function(input, output, session) {
 
     plot_ly(x = colnames(mtx_df), y = rownames(mtx_df), z = as.matrix(mtx_df),
             type = "heatmap",
-            colorscale = list(c(0, "#FBF5F2"), c(0.5, "#EF7173"), c(1, "#8B2020")),
+            colorscale = list(c(0, "#F5F0F2"), c(0.5, "#EF7173"), c(1, "#C0393B")),
             hovertemplate = "From: %{y}<br>To: %{x}<br>Count: %{z}<extra></extra>") %>%
       layout(xaxis = list(title = paste0("Risk Bucket (", years[length(years)], ")"), tickangle = 0),
              yaxis = list(title = paste0("Risk Bucket (", years[1], ")"), autorange = "reversed"),
@@ -3080,6 +3089,7 @@ server <- function(input, output, session) {
       animation_opts(frame = 800, transition = 400, redraw = FALSE) %>%
       animation_slider(currentvalue = list(prefix = "Shock Year: "))
   })
+  } # END REMOVED BLOCK
 
   # ---- Horizon: PD Term Structure ----
   output$horizon_term_structure <- renderPlotly({
@@ -3384,7 +3394,7 @@ server <- function(input, output, session) {
       columnDefs = list(list(className = "dt-center", targets = "_all"))
     )) %>%
       formatStyle("Avg PD (%)", backgroundColor = styleInterval(
-        c(0.5, 2, 5), c("#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")))
+        c(0.5, 2, 5), c("#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")))
   })
 
   # ---- Sensitivity Tornado Chart ----
@@ -3470,7 +3480,7 @@ server <- function(input, output, session) {
     dim_labels <- c("Avg PD", "NPV Impact", "EL Impact", "Max PD")
 
     p <- plot_ly(type = "scatterpolar", fill = "toself")
-    colors <- c(BRAND_CORAL, STATUS_BLUE, STATUS_GREEN, "#9C27B0", "#FF9800", "#795548")
+    colors <- c(BRAND_CORAL, STATUS_BLUE, STATUS_GREEN, "#8B6914", "#888888", "#C0393B")
 
     for (i in seq_len(nrow(radar_df))) {
       vals <- as.numeric(radar_df[i, dims])
@@ -3533,7 +3543,7 @@ server <- function(input, output, session) {
 
     plot_ly(x = scenarios, y = companies, z = z_matrix,
             type = "heatmap",
-            colorscale = list(c(0, "#e8f5e9"), c(0.3, "#fff9c4"), c(0.6, "#ffccbc"), c(1, "#c62828")),
+            colorscale = list(c(0, "#F5F0F2"), c(0.3, "#EF7173"), c(0.6, "#E84B4D"), c(1, "#C0393B")),
             colorbar = list(title = "PD Shock (%)"),
             hoverinfo = "text",
             text = text_matrix) %>%
@@ -3606,8 +3616,7 @@ server <- function(input, output, session) {
 
     # Individual scenario traces (thin, semi-transparent)
     scen_labels <- unique(sps$scenario_label)
-    colors_scen <- c("#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#795548",
-                     "#607D8B", "#E91E63", "#00BCD4", "#8BC34A", "#FFC107")
+    colors_scen <- SCENARIO_COLORS
     for (i in seq_along(scen_labels)) {
       scen_data <- sps %>% filter(scenario_label == scen_labels[i])
       col <- colors_scen[((i - 1) %% length(colors_scen)) + 1]
@@ -3746,7 +3755,7 @@ server <- function(input, output, session) {
       columnDefs = list(list(className = "dt-center", targets = "_all"))
     )) %>%
       formatStyle("PD P90 (%)", backgroundColor = styleInterval(
-        c(1, 3, 5), c("#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")))
+        c(1, 3, 5), c("#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")))
   })
 
   # ---- Export scenario comparison data ----
@@ -3903,6 +3912,7 @@ server <- function(input, output, session) {
           )
         )
       ),
+      tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Decomposes the portfolio PD change into sector and company contributions. The waterfall shows how each sector moves the portfolio from baseline PD to shocked PD, exposure-weighted."),
 
       # Row 1: Waterfall chart (top-down PD decomposition)
       fluidRow(
@@ -3917,49 +3927,19 @@ server <- function(input, output, session) {
         )
       ),
 
-      # Row 2: Company movers + Sector×Driver heatmap
+      # Row 2: Company movers (full width — marginal contribution treemap removed)
       fluidRow(
-        column(6,
+        column(12,
           div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("sort-amount-down"), " Top Risk Movers (Companies)",
                style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Companies with the largest marginal contribution to portfolio PD change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
+            tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Companies with the largest exposure-weighted PD change \u2014 the names driving your portfolio's climate transition risk."),
             plotlyOutput("attr_company_movers", height = "380px")
-          )
-        ),
-        column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("chart-pie"), " Marginal Contribution to Portfolio Risk",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Each company's share of the total portfolio PD change (absolute).",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("attr_marginal_contribution", height = "380px")
           )
         )
       ),
 
-      # Row 3: Sector×Technology heatmap + EL waterfall
-      fluidRow(
-        column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("th"), " Sector \u00D7 Technology Attribution",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("PD contribution by sector and technology combination.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("attr_sector_tech_heatmap", height = "380px")
-          )
-        ),
-        column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("money-bill-wave"), " Expected Loss Attribution by Sector",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Change in expected loss (EL) decomposed by sector.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("attr_el_waterfall", height = "380px")
-          )
-        )
-      ),
+      # Row 3: (Sector×Tech heatmap + EL waterfall removed — PD waterfall + movers are clearer)
 
       # Row 4: Attribution summary table
       fluidRow(
@@ -4078,6 +4058,8 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE)
   })
 
+  # ---- REMOVED: attr_marginal_contribution — redundant with company movers ----
+  if (FALSE) {
   # ---- Marginal Contribution (treemap-style bar chart) ----
   output$attr_marginal_contribution <- renderPlotly({
     ad <- attribution_data()
@@ -4160,8 +4142,10 @@ server <- function(input, output, session) {
              modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
+  }
 
-  # ---- Sector × Technology Attribution Heatmap ----
+  # ---- REMOVED: Sector × Tech heatmap + EL waterfall — redundant with concentration heatmap ----
+  if (FALSE) { # START REMOVED ATTRIBUTION BLOCK
   output$attr_sector_tech_heatmap <- renderPlotly({
     ad <- attribution_data()
     req(ad, ad$has_tech, ad$tech)
@@ -4274,6 +4258,8 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE)
   })
 
+  } # END REMOVED ATTRIBUTION BLOCK
+
   # ---- Detailed Attribution Table ----
   output$attr_detail_table <- renderDT({
     ad <- attribution_data()
@@ -4320,7 +4306,7 @@ server <- function(input, output, session) {
         "PD Change (pp)",
         backgroundColor = styleInterval(
           c(-0.01, 0, 0.01, 0.05),
-          c("#c8e6c9", "#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")
+          c("#BAB6B5", "#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")
         ),
         fontWeight = "bold"
       ) %>%
@@ -4328,7 +4314,7 @@ server <- function(input, output, session) {
         "Contribution (pp)",
         backgroundColor = styleInterval(
           c(-0.005, 0, 0.005, 0.02),
-          c("#c8e6c9", "#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")
+          c("#BAB6B5", "#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")
         ),
         fontWeight = "bold"
       )
@@ -4522,7 +4508,7 @@ server <- function(input, output, session) {
     # HHI traffic light
     hhi_color <- if (cd$hhi < 1500) STATUS_GREEN else if (cd$hhi < 2500) "#D4A017" else BRAND_CORAL
     hhi_label <- if (cd$hhi < 1500) "Low" else if (cd$hhi < 2500) "Moderate" else "High"
-    gini_color <- if (cd$gini < 0.4) STATUS_GREEN else if (cd$gini < 0.6) "#D4A017" else BRAND_CORAL
+    # gini_color removed (Gini card replaced with CR10 card)
     cr5_color <- if (cd$cr5 < 50) STATUS_GREEN else if (cd$cr5 < 75) "#D4A017" else BRAND_CORAL
 
     tagList(
@@ -4543,6 +4529,7 @@ server <- function(input, output, session) {
           )
         )
       ),
+      tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Measures how concentrated your climate transition risk is across names and sectors. High concentration means a few exposures dominate your portfolio's risk profile."),
 
       # Row 1: Concentration Scorecard
       fluidRow(
@@ -4563,12 +4550,11 @@ server <- function(input, output, session) {
           )
         ),
         column(3,
-          div(style = paste0("background: white; border-left: 4px solid ", gini_color,
+          div(style = paste0("background: white; border-left: 4px solid ", cr5_color,
                             "; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;"),
-            tags$small("Gini Coefficient", style = "color: #666; display: block; margin-bottom: 4px;"),
-            h3(round(cd$gini, 3), style = paste0("margin: 0; color: ", gini_color, "; font-weight: 700;")),
-            tags$span(if (cd$gini < 0.4) "Even" else if (cd$gini < 0.6) "Moderate" else "Concentrated",
-                     style = paste0("font-size: 12px; font-weight: 600; color: ", gini_color, ";"))
+            tags$small("Top-10 Concentration (CR10)", style = "color: #666; display: block; margin-bottom: 4px;"),
+            h3(paste0(round(cd$cr10, 1), "%"), style = paste0("margin: 0; color: ", cr5_color, "; font-weight: 700;")),
+            tags$small(paste0("# Sectors: ", nrow(cd$sector)), style = "color: #888;")
           )
         ),
         column(3,
@@ -4622,32 +4608,11 @@ server <- function(input, output, session) {
         )
       ),
 
-      # Row 3: Treemap + Lorenz curve
-      fluidRow(
-        column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("project-diagram"), " Exposure Treemap (Sector \u2192 Company)",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Size = exposure weight, color = PD change magnitude.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("conc_treemap", height = "400px")
-          )
-        ),
-        column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("chart-area"), " Lorenz Curve (Exposure Concentration)",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small(paste0("Gini = ", round(cd$gini, 3),
-                             " | Perfect equality = 0, maximum concentration = 1."),
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("conc_lorenz", height = "400px")
-          )
-        )
-      ),
+      # Row 3: (Treemap + Lorenz removed — heatmap + donut are more analytical)
 
-      # Row 4: Risk-return scatter + Geographic choropleth
+      # Row 4: Risk-return scatter (full width)
       fluidRow(
-        column(6,
+        column(12,
           div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("bullseye"), " Risk-Return Scatter",
                style = "font-weight: 600; margin-top: 0;"),
@@ -4655,30 +4620,10 @@ server <- function(input, output, session) {
                       style = "color: #666; display: block; margin-bottom: 10px;"),
             plotlyOutput("conc_scatter", height = "400px")
           )
-        ),
-        column(6,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("globe"), " Geographic Concentration",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Country-level exposure and PD change.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("conc_geo_map", height = "400px")
-          )
         )
       ),
 
-      # Row 5: Dual-axis baseline vs shocked concentration
-      fluidRow(
-        column(12,
-          div(class = "card-surface", style = "margin-bottom: 16px;",
-            h5(icon("columns"), " Concentration Shift: Baseline vs Shocked",
-               style = "font-weight: 600; margin-top: 0;"),
-            tags$small("Side-by-side sector concentration before and after the transition shock.",
-                      style = "color: #666; display: block; margin-bottom: 10px;"),
-            plotlyOutput("conc_dual_bar", height = "380px")
-          )
-        )
-      )
+      # Row 5: (Dual bar removed — redundant with summary + waterfall)
     )
   })
 
@@ -4890,6 +4835,8 @@ server <- function(input, output, session) {
   })
 
   # ---- Exposure Treemap (Sector -> Company) ----
+  # ---- REMOVED: Treemap, Lorenz, Geo Map — replaced by heatmap + donut + scatter ----
+  if (FALSE) { # START REMOVED CONCENTRATION BLOCK
   output$conc_treemap <- renderPlotly({
     cd <- concentration_data()
     req(cd)
@@ -5217,6 +5164,10 @@ server <- function(input, output, session) {
     }
   })
 
+  } # END REMOVED CONCENTRATION BLOCK
+
+  # ---- REMOVED: conc_dual_bar — redundant with summary + waterfall ----
+  if (FALSE) {
   # ---- Dual Bar: Baseline vs Shocked concentration ----
   output$conc_dual_bar <- renderPlotly({
     cd <- concentration_data()
@@ -5262,6 +5213,7 @@ server <- function(input, output, session) {
       ) %>%
       config(displayModeBar = FALSE)
   })
+  }
 
   # ---- Export Concentration CSV ----
   output$download_concentration_csv <- downloadHandler(
@@ -5310,9 +5262,11 @@ server <- function(input, output, session) {
       "zscore" = tagList(
         tags$b("Z-Score Integration (Basel IRB)"),
         tags$p(HTML("TRISK-adjusted PD = &Phi;(&Phi;<sup>-1</sup>(Internal_PD) + &Phi;<sup>-1</sup>(PD_shock) - &Phi;<sup>-1</sup>(PD_baseline))")),
-        tags$p("Uses the Vasicek one-factor model approach. Combines PDs in the normal quantile
-               (z-score) space, preserving the non-linear relationship at distribution tails.
-               Recommended for Basel IRB-aligned institutions.")
+        tags$p("Combines PDs in the normal quantile (z-score) space using the Vasicek one-factor
+               model. This preserves non-linear tail behavior \u2014 critical for regulatory capital,
+               where the difference between 2% and 5% PD is much larger than 0.1% vs 0.4%."),
+        tags$p(class = "fs-12 fg-secondary", tags$em("Recommended for Basel III/IV IRB banks. Consistent with the
+               single-factor Gaussian copula framework underpinning regulatory capital formulas (CRR Art. 153)."))
       )
     )
     desc
@@ -5554,7 +5508,7 @@ server <- function(input, output, session) {
 
     brks_pd <- c(-pd_adj_max, -pd_adj_max * 0.5, -pd_adj_max * 0.1,
                   pd_adj_max * 0.1, pd_adj_max * 0.5, pd_adj_max)
-    clrs_pd <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#7AADCA",
+    clrs_pd <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#BAB6B5",
                  "#C45555", "#8B2020", "#5C0A0A")
 
     num_cols <- which(sapply(display_df, is.numeric)) - 1
@@ -5640,6 +5594,173 @@ server <- function(input, output, session) {
       ),
       hr()
     )
+  })
+
+  # Sector/Technology PD Breakdown (collapsible summary table)
+  output$pd_sector_breakdown <- renderUI({
+    req(rv$pd_integration_result)
+    df <- rv$pd_integration_result
+
+    grp_cols <- intersect(c("sector", "technology"), names(df))
+    if (length(grp_cols) == 0) return(NULL)
+
+    grp_col <- grp_cols[1]
+    sectors <- unique(df[[grp_col]])
+
+    breakdown_rows <- lapply(sectors, function(s) {
+      sub_df <- df[df[[grp_col]] == s, , drop = FALSE]
+      n <- nrow(sub_df)
+      avg_internal <- mean(sub_df$Internal_PD, na.rm = TRUE)
+      avg_adjusted <- mean(sub_df$TRISK_Adjusted_PD, na.rm = TRUE)
+      avg_pd_adj <- mean(sub_df$PD_Adjustment, na.rm = TRUE)
+
+      dir_icon <- if (avg_pd_adj > 1e-6) {
+        tags$span(class = "text-danger", icon("arrow-up"), " ")
+      } else if (avg_pd_adj < -1e-6) {
+        tags$span(class = "text-success", icon("arrow-down"), " ")
+      } else {
+        tags$span(class = "fg-secondary", icon("minus"), " ")
+      }
+
+      tags$tr(
+        tags$td(class = "td-pad fw-600", s),
+        tags$td(class = "td-right", n),
+        tags$td(class = "td-right", smart_round(avg_internal)),
+        tags$td(class = "td-right", smart_round(avg_adjusted)),
+        tags$td(class = "td-right", dir_icon, smart_round(avg_pd_adj)),
+        tags$td(class = "td-right",
+                paste0(smart_round(avg_pd_adj * 100), " pp"))
+      )
+    })
+
+    tagList(
+      tags$div(
+        class = "mb-15",
+        tags$details(
+          tags$summary(
+            class = "breakdown-summary",
+            icon("layer-group"), " PD Breakdown by Sector"
+          ),
+          tags$div(
+            class = "breakdown-body",
+            tags$table(
+              class = "table table-striped table-hover breakdown-table",
+              tags$thead(
+                tags$tr(
+                  class = "breakdown-thead",
+                  tags$th(class = "th-pad", "Sector"),
+                  tags$th(class = "th-right", "Count"),
+                  tags$th(class = "th-right", "Avg Internal PD"),
+                  tags$th(class = "th-right", "Avg Adjusted PD"),
+                  tags$th(class = "th-right", "Avg PD Adj."),
+                  tags$th(class = "th-right", "Avg PD Adj. (pp)")
+                )
+              ),
+              tags$tbody(breakdown_rows)
+            )
+          )
+        )
+      )
+    )
+  })
+
+  # PD Adjustment Bar Chart (plotly)
+  output$pd_adjustment_chart <- renderPlotly({
+    req(rv$pd_integration_result)
+    df <- rv$pd_integration_result
+
+    has_sector <- "sector" %in% names(df)
+    has_company <- "company_name" %in% names(df)
+
+    if (has_sector) {
+      chart_df <- df %>%
+        group_by(sector) %>%
+        summarise(
+          PD_Adjustment = mean(PD_Adjustment, na.rm = TRUE),
+          n = n(),
+          .groups = "drop"
+        ) %>%
+        arrange(PD_Adjustment)
+
+      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0, BRAND_CORAL, STATUS_GREEN)
+      chart_df$hover_text <- paste0(
+        "<b>", htmltools::htmlEscape(as.character(chart_df$sector)), "</b><br>",
+        "Avg PD Adjustment: ", sapply(chart_df$PD_Adjustment, smart_round), "<br>",
+        "Counterparties: ", chart_df$n
+      )
+
+      p <- plot_ly(chart_df,
+                   y = ~reorder(sector, PD_Adjustment),
+                   x = ~PD_Adjustment,
+                   type = "bar",
+                   orientation = "h",
+                   marker = list(color = ~color),
+                   text = ~hover_text,
+                   hoverinfo = "text") %>%
+        layout(
+          title = list(text = "Avg PD Adjustment by Sector", font = list(size = 14)),
+          xaxis = list(title = "PD Adjustment", zeroline = TRUE,
+                       zerolinecolor = "#999", zerolinewidth = 1.5),
+          yaxis = list(title = ""),
+          plot_bgcolor = "#FEFEFE",
+          paper_bgcolor = "#FEFEFE",
+          margin = list(l = 120, r = 20, t = 40, b = 40),
+          showlegend = FALSE
+        )
+    } else if (has_company) {
+      chart_df <- df %>%
+        arrange(desc(abs(PD_Adjustment))) %>%
+        head(15) %>%
+        arrange(PD_Adjustment)
+
+      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0, BRAND_CORAL, STATUS_GREEN)
+      chart_df$hover_text <- paste0(
+        "<b>", htmltools::htmlEscape(as.character(chart_df$company_name)), "</b><br>",
+        "PD Adjustment: ", sapply(chart_df$PD_Adjustment, smart_round)
+      )
+
+      p <- plot_ly(chart_df,
+                   y = ~reorder(company_name, PD_Adjustment),
+                   x = ~PD_Adjustment,
+                   type = "bar",
+                   orientation = "h",
+                   marker = list(color = ~color),
+                   text = ~hover_text,
+                   hoverinfo = "text") %>%
+        layout(
+          title = list(text = "Top 15 Counterparties by PD Adjustment", font = list(size = 14)),
+          xaxis = list(title = "PD Adjustment", zeroline = TRUE,
+                       zerolinecolor = "#999", zerolinewidth = 1.5),
+          yaxis = list(title = ""),
+          plot_bgcolor = "#FEFEFE",
+          paper_bgcolor = "#FEFEFE",
+          margin = list(l = 150, r = 20, t = 40, b = 40),
+          showlegend = FALSE
+        )
+    } else {
+      chart_df <- df %>%
+        mutate(label = paste0("Row ", row_number())) %>%
+        arrange(PD_Adjustment)
+
+      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0, BRAND_CORAL, STATUS_GREEN)
+
+      p <- plot_ly(chart_df,
+                   y = ~reorder(label, PD_Adjustment),
+                   x = ~PD_Adjustment,
+                   type = "bar",
+                   orientation = "h",
+                   marker = list(color = ~color)) %>%
+        layout(
+          title = list(text = "PD Adjustment by Counterparty", font = list(size = 14)),
+          xaxis = list(title = "PD Adjustment"),
+          yaxis = list(title = ""),
+          plot_bgcolor = "#FEFEFE",
+          paper_bgcolor = "#FEFEFE",
+          showlegend = FALSE
+        )
+    }
+
+    p
   })
 
   # ============================================
@@ -5876,7 +5997,7 @@ server <- function(input, output, session) {
 
     brks_adj <- c(-el_adj_max, -el_adj_max * 0.5, -el_adj_max * 0.1,
                    el_adj_max * 0.1, el_adj_max * 0.5, el_adj_max)
-    clrs_adj <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#7AADCA",
+    clrs_adj <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#BAB6B5",
                   "#C45555", "#8B2020", "#5C0A0A")
 
     num_cols <- which(sapply(display_df, is.numeric)) - 1

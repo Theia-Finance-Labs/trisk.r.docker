@@ -71,7 +71,7 @@ if (all(c("sector", "crispy_perc_value_change") %in% names(df))) {
                           fill = avg_npv_change < 0)) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    scale_fill_manual(values = c("TRUE" = "#F53D3F", "FALSE" = "#5D9324"), guide = "none") +
+    scale_fill_manual(values = c("TRUE" = "#F53D3F", "FALSE" = "#3D8B5E"), guide = "none") +
     labs(title = "NPV Change by Sector", x = "", y = "Average NPV Change (%)") +
     theme_minimal(base_size = 12) +
     theme(plot.title = element_text(hjust = 0.5, face = "bold"),
@@ -96,7 +96,7 @@ if (all(c("sector", "pd_baseline", "pd_shock") %in% names(df))) {
 
   ggplot(sector_pd, aes(x = sector, y = pd, fill = scenario)) +
     geom_bar(stat = "identity", position = "dodge") +
-    scale_fill_manual(values = c("Baseline" = "#5D9324", "Shock" = "#F53D3F")) +
+    scale_fill_manual(values = c("Baseline" = "#3D8B5E", "Shock" = "#F53D3F")) +
     labs(title = "PD by Sector: Baseline vs Shock", x = "", y = "Avg PD (%)") +
     theme_minimal(base_size = 12) +
     theme(plot.title = element_text(hjust = 0.5, face = "bold"),

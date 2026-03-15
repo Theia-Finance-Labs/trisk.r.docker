@@ -200,7 +200,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
       columnDefs = list(list(className = "dt-center", targets = "_all"))
     )) %>%
       formatStyle("Avg PD (%)", backgroundColor = styleInterval(
-        c(0.5, 2, 5), c("#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")))
+        c(0.5, 2, 5), c("#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")))
   })
 
   # ---- Sensitivity Tornado Chart ----
@@ -305,7 +305,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
     dim_labels <- c("Avg PD", "NPV Impact", "EL Impact", "Max PD")
 
     p <- plot_ly(type = "scatterpolar", fill = "toself")
-    colors <- c(BRAND_CORAL, STATUS_BLUE, STATUS_GREEN, "#9C27B0", "#FF9800", "#795548")
+    colors <- c(BRAND_CORAL, STATUS_BLUE, STATUS_GREEN, "#8B6914", "#888888", "#C0393B")
 
     for (i in seq_len(nrow(radar_df))) {
       vals <- as.numeric(radar_df[i, dims])
@@ -364,7 +364,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
 
     plot_ly(x = scenarios, y = companies, z = z_matrix,
             type = "heatmap",
-            colorscale = list(c(0, "#e8f5e9"), c(0.3, "#fff9c4"), c(0.6, "#ffccbc"), c(1, "#c62828")),
+            colorscale = list(c(0, "#F5F0F2"), c(0.3, "#EF7173"), c(0.6, "#E84B4D"), c(1, "#C0393B")),
             colorbar = list(title = "PD Shock (%)"),
             hoverinfo = "text",
             text = text_matrix) %>%
@@ -445,8 +445,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
 
     # Individual scenario traces (thin, semi-transparent)
     scen_labels <- unique(sps$scenario_label)
-    colors_scen <- c("#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#795548",
-                     "#607D8B", "#E91E63", "#00BCD4", "#8BC34A", "#FFC107")
+    colors_scen <- SCENARIO_COLORS
     for (i in seq_along(scen_labels)) {
       scen_data <- sps %>% filter(scenario_label == scen_labels[i])
       col <- colors_scen[((i - 1) %% length(colors_scen)) + 1]
@@ -616,7 +615,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
       columnDefs = list(list(className = "dt-center", targets = "_all"))
     )) %>%
       formatStyle("PD P90 (%)", backgroundColor = styleInterval(
-        c(1, 3, 5), c("#e8f5e9", "#fff9c4", "#ffccbc", "#ef9a9a")))
+        c(1, 3, 5), c("#F5F0F2", "#EF7173", "#E84B4D", "#C0393B")))
   })
 
   # ---- Export scenario comparison data ----

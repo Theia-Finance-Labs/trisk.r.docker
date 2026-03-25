@@ -24,7 +24,7 @@ setup_sensitivity <- function(input, output, session, rv) {
   # ---- Detect sensitivity groups when main analysis completes ----
   observe({
     req(rv$results, rv$target_scenarios_all)
-    # Use the core target scenario from the main run
+    req("target_scenario" %in% names(rv$results))
     core_target <- rv$results$target_scenario[1]
     req(core_target)
     rv$sensitivity_config <- build_sensitivity_groups(core_target, rv$target_scenarios_all)
@@ -52,7 +52,9 @@ setup_sensitivity <- function(input, output, session, rv) {
     }
 
     config <- rv$sensitivity_config
+    req(rv$results_by_year)
     shock_years <- sort(as.integer(names(rv$results_by_year)))
+    req("target_scenario" %in% names(rv$results), "baseline_scenario" %in% names(rv$results))
     core_target <- rv$results$target_scenario[1]
     core_baseline <- rv$results$baseline_scenario[1]
 

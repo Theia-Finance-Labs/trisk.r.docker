@@ -17,24 +17,17 @@ setup_upload <- function(input, output, session, rv, log_message) {
       rv$financial <- load_mock_data("financial")
       if (!is.null(rv$financial)) log_message(paste("  Financial:", nrow(rv$financial), "rows"))
 
-      # Only load test scenarios if no scenarios are already loaded (e.g. from GCS download)
-      if (is.null(rv$scenarios)) {
-        rv$scenarios <- load_mock_data("scenarios")
-        if (!is.null(rv$scenarios)) log_message(paste("  Scenarios: loaded testdata,", nrow(rv$scenarios), "rows"))
-      } else {
-        log_message(paste("  Scenarios: keeping existing data (", length(unique(rv$scenarios$scenario)), "scenarios)"))
-      }
+      # Always load demo scenarios/carbon so demo data works as a cohesive package
+      rv$scenarios <- load_mock_data("scenarios")
+      if (!is.null(rv$scenarios)) log_message(paste("  Scenarios: loaded testdata,", nrow(rv$scenarios), "rows"))
 
-      # Same for carbon - keep pre-loaded if available
-      if (is.null(rv$carbon)) {
-        rv$carbon <- load_mock_data("carbon")
-        if (!is.null(rv$carbon)) log_message(paste("  Carbon: loaded testdata,", nrow(rv$carbon), "rows"))
-      } else {
-        log_message(paste("  Carbon: keeping existing data (", nrow(rv$carbon), "rows)"))
-      }
+      rv$carbon <- load_mock_data("carbon")
+      if (!is.null(rv$carbon)) log_message(paste("  Carbon: loaded testdata,", nrow(rv$carbon), "rows"))
 
       rv$portfolio <- load_mock_data("portfolio")
       if (!is.null(rv$portfolio)) log_message(paste("  Portfolio:", nrow(rv$portfolio), "rows"))
+
+      audit_log("upload", list(type = "mock_data", datasets_loaded = 5))
 
       loaded <- sum(!sapply(list(rv$assets, rv$financial, rv$scenarios, rv$carbon, rv$portfolio), is.null))
 
@@ -95,7 +88,12 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(paste("Portfolio rejected:", err), type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       rv$portfolio <- df
+      audit_log("upload", list(type = "portfolio", rows = nrow(df)))
       showNotification(paste("Portfolio loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (portfolio upload):", conditionMessage(e)))
@@ -117,7 +115,12 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(paste("Assets rejected:", err), type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       rv$assets <- df
+      audit_log("upload", list(type = "assets", rows = nrow(df)))
       showNotification(paste("Assets loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (assets upload):", conditionMessage(e)))
@@ -139,7 +142,12 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(paste("Financial data rejected:", err), type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       rv$financial <- df
+      audit_log("upload", list(type = "financial", rows = nrow(df)))
       showNotification(paste("Financial data loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (financial upload):", conditionMessage(e)))
@@ -155,13 +163,17 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(file_check, type = "error")
         return()
       }
-      df <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
-      # Minimal schema check: must have 'scenario' column at minimum
+      df <- strip_columns(tibble::as_tibble(data.table::fread(input$scenarios_file$datapath)), "scenarios")
       if (!"scenario" %in% names(df)) {
         showNotification("Scenarios rejected: missing required column 'scenario'", type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       rv$scenarios <- df
+      audit_log("upload", list(type = "scenarios", rows = nrow(df)))
       showNotification(
         paste("Scenarios loaded:", length(unique(df$scenario)), "scenarios"),
         type = "message"

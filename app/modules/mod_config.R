@@ -26,7 +26,11 @@ setup_config <- function(input, output, session, rv) {
       target_scenarios <- all_scenarios
     }
 
-    geographies <- sort(unique(rv$scenarios$scenario_geography))
+    geographies <- if ("scenario_geography" %in% names(rv$scenarios)) {
+      sort(unique(rv$scenarios$scenario_geography))
+    } else {
+      "Global"
+    }
 
     # Determine the primary default baseline (NGFS GCAM 2024 CP preferred)
     ngfs_gcam_cp_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?CP$", baseline_scenarios, value = TRUE)

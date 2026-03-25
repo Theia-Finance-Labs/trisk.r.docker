@@ -1001,7 +1001,7 @@ setup_results_concentration <- function(input, output, session, rv) {
                            "% | CR10=", round(cd$cr10, 1), "% | Gini=", round(cd$gini, 3))),
           stringsAsFactors = FALSE
         )
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(sanitize_export(export_df), file, row.names = FALSE)
       }
     }
   )

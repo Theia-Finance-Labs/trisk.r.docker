@@ -375,9 +375,12 @@ setup_results_horizon <- function(input, output, session, rv) {
         `Shock Year` = yr,
         `Avg PD (%)` = round(mean(df$pd_shock, na.rm = TRUE) * 100, 4),
         `Max PD (%)` = round(max(df$pd_shock, na.rm = TRUE) * 100, 4),
-        `Avg NPV Change (%)` = round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2),
-        `Total EL` = round(sum(df$expected_loss_shock, na.rm = TRUE), 0),
-        `Total EL Change` = round(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE), 0),
+        `Avg NPV Change (%)` = if ("crispy_perc_value_change" %in% names(df))
+          round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2) else NA_real_,
+        `Total EL` = if ("expected_loss_shock" %in% names(df))
+          round(sum(df$expected_loss_shock, na.rm = TRUE), 0) else NA_real_,
+        `Total EL Change` = if (all(c("expected_loss_shock", "expected_loss_baseline") %in% names(df)))
+          round(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE), 0) else NA_real_,
         Companies = nrow(df),
         check.names = FALSE
       )

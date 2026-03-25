@@ -318,17 +318,7 @@ setup_run <- function(input, output, session, rv, log_message) {
         total_runs <- n_scenarios * n_years
         run_count <- 0
 
-        # Helper to extract result df from raw output
-        extract_result_df <- function(raw) {
-          if (is.data.frame(raw)) return(raw)
-          if (is.list(raw)) {
-            if ("portfolio_results_tech_detail" %in% names(raw)) return(raw$portfolio_results_tech_detail)
-            if ("portfolio_results" %in% names(raw)) return(raw$portfolio_results)
-            df_idx <- which(sapply(raw, is.data.frame))
-            if (length(df_idx) > 0) return(raw[[df_idx[1]]])
-          }
-          stop("Could not extract a data.frame from analysis results")
-        }
+        # extract_result_df() is defined in global.R — no local shadow needed
 
         # Store results: scenario -> year -> df
         all_scenario_results <- list()

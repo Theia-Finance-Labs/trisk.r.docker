@@ -598,7 +598,7 @@ setup_results_attribution <- function(input, output, session, rv) {
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(sanitize_export(export_df), file, row.names = FALSE)
       }
     }
   )

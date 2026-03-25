@@ -53,6 +53,10 @@ server <- function(input, output, session) {
   log_message <- function(msg) {
     timestamp <- format(Sys.time(), "[%H:%M:%S]")
     rv$analysis_log <- c(rv$analysis_log, paste(timestamp, msg))
+    # Cap log to prevent unbounded memory growth in long sessions
+    if (length(rv$analysis_log) > 500) {
+      rv$analysis_log <- tail(rv$analysis_log, 500)
+    }
   }
 
   # Session idle timeout handler (JS fires this after 30 min inactivity)
@@ -61,26 +65,9 @@ server <- function(input, output, session) {
     session$close()
   })
 
-  # Session cleanup — null all reactive values on disconnect
+  # Session cleanup — GC on disconnect (rv is freed automatically when session is collected)
   session$onSessionEnded(function() {
-    tryCatch({
-      rv$portfolio <- NULL
-      rv$assets <- NULL
-      rv$financial <- NULL
-      rv$scenarios <- NULL
-      rv$carbon <- NULL
-      rv$results <- NULL
-      rv$results_by_year <- NULL
-      rv$results_by_scenario <- NULL
-      rv$run_history <- list()
-      rv$internal_pd <- NULL
-      rv$internal_el <- NULL
-      rv$pd_integration_result <- NULL
-      rv$el_integration_result <- NULL
-      rv$analysis_log <- character()
-    }, error = function(e) {
-      message(paste("Session cleanup error:", conditionMessage(e)))
-    })
+    gc()
   })
 
   # ============================================
@@ -166,8 +153,12 @@ server <- function(input, output, session) {
         showNotification(file_check, type = "error")
         return()
       }
-      rv$portfolio <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
+      df <- tibble::as_tibble(data.table::fread(input$portfolio_file$datapath))
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
+      rv$portfolio <- strip_columns(df, "portfolio")
       audit_log("upload", list(type = "portfolio", rows = nrow(rv$portfolio)))
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
@@ -184,8 +175,12 @@ server <- function(input, output, session) {
         showNotification(file_check, type = "error")
         return()
       }
-      rv$assets <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
+      df <- tibble::as_tibble(data.table::fread(input$assets_file$datapath))
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
+      rv$assets <- strip_columns(df, "assets")
       audit_log("upload", list(type = "assets", rows = nrow(rv$assets)))
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
@@ -202,8 +197,12 @@ server <- function(input, output, session) {
         showNotification(file_check, type = "error")
         return()
       }
-      rv$financial <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
+      df <- tibble::as_tibble(data.table::fread(input$financial_file$datapath))
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
+      rv$financial <- strip_columns(df, "financial")
       audit_log("upload", list(type = "financial", rows = nrow(rv$financial)))
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
@@ -220,7 +219,12 @@ server <- function(input, output, session) {
         showNotification(file_check, type = "error")
         return()
       }
-      rv$scenarios <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
+      df <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
+      if (nrow(df) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
+      rv$scenarios <- strip_columns(df, "scenarios")
       audit_log("upload", list(type = "scenarios", rows = nrow(rv$scenarios)))
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
@@ -641,8 +645,8 @@ server <- function(input, output, session) {
   # Error report (combined issues from all datasets)
   # ============================================
 
-  # Reactive flag for conditionalPanel
-  output$has_data_issues <- reactive({
+  # Reactive flag for conditionalPanel (must use renderText, not reactive, for output$)
+  output$has_data_issues <- renderText({
     issues_count <- 0
     for (type in c("portfolio", "assets", "financial")) {
       df <- switch(type,
@@ -655,7 +659,7 @@ server <- function(input, output, session) {
         if (!is.null(audit)) issues_count <- issues_count + nrow(audit$issues)
       }
     }
-    issues_count > 0
+    as.character(issues_count > 0)
   })
   outputOptions(output, "has_data_issues", suspendWhenHidden = FALSE)
 
@@ -680,7 +684,7 @@ server <- function(input, output, session) {
           }
         }
       }
-      write.csv(all_issues, file, row.names = FALSE)
+      write.csv(sanitize_export(all_issues), file, row.names = FALSE)
     }
   )
 
@@ -1368,30 +1372,28 @@ server <- function(input, output, session) {
 
         incProgress(0.2, detail = "Preparing data...")
 
-        # ---- ENRICH PORTFOLIO WITH TECHNOLOGY ----
+        # ---- ENRICH PORTFOLIO WITH TECHNOLOGY (local copy, never mutate rv$portfolio) ----
         # trisk.analysis::join_trisk_outputs_to_portfolio() joins results back
         # to the portfolio by (company_id, country_iso2, sector, technology, term).
         # User-uploaded portfolios are often company-level (no technology column).
         # Expand each company to one row per technology from the assets data.
-        if (!"technology" %in% names(rv$portfolio)) {
+        portfolio_for_run <- rv$portfolio
+        if (!"technology" %in% names(portfolio_for_run)) {
           company_techs <- rv$assets %>%
             dplyr::distinct(.data$company_id, .data$sector, .data$technology)
-          portfolio_enriched <- rv$portfolio %>%
-            dplyr::select(-any_of("sector")) %>%        # drop portfolio-level sector to avoid conflict
+          portfolio_for_run <- portfolio_for_run %>%
+            dplyr::select(-any_of("sector")) %>%
             dplyr::inner_join(company_techs, by = "company_id")
           log_message(paste("  Portfolio enriched: added technology column from assets data.",
-                           nrow(rv$portfolio), "->", nrow(portfolio_enriched), "rows"))
-          rv$portfolio <- portfolio_enriched
+                           nrow(rv$portfolio), "->", nrow(portfolio_for_run), "rows"))
         }
 
         # ---- ENRICH PORTFOLIO COMPANY NAMES FROM ASSETS ----
-        # Demo portfolio has company_name = NA; assets has actual names (e.g. "Company 1").
-        # Fill in missing company_names from assets so charts show meaningful labels.
-        if ("company_name" %in% names(rv$portfolio) && all(is.na(rv$portfolio$company_name)) &&
+        if ("company_name" %in% names(portfolio_for_run) && all(is.na(portfolio_for_run$company_name)) &&
             "company_name" %in% names(rv$assets)) {
           asset_names <- rv$assets %>%
             dplyr::distinct(.data$company_id, asset_company_name = .data$company_name)
-          rv$portfolio <- rv$portfolio %>%
+          portfolio_for_run <- portfolio_for_run %>%
             dplyr::left_join(asset_names, by = "company_id") %>%
             dplyr::mutate(company_name = dplyr::coalesce(.data$asset_company_name, .data$company_name)) %>%
             dplyr::select(-"asset_company_name")
@@ -1405,7 +1407,7 @@ server <- function(input, output, session) {
         pairs_with_data <- list()
         for (key in names(scenario_pairs)) {
           pair <- scenario_pairs[[key]]
-          portfolio_subset <- rv$portfolio %>%
+          portfolio_subset <- portfolio_for_run %>%
             dplyr::filter(.data$sector %in% pair$sectors)
           if (nrow(portfolio_subset) > 0) {
             pairs_with_data[[key]] <- pair
@@ -1463,7 +1465,7 @@ server <- function(input, output, session) {
                                 " (", run_count, "/", total_runs, ") ---"))
 
               # Filter portfolio and assets to this pair's sectors
-              portfolio_subset <- rv$portfolio %>%
+              portfolio_subset <- portfolio_for_run %>%
                 dplyr::filter(.data$sector %in% pair$sectors)
               assets_subset <- assets_for_run %>%
                 dplyr::filter(.data$sector %in% pair$sectors)
@@ -1575,9 +1577,6 @@ server <- function(input, output, session) {
         # NOTE: rv$internal_pd and rv$internal_el are intentionally preserved
 
         rv$run_id <- generate_run_id()
-
-        # Clear any previous warnings
-        output$scenario_warnings <- renderUI(NULL)
 
         incProgress(0.9, detail = "Finalizing...")
         log_message(paste("Analysis complete! Run ID:", rv$run_id))
@@ -1731,29 +1730,34 @@ server <- function(input, output, session) {
     )
   })
 
-  # Handle compare button clicks for each history entry
+  # Handle compare button clicks for each history entry (with destroy pattern to prevent accumulation)
+  compare_observers <- reactiveVal(list())
   observe({
-    lapply(seq_along(rv$run_history), function(i) {
+    # Destroy previous observers before creating new ones
+    for (obs in compare_observers()) obs$destroy()
+    new_obs <- lapply(seq_along(rv$run_history), function(i) {
       btn_id <- paste0("compare_run_", i)
       observeEvent(input[[btn_id]], {
         if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
-          rv$compare_run_idx <- NULL  # Toggle off
+          rv$compare_run_idx <- NULL
         } else {
-          rv$compare_run_idx <- i  # Select for comparison
+          rv$compare_run_idx <- i
         }
       }, ignoreInit = TRUE)
     })
+    compare_observers(new_obs)
   })
 
-  # Handle duplicate button clicks for each history entry
+  # Handle duplicate button clicks for each history entry (with destroy pattern)
+  dup_observers <- reactiveVal(list())
   observe({
-    lapply(seq_along(rv$run_history), function(i) {
+    for (obs in dup_observers()) obs$destroy()
+    new_obs <- lapply(seq_along(rv$run_history), function(i) {
       btn_id <- paste0("dup_run_", i)
       observeEvent(input[[btn_id]], {
         if (i > length(rv$run_history)) return()
         cfg <- rv$run_history[[i]]$config
 
-        # Restore scenario selections from history
         if (!is.null(cfg$baseline_scenario)) {
           updateSelectizeInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
         }
@@ -1784,12 +1788,12 @@ server <- function(input, output, session) {
           updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)
         }
 
-        # Navigate to config tab
         updateTabItems(session, "tabs", selected = "config")
         showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
                          type = "message", duration = 3)
       }, ignoreInit = TRUE)
     })
+    dup_observers(new_obs)
   })
 
   # Render comparison panel when a history run is selected
@@ -2075,7 +2079,7 @@ server <- function(input, output, session) {
     filename = function() paste0("trisk_summary_", Sys.Date(), ".csv"),
     content = function(file) {
       req(rv$results)
-      write.csv(rv$results, file, row.names = FALSE)
+      write.csv(sanitize_export(rv$results), file, row.names = FALSE)
     }
   )
 
@@ -2087,7 +2091,7 @@ server <- function(input, output, session) {
                    "exposure_value_usd", "term", "loss_given_default", "pd_baseline", "pd_shock")
       pd_cols <- intersect(pd_cols, names(rv$results))
       if (length(pd_cols) == 0) pd_cols <- names(rv$results)
-      write.csv(rv$results[, pd_cols, drop = FALSE], file, row.names = FALSE)
+      write.csv(sanitize_export(rv$results[, pd_cols, drop = FALSE]), file, row.names = FALSE)
     }
   )
 
@@ -3303,8 +3307,7 @@ server <- function(input, output, session) {
     sps <- scenario_portfolio_summary()
     req(sps)
 
-    # Use earliest year for ranking
-    earliest_yr <- min(sps$shock_year)
+    # Use latest shock year for ranking (maximum stress impact)
     ranking <- sps %>%
       filter(shock_year == max(sps$shock_year)) %>%
       arrange(desc(avg_pd_shock)) %>%
@@ -4347,7 +4350,7 @@ server <- function(input, output, session) {
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(sanitize_export(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -5233,7 +5236,7 @@ server <- function(input, output, session) {
                            "% | CR10=", round(cd$cr10, 1), "% | Gini=", round(cd$gini, 3))),
           stringsAsFactors = FALSE
         )
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(sanitize_export(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -5338,7 +5341,16 @@ server <- function(input, output, session) {
   observeEvent(input$upload_internal_pd, {
     req(input$upload_internal_pd, rv$results)
     tryCatch({
+      file_check <- validate_file_type(input$upload_internal_pd$datapath, input$upload_internal_pd$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
       uploaded <- read.csv(input$upload_internal_pd$datapath, stringsAsFactors = FALSE)
+      if (nrow(uploaded) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -5349,22 +5361,19 @@ server <- function(input, output, session) {
         return()
       }
 
-      # Match by company_id
+      # Match by company_id (vectorized join instead of O(n^2) loop)
       df <- rv$results
       internal_pd <- if ("pd_baseline" %in% names(df)) df$pd_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_pd[idx[1]])
-          if (!is.na(val)) {
-            internal_pd[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      uploaded_map <- stats::setNames(
+        as.numeric(uploaded$internal_pd),
+        as.character(uploaded$company_id)
+      )
+      result_ids <- as.character(df$company_id)
+      matched_vals <- uploaded_map[result_ids]
+      has_match <- !is.na(matched_vals)
+      internal_pd[has_match] <- matched_vals[has_match]
+      matched <- sum(has_match)
 
       rv$internal_pd <- internal_pd
       showNotification(
@@ -5377,12 +5386,18 @@ server <- function(input, output, session) {
     })
   })
 
+  # Reset stale internal PD when results row count changes (separate observer, not inside renderUI)
+  observe({
+    req(rv$results, rv$internal_pd)
+    if (length(rv$internal_pd) != nrow(rv$results)) {
+      rv$internal_pd <- NULL
+    }
+  })
+
   # Internal PD upload status
   output$internal_pd_upload_status <- renderUI({
     if (!is.null(rv$internal_pd)) {
-      # Safety: if results row count changed, warn and reset
       if (!is.null(rv$results) && length(rv$internal_pd) != nrow(rv$results)) {
-        rv$internal_pd <- NULL
         return(tags$span(class = "text-warning", icon("triangle-exclamation"),
                         "Internal PDs reset (portfolio size changed)"))
       }
@@ -5844,7 +5859,16 @@ server <- function(input, output, session) {
   observeEvent(input$upload_internal_el, {
     req(input$upload_internal_el, rv$results)
     tryCatch({
+      file_check <- validate_file_type(input$upload_internal_el$datapath, input$upload_internal_el$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
       uploaded <- read.csv(input$upload_internal_el$datapath, stringsAsFactors = FALSE)
+      if (nrow(uploaded) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -5858,18 +5882,15 @@ server <- function(input, output, session) {
       df <- rv$results
       internal_el <- if ("expected_loss_baseline" %in% names(df)) df$expected_loss_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_el[idx[1]])
-          if (!is.na(val)) {
-            internal_el[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      uploaded_map <- stats::setNames(
+        as.numeric(uploaded$internal_el),
+        as.character(uploaded$company_id)
+      )
+      result_ids <- as.character(df$company_id)
+      matched_vals <- uploaded_map[result_ids]
+      has_match <- !is.na(matched_vals)
+      internal_el[has_match] <- matched_vals[has_match]
+      matched <- sum(has_match)
 
       rv$internal_el <- internal_el
       showNotification(
@@ -5882,12 +5903,18 @@ server <- function(input, output, session) {
     })
   })
 
+  # Reset stale internal EL when results row count changes
+  observe({
+    req(rv$results, rv$internal_el)
+    if (length(rv$internal_el) != nrow(rv$results)) {
+      rv$internal_el <- NULL
+    }
+  })
+
   # Internal EL upload status
   output$internal_el_upload_status <- renderUI({
     if (!is.null(rv$internal_el)) {
-      # Safety: if results row count changed, warn and reset
       if (!is.null(rv$results) && length(rv$internal_el) != nrow(rv$results)) {
-        rv$internal_el <- NULL
         return(tags$span(class = "text-warning", icon("triangle-exclamation"),
                         "Internal ELs reset (portfolio size changed)"))
       }

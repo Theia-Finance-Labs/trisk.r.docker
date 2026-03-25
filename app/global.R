@@ -8,6 +8,9 @@ library(shinydashboard)
 library(shinyWidgets)
 library(shinyjs)
 
+# Null-coalescing operator (needed by server.R and mod_sensitivity.R)
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 # TRISK packages
 library(trisk.model)
 library(trisk.analysis)
@@ -462,16 +465,39 @@ validate_file_type <- function(filepath, original_name) {
   NULL
 }
 
-# Structured audit logging — writes JSON to stderr (captured by Docker log driver)
+# Structured audit logging — writes JSON to persistent file + stderr
 # Use for security-relevant events: uploads, analysis runs, exports
-audit_log <- function(event, details = list()) {
+AUDIT_LOG_DIR <- file.path(OUTPUT_DIR, "audit")
+AUDIT_LOG_PATH <- file.path(AUDIT_LOG_DIR, "trisk-audit.jsonl")
+tryCatch(dir.create(AUDIT_LOG_DIR, recursive = TRUE, showWarnings = FALSE), error = function(e) NULL)
+
+audit_log <- function(event, details = list(), session_obj = NULL) {
+  session_id <- tryCatch({
+    if (!is.null(session_obj)) {
+      substr(digest::digest(session_obj$token, algo = "sha256"), 1, 16)
+    } else if (exists("session", inherits = TRUE) && !is.null(get("session", inherits = TRUE)$token)) {
+      substr(digest::digest(get("session", inherits = TRUE)$token, algo = "sha256"), 1, 16)
+    } else {
+      "startup"
+    }
+  }, error = function(e) "startup")
   entry <- list(
     timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
     event = event,
-    session = if (exists("session")) session$token else "startup"
+    session = session_id
   )
   entry <- c(entry, details)
-  message(jsonlite::toJSON(entry, auto_unbox = TRUE))
+  json_line <- jsonlite::toJSON(entry, auto_unbox = TRUE)
+  # Write to persistent file (primary) and stderr (Docker log driver fallback)
+  tryCatch(write(json_line, AUDIT_LOG_PATH, append = TRUE), error = function(e) NULL)
+  message(json_line)
+}
+
+# Weighted mean that handles zero-weight vectors safely
+safe_weighted_mean <- function(x, w, na.rm = TRUE) {
+  w_sum <- sum(w, na.rm = na.rm)
+  if (w_sum == 0 || is.na(w_sum)) return(mean(x, na.rm = na.rm))
+  weighted.mean(x, w, na.rm = na.rm)
 }
 
 #' Audit a dataset: compute QA statistics and identify issues

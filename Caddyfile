@@ -18,9 +18,10 @@
         -Server
     }
 
-    # HTTP Basic Auth — override TRISK_USER and hash via: caddy hash-password
+    # HTTP Basic Auth — set TRISK_USER and TRISK_PASS_HASH in .env
+    # Generate hash: caddy hash-password --algorithm bcrypt
     basicauth {
-        {$TRISK_USER:analyst} {$TRISK_PASS_HASH:JDJhJDE0JEdNMHFLLjVzZWMxbFRKQjZHZkxsdWVibXdEaVlNN01na1VxUjJPZXNmMUlwOWZ1VjdIMnlx}
+        {$TRISK_USER} {$TRISK_PASS_HASH}
     }
 
     reverse_proxy trisk:3838

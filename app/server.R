@@ -2266,8 +2266,8 @@ server <- function(input, output, session) {
       ) %>%
       group_by(company_label) %>%
       summarise(
-        pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
-        pd_shock = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+        pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+        pd_shock = safe_weighted_mean(pd_shock, exposure_value_usd),
         exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
         sector = first(sector),
         .groups = "drop"
@@ -3254,7 +3254,7 @@ server <- function(input, output, session) {
       group_by(company_name, scenario_label) %>%
       summarise(
         pd_shock = if (has_exposure) {
-          weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE)
+          safe_weighted_mean(pd_shock, exposure_value_usd)
         } else {
           mean(pd_shock, na.rm = TRUE)
         },
@@ -3541,10 +3541,10 @@ server <- function(input, output, session) {
       group_by(company_label, sector) %>%
       summarise(
         # Weighted means MUST come before exposure_value_usd is overwritten by sum()
-        pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
-        pd_shock    = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
-        pd_change   = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
-        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+        pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+        pd_shock    = safe_weighted_mean(pd_shock, exposure_value_usd),
+        pd_change   = safe_weighted_mean(pd_change, exposure_value_usd),
+        npv_change_pct = if (has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
         exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
         weight      = sum(weight, na.rm = TRUE),
         pd_contribution = sum(pd_contribution, na.rm = TRUE),
@@ -3566,12 +3566,12 @@ server <- function(input, output, session) {
         n_companies = n(),
         total_exposure = sum(exposure_value_usd, na.rm = TRUE),
         weight = sum(weight, na.rm = TRUE),
-        avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
-        avg_pd_shock = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+        avg_pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+        avg_pd_shock = safe_weighted_mean(pd_shock, exposure_value_usd),
         avg_pd_change = avg_pd_shock - avg_pd_baseline,
         pd_contribution = sum(pd_contribution, na.rm = TRUE),
         el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
-        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+        npv_change_pct = if (has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
         .groups = "drop"
       ) %>%
       arrange(desc(abs(pd_contribution)))
@@ -3585,7 +3585,7 @@ server <- function(input, output, session) {
           n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
-          avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+          avg_pd_change = safe_weighted_mean(pd_change, exposure_value_usd),
           pd_contribution = sum(pd_contribution, na.rm = TRUE),
           el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
           .groups = "drop"
@@ -3594,8 +3594,8 @@ server <- function(input, output, session) {
     } else NULL
 
     # --- Portfolio-level waterfall steps ---
-    portfolio_pd_baseline <- weighted.mean(df$pd_baseline, df$exposure_value_usd, na.rm = TRUE)
-    portfolio_pd_shock <- weighted.mean(df$pd_shock, df$exposure_value_usd, na.rm = TRUE)
+    portfolio_pd_baseline <- safe_weighted_mean(df$pd_baseline, df$exposure_value_usd)
+    portfolio_pd_shock <- safe_weighted_mean(df$pd_shock, df$exposure_value_usd)
     portfolio_pd_change <- portfolio_pd_shock - portfolio_pd_baseline
 
     list(
@@ -4032,11 +4032,11 @@ server <- function(input, output, session) {
         n_companies = n(),
         total_exposure = sum(exposure_value_usd, na.rm = TRUE),
         weight = sum(weight, na.rm = TRUE),
-        avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
-        avg_pd_shock = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+        avg_pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+        avg_pd_shock = safe_weighted_mean(pd_shock, exposure_value_usd),
         avg_pd_change = avg_pd_shock - avg_pd_baseline,
         el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
-        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+        npv_change_pct = if (has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
         .groups = "drop"
       ) %>%
       arrange(desc(total_exposure))
@@ -4049,8 +4049,8 @@ server <- function(input, output, session) {
           n_companies = n(),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
-          avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
-          avg_pd_shock = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+          avg_pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+          avg_pd_shock = safe_weighted_mean(pd_shock, exposure_value_usd),
           avg_pd_change = avg_pd_shock - avg_pd_baseline,
           .groups = "drop"
         ) %>%
@@ -4065,9 +4065,9 @@ server <- function(input, output, session) {
           n_companies = n(),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
-          avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+          avg_pd_change = safe_weighted_mean(pd_change, exposure_value_usd),
           el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
-          npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+          npv_change_pct = if (has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
           .groups = "drop"
         )
     } else NULL
@@ -4080,7 +4080,7 @@ server <- function(input, output, session) {
           n_companies = n(),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
-          avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+          avg_pd_change = safe_weighted_mean(pd_change, exposure_value_usd),
           .groups = "drop"
         )
     } else NULL
@@ -4273,9 +4273,9 @@ server <- function(input, output, session) {
           n_companies = n(),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
-          avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+          avg_pd_change = safe_weighted_mean(pd_change, exposure_value_usd),
           el_change = if (cd$has_el) sum(el_change, na.rm = TRUE) else NA_real_,
-          npv_change_pct = if (cd$has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+          npv_change_pct = if (cd$has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
           .groups = "drop"
         )
       # Limit to top 20 companies for readability

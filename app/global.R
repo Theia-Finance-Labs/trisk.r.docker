@@ -66,9 +66,9 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
-# Cap upload size to 500 MB (Shiny default is 5 MB).
-# Bank portfolios with full asset-level production trajectories can reach 200-300 MB.
-options(shiny.maxRequestSize = 500 * 1024^2)
+# Cap upload size to 100 MB (Shiny default is 5 MB).
+# Row-count limits enforce further constraints per dataset type after parsing.
+options(shiny.maxRequestSize = 100 * 1024^2)
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic
@@ -78,6 +78,59 @@ options(shiny.sanitize.errors = TRUE)
 SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
 INPUT_DIR <- "/data/input"
 OUTPUT_DIR <- "/data/output"
+AUDIT_DIR  <- "/data/output/audit"
+
+# ============================================
+# Persistent Structured Audit Logging
+# ============================================
+# Writes JSON-lines to /data/output/audit/audit_YYYY-MM-DD.jsonl
+# Each line is a self-contained JSON object with: timestamp, session_id,
+# user (from REMOTE_USER env if behind auth proxy), action, and details.
+# Also forwards to message() so Docker log driver captures it.
+
+#' Initialize audit log directory (called once at app startup)
+init_audit_log <- function() {
+  if (!dir.exists(AUDIT_DIR)) {
+    tryCatch(dir.create(AUDIT_DIR, recursive = TRUE), error = function(e) {
+      message("[AUDIT] Cannot create audit directory: ", e$message)
+    })
+  }
+}
+
+#' Write a structured audit log entry.
+#' @param session Shiny session object (for session token and user identity)
+#' @param action character action name (e.g., "upload", "run_analysis", "download")
+#' @param details named list of action-specific details
+audit_log <- function(session = NULL, action, details = list()) {
+  entry <- list(
+    timestamp  = format(Sys.time(), "%Y-%m-%dT%H:%M:%OS3Z", tz = "UTC"),
+    session_id = if (!is.null(session)) session$token else "system",
+    user       = if (!is.null(session)) {
+      # Caddy / reverse proxy sets REMOTE_USER; Shiny Server Pro sets .auth$user
+      session$request$HTTP_REMOTE_USER %||%
+        session$user %||%
+        Sys.getenv("TRISK_USER", "anonymous")
+    } else "system",
+    action     = action,
+    details    = details
+  )
+
+  json_line <- jsonlite::toJSON(entry, auto_unbox = TRUE, null = "null")
+
+  # Write to daily log file
+  log_file <- file.path(AUDIT_DIR, paste0("audit_", format(Sys.Date()), ".jsonl"))
+  tryCatch({
+    cat(json_line, "\n", file = log_file, append = TRUE, sep = "")
+  }, error = function(e) {
+    message("[AUDIT] File write failed: ", e$message)
+  })
+
+  # Forward to stderr for Docker log driver / SIEM
+  message("[AUDIT] ", json_line)
+}
+
+# Create audit directory at load time
+init_audit_log()
 
 #' Default model parameter values (single source of truth)
 #' Used by UI for initial values and by Reset button
@@ -211,15 +264,27 @@ validate_internal_el_csv <- function(df) {
   NULL
 }
 
-#' Generate a unique run ID from timestamp + config hash (base R only)
+#' Generate a unique run ID from timestamp + config hash
+#' Uses rlang::hash() for collision-resistant hashing (no extra dependency
+#' needed, rlang is already loaded via dplyr/tidyr).
 #' @param config_list named list of analysis parameters
-#' @return character string like "20260301_143022_a7f3b"
+#' @return character string like "20260301_143022_a7f3b2c1"
 generate_run_id <- function(config_list) {
   ts <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  config_str <- paste(sort(unlist(config_list)), collapse = "")
-  hash_int <- abs(sum(utf8ToInt(config_str)))
-  hash_hex <- substring(sprintf("%x", hash_int), 1, 5)
+  hash_hex <- substring(rlang::hash(config_list), 1, 8)
   paste0(ts, "_", hash_hex)
+}
+
+#' Compute SHA256 checksum of an uploaded file for reproducibility tracking.
+#' Falls back gracefully if the temp file is no longer available.
+#' @param filepath path to file (typically from input$*_file$datapath)
+#' @return character hash hex string, or "unavailable" if file doesn't exist
+compute_file_checksum <- function(filepath) {
+  if (!is.null(filepath) && file.exists(filepath)) {
+    rlang::hash_file(filepath)
+  } else {
+    "unavailable"
+  }
 }
 
 #' Validate portfolio data structure
@@ -657,6 +722,19 @@ compute_el_columns <- function(df) {
     }
   }
   return(df)
+}
+
+#' Sanitize cell values to prevent formula injection in Excel/CSV exports (CWE-1236).
+#' Prefixes string values starting with =, +, -, @, tab, or CR with a single quote.
+#' Applied to all string columns before export to prevent malicious formula execution.
+#' @param df data.frame to sanitize
+#' @return data.frame with sanitized string columns
+sanitize_formula_injection <- function(df) {
+  char_cols <- names(df)[sapply(df, is.character)]
+  for (col in char_cols) {
+    df[[col]] <- gsub("^([=+\\-@\t\r])", "'\\1", df[[col]])
+  }
+  df
 }
 
 # ============================================

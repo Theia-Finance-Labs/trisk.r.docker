@@ -59,6 +59,7 @@ setup_download <- function(input, output, session, rv) {
         sheets[["EL Integration"]] <- rv$el_integration_result
       }
 
+      sheets <- lapply(sheets, sanitize_formula_injection)
       writexl::write_xlsx(sheets, file)
     }
   )
@@ -69,7 +70,8 @@ setup_download <- function(input, output, session, rv) {
     },
     content = function(file) {
       req(rv$results)
-      write_csv(sanitize_export(rv$results), file)
+      df <- sanitize_formula_injection(sanitize_export(rv$results))
+      write_csv(df, file)
     }
   )
 
@@ -106,6 +108,17 @@ setup_download <- function(input, output, session, rv) {
           portfolio_rows = nrow(rv$portfolio),
           assets_rows = nrow(rv$assets),
           financial_rows = nrow(rv$financial)
+        ),
+        input_checksums = list(
+          portfolio = compute_file_checksum(input$portfolio_file$datapath),
+          assets = compute_file_checksum(input$assets_file$datapath),
+          financial = compute_file_checksum(input$financial_file$datapath),
+          scenarios = compute_file_checksum(input$scenarios_file$datapath)
+        ),
+        environment = list(
+          trisk_model_sha = Sys.getenv("TRISK_MODEL_SHA", "unknown"),
+          scenarios_sha256 = Sys.getenv("SCENARIOS_SHA256", "unknown"),
+          build_date = Sys.getenv("BUILD_DATE", "unknown")
         ),
         versions = list(
           trisk_model = as.character(packageVersion("trisk.model")),

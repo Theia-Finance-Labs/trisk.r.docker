@@ -39,6 +39,8 @@ server <- function(input, output, session) {
   log_message <- function(msg) {
     timestamp <- format(Sys.time(), "[%H:%M:%S]")
     rv$analysis_log <- c(rv$analysis_log, paste(timestamp, msg))
+    # Forward to stderr for Docker log driver
+    message(timestamp, " ", msg)
   }
 
   # ============================================
@@ -84,7 +86,8 @@ server <- function(input, output, session) {
         log_message(paste("Warning: only", loaded, "of 5 datasets loaded."))
       }
     }, error = function(e) {
-      showNotification(paste("Error loading mock data:", e$message), type = "error")
+      showNotification("Error loading mock data. Check log for details.", type = "error")
+      message("[ERROR] Mock data load failed: ", e$message)
       log_message(paste("ERROR loading mock data:", e$message))
     })
   })
@@ -123,9 +126,16 @@ server <- function(input, output, session) {
     tryCatch({
       rv$portfolio <- strip_columns(
         tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
+      if (nrow(rv$portfolio) > 100000) {
+        rv$portfolio <- NULL
+        showNotification("Portfolio exceeds 100,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
+      audit_log(session, "upload_data", list(type = "portfolio", rows = nrow(rv$portfolio)))
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading portfolio:", e$message), type = "error")
+      showNotification("Error loading portfolio. Check the file format and try again.", type = "error")
+      message("[ERROR] Portfolio load failed: ", e$message)
     })
   })
 
@@ -134,9 +144,15 @@ server <- function(input, output, session) {
     tryCatch({
       rv$assets <- strip_columns(
         tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
+      if (nrow(rv$assets) > 1000000) {
+        rv$assets <- NULL
+        showNotification("Assets exceeds 1,000,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading assets:", e$message), type = "error")
+      showNotification("Error loading assets data. Ensure the CSV has the required columns.", type = "error")
+      message("[ERROR] Assets load failed: ", e$message)
     })
   })
 
@@ -145,9 +161,15 @@ server <- function(input, output, session) {
     tryCatch({
       rv$financial <- strip_columns(
         tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
+      if (nrow(rv$financial) > 100000) {
+        rv$financial <- NULL
+        showNotification("Financial data exceeds 100,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading financial data:", e$message), type = "error")
+      showNotification("Error loading financial data. Check the file format and try again.", type = "error")
+      message("[ERROR] Financial data load failed: ", e$message)
     })
   })
 
@@ -156,12 +178,18 @@ server <- function(input, output, session) {
     tryCatch({
       rv$scenarios <- strip_columns(
         tibble::as_tibble(data.table::fread(input$scenarios_file$datapath)), "scenarios")
+      if (nrow(rv$scenarios) > 500000) {
+        rv$scenarios <- NULL
+        showNotification("Scenarios exceeds 500,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
         type = "message"
       )
     }, error = function(e) {
-      showNotification(paste("Error loading scenarios:", e$message), type = "error")
+      showNotification("Error loading scenarios. Check the file format and try again.", type = "error")
+      message("[ERROR] Scenarios load failed: ", e$message)
     })
   })
 
@@ -347,17 +375,17 @@ server <- function(input, output, session) {
 
   output$download_portfolio_template <- downloadHandler(
     filename = function() "template_portfolio.csv",
-    content = function(file) write.csv(dataset_template("portfolio"), file, row.names = FALSE)
+    content = function(file) write.csv(sanitize_formula_injection(dataset_template("portfolio")), file, row.names = FALSE)
   )
 
   output$download_assets_template <- downloadHandler(
     filename = function() "template_assets.csv",
-    content = function(file) write.csv(dataset_template("assets"), file, row.names = FALSE)
+    content = function(file) write.csv(sanitize_formula_injection(dataset_template("assets")), file, row.names = FALSE)
   )
 
   output$download_financial_template <- downloadHandler(
     filename = function() "template_financial.csv",
-    content = function(file) write.csv(dataset_template("financial"), file, row.names = FALSE)
+    content = function(file) write.csv(sanitize_formula_injection(dataset_template("financial")), file, row.names = FALSE)
   )
 
   # ============================================
@@ -403,7 +431,7 @@ server <- function(input, output, session) {
           }
         }
       }
-      write.csv(all_issues, file, row.names = FALSE)
+      write.csv(sanitize_formula_injection(all_issues), file, row.names = FALSE)
     }
   )
 
@@ -837,6 +865,7 @@ server <- function(input, output, session) {
       rv$run_history <- c(list(history_entry), rv$run_history)
       if (length(rv$run_history) > 5) {
         rv$run_history <- rv$run_history[1:5]
+        gc()  # Free memory from trimmed entries
       }
       rv$compare_run_idx <- NULL
 
@@ -845,6 +874,19 @@ server <- function(input, output, session) {
 
     rv$analysis_log <- character()
     log_message("Starting TRISK analysis...")
+
+    # Persistent audit log entry for every analysis run
+    audit_log(session, "run_analysis", list(
+      baseline_scenario = input$baseline_scenario,
+      target_scenarios = input$target_scenarios,
+      scenario_geography = input$scenario_geography,
+      shock_years = input$shock_years,
+      risk_free_rate = input$risk_free_rate,
+      discount_rate = input$discount_rate,
+      growth_rate = input$growth_rate,
+      portfolio_rows = nrow(rv$portfolio),
+      assets_rows = nrow(rv$assets)
+    ))
 
     withProgress(message = "Running TRISK analysis...", value = 0, {
 
@@ -897,15 +939,16 @@ server <- function(input, output, session) {
         # to the portfolio by (company_id, country_iso2, sector, technology, term).
         # User-uploaded portfolios are often company-level (no technology column).
         # Expand each company to one row per technology from the assets data.
-        if (!"technology" %in% names(rv$portfolio)) {
+        # Work on a local copy to avoid mutating the original portfolio
+        portfolio_for_run <- rv$portfolio
+        if (!"technology" %in% names(portfolio_for_run)) {
           company_techs <- rv$assets %>%
             dplyr::distinct(.data$company_id, .data$sector, .data$technology)
-          portfolio_enriched <- rv$portfolio %>%
+          portfolio_for_run <- portfolio_for_run %>%
             dplyr::select(-any_of("sector")) %>%        # drop portfolio-level sector to avoid conflict
             dplyr::inner_join(company_techs, by = "company_id")
           log_message(paste("  Portfolio enriched: added technology column from assets data.",
-                           nrow(rv$portfolio), "->", nrow(portfolio_enriched), "rows"))
-          rv$portfolio <- portfolio_enriched
+                           nrow(rv$portfolio), "->", nrow(portfolio_for_run), "rows"))
         }
 
         # Validate year range compatibility between assets and scenarios
@@ -988,7 +1031,7 @@ server <- function(input, output, session) {
               scenarios_data = rv$scenarios,
               financial_data = rv$financial,
               carbon_data = rv$carbon,
-              portfolio_data = rv$portfolio,
+              portfolio_data = portfolio_for_run,
               baseline_scenario = matched_baseline,
               target_scenario = target_scen,
               scenario_geography = input$scenario_geography,
@@ -1061,6 +1104,47 @@ server <- function(input, output, session) {
           carbon_price_model = input$carbon_price_model
         ))
 
+        # Auto-save run to disk for audit trail
+        tryCatch({
+          run_dir <- file.path("/data/output/runs", rv$run_id)
+          dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
+
+          # Save results CSV
+          data.table::fwrite(
+            sanitize_export(rv$results),
+            file.path(run_dir, "results.csv")
+          )
+
+          # Save config JSON
+          config <- list(
+            run_id = rv$run_id,
+            timestamp = as.character(Sys.time()),
+            parameters = list(
+              baseline_scenarios = input$baseline_scenario,
+              target_scenarios = input$target_scenarios,
+              scenario_geography = input$scenario_geography,
+              shock_years = input$shock_years,
+              risk_free_rate = input$risk_free_rate,
+              discount_rate = input$discount_rate,
+              growth_rate = input$growth_rate
+            ),
+            data_summary = list(
+              portfolio_rows = nrow(rv$portfolio),
+              result_rows = nrow(rv$results)
+            )
+          )
+          jsonlite::write_json(
+            config,
+            file.path(run_dir, "config.json"),
+            auto_unbox = TRUE,
+            pretty = TRUE
+          )
+
+          log_message(paste("Auto-saved run to", run_dir))
+        }, error = function(e) {
+          message("[WARN] Auto-save failed: ", e$message)
+        })
+
         incProgress(0.9, detail = "Finalizing...")
         log_message(paste("Analysis complete! Run ID:", rv$run_id))
 
@@ -1072,8 +1156,9 @@ server <- function(input, output, session) {
 
       }, error = function(e) {
         log_message(paste("ERROR:", e$message))
+        message("[ERROR] Analysis failed: ", e$message)
         showNotification(
-          paste("Analysis failed:", e$message),
+          "Analysis failed. Check the log for details.",
           type = "error",
           duration = 10
         )
@@ -1199,62 +1284,80 @@ server <- function(input, output, session) {
   })
 
   # Handle compare button clicks for each history entry
+  # Track observers for cleanup to avoid accumulation on re-runs
+  compare_observers <- list()
+  dup_observers <- list()
+
   observe({
-    lapply(seq_along(rv$run_history), function(i) {
-      btn_id <- paste0("compare_run_", i)
-      observeEvent(input[[btn_id]], {
-        if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
-          rv$compare_run_idx <- NULL  # Toggle off
-        } else {
-          rv$compare_run_idx <- i  # Select for comparison
-        }
-      }, ignoreInit = TRUE)
-    })
+    # Destroy previous compare observers before creating new ones
+    for (obs in compare_observers) obs$destroy()
+    compare_observers <<- list()
+
+    for (i in seq_along(rv$run_history)) {
+      local({
+        idx <- i
+        obs <- observeEvent(input[[paste0("compare_run_", idx)]], {
+          if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == idx) {
+            rv$compare_run_idx <- NULL  # Toggle off
+          } else {
+            rv$compare_run_idx <- idx  # Select for comparison
+          }
+        }, ignoreInit = TRUE)
+        compare_observers[[idx]] <<- obs
+      })
+    }
   })
 
   # Handle duplicate button clicks for each history entry
   observe({
-    lapply(seq_along(rv$run_history), function(i) {
-      btn_id <- paste0("dup_run_", i)
-      observeEvent(input[[btn_id]], {
-        if (i > length(rv$run_history)) return()
-        cfg <- rv$run_history[[i]]$config
+    # Destroy previous duplicate observers before creating new ones
+    for (obs in dup_observers) obs$destroy()
+    dup_observers <<- list()
 
-        # Restore all config inputs from the history entry
-        updateSelectInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
-        if (!is.null(cfg$target_scenarios)) {
-          updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
-        }
-        updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
-        if (!is.null(cfg$shock_years)) {
-          updateSelectizeInput(session, "shock_years", selected = cfg$shock_years)
-        }
-        if (!is.null(cfg$risk_free_rate)) {
-          updateSliderInput(session, "risk_free_rate", value = cfg$risk_free_rate)
-          updateNumericInput(session, "risk_free_rate_num", value = cfg$risk_free_rate)
-        }
-        if (!is.null(cfg$discount_rate)) {
-          updateSliderInput(session, "discount_rate", value = cfg$discount_rate)
-          updateNumericInput(session, "discount_rate_num", value = cfg$discount_rate)
-        }
-        if (!is.null(cfg$growth_rate)) {
-          updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
-          updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
-        }
-        if (!is.null(cfg$market_passthrough)) {
-          updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
-          updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
-        }
-        if (!is.null(cfg$carbon_price_model)) {
-          updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)
-        }
+    for (i in seq_along(rv$run_history)) {
+      local({
+        idx <- i
+        obs <- observeEvent(input[[paste0("dup_run_", idx)]], {
+          if (idx > length(rv$run_history)) return()
+          cfg <- rv$run_history[[idx]]$config
 
-        # Navigate to config tab
-        updateTabItems(session, "tabs", selected = "config")
-        showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
-                         type = "message", duration = 3)
-      }, ignoreInit = TRUE)
-    })
+          # Restore all config inputs from the history entry
+          updateSelectInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
+          if (!is.null(cfg$target_scenarios)) {
+            updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
+          }
+          updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
+          if (!is.null(cfg$shock_years)) {
+            updateSelectizeInput(session, "shock_years", selected = cfg$shock_years)
+          }
+          if (!is.null(cfg$risk_free_rate)) {
+            updateSliderInput(session, "risk_free_rate", value = cfg$risk_free_rate)
+            updateNumericInput(session, "risk_free_rate_num", value = cfg$risk_free_rate)
+          }
+          if (!is.null(cfg$discount_rate)) {
+            updateSliderInput(session, "discount_rate", value = cfg$discount_rate)
+            updateNumericInput(session, "discount_rate_num", value = cfg$discount_rate)
+          }
+          if (!is.null(cfg$growth_rate)) {
+            updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
+            updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
+          }
+          if (!is.null(cfg$market_passthrough)) {
+            updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
+            updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
+          }
+          if (!is.null(cfg$carbon_price_model)) {
+            updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)
+          }
+
+          # Navigate to config tab
+          updateTabItems(session, "tabs", selected = "config")
+          showNotification(paste0("Config loaded from run #", idx, ". Adjust and re-run."),
+                           type = "message", duration = 3)
+        }, ignoreInit = TRUE)
+        dup_observers[[idx]] <<- obs
+      })
+    }
   })
 
   # Render comparison panel when a history run is selected
@@ -2206,7 +2309,7 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results_by_year)
       combined <- bind_rows(rv$results_by_year, .id = "shock_year")
-      write.csv(sanitize_export(combined), file, row.names = FALSE)
+      write.csv(sanitize_formula_injection(sanitize_export(combined)), file, row.names = FALSE)
     }
   )
 
@@ -2775,7 +2878,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       scd <- scenario_comparison_data()
-      if (!is.null(scd)) write.csv(sanitize_export(scd), file, row.names = FALSE)
+      if (!is.null(scd)) write.csv(sanitize_formula_injection(sanitize_export(scd)), file, row.names = FALSE)
     }
   )
 
@@ -3334,7 +3437,7 @@ server <- function(input, output, session) {
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(sanitize_formula_injection(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -4272,7 +4375,7 @@ server <- function(input, output, session) {
                            "% | CR10=", round(cd$cr10, 1), "% | Gini=", round(cd$gini, 3))),
           stringsAsFactors = FALSE
         )
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(sanitize_formula_injection(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -4409,7 +4512,8 @@ server <- function(input, output, session) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      showNotification("Error reading PD CSV. Check the file format and try again.", type = "error", duration = 8)
+      message("[ERROR] Internal PD CSV read failed: ", e$message)
     })
   })
 
@@ -4746,7 +4850,8 @@ server <- function(input, output, session) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      showNotification("Error reading EL CSV. Check the file format and try again.", type = "error", duration = 8)
+      message("[ERROR] Internal EL CSV read failed: ", e$message)
     })
   })
 
@@ -5166,6 +5271,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
+      audit_log(session, "download", list(format = "excel", run_id = rv$run_id, rows = nrow(rv$results)))
 
       df <- rv$results
       grp_cols <- intersect(c("sector", "technology"), names(df))
@@ -5214,6 +5320,7 @@ server <- function(input, output, session) {
 
       # Sanitize all sheets to export-safe columns
       sheets <- lapply(sheets, sanitize_export)
+      sheets <- lapply(sheets, sanitize_formula_injection)
 
       # Guard against OOM: writexl builds the entire workbook in memory.
       # For large exports (>100K rows), write CSV instead which streams to disk.
@@ -5236,7 +5343,8 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results)
-      write_csv(sanitize_export(rv$results), file)
+      df <- sanitize_formula_injection(sanitize_export(rv$results))
+      write_csv(df, file)
     }
   )
 
@@ -5274,10 +5382,20 @@ server <- function(input, output, session) {
           assets_rows = nrow(rv$assets),
           financial_rows = nrow(rv$financial)
         ),
+        input_checksums = list(
+          portfolio = compute_file_checksum(input$portfolio_file$datapath),
+          assets = compute_file_checksum(input$assets_file$datapath),
+          financial = compute_file_checksum(input$financial_file$datapath),
+          scenarios = compute_file_checksum(input$scenarios_file$datapath)
+        ),
+        environment = list(
+          trisk_model_sha = Sys.getenv("TRISK_MODEL_SHA", "unknown"),
+          scenarios_sha256 = Sys.getenv("SCENARIOS_SHA256", "unknown"),
+          build_date = Sys.getenv("BUILD_DATE", "unknown")
+        ),
         versions = list(
           trisk_model = as.character(packageVersion("trisk.model")),
-          trisk_analysis = as.character(packageVersion("trisk.analysis")),
-          R = R.version$version.string
+          trisk_analysis = as.character(packageVersion("trisk.analysis"))
         )
       )
       jsonlite::write_json(config, file, pretty = TRUE, auto_unbox = TRUE)
@@ -5306,10 +5424,7 @@ server <- function(input, output, session) {
   output$version_info <- renderText({
     paste(
       "trisk.model:", as.character(packageVersion("trisk.model")),
-      "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis")),
-      "\nR:", R.version$version.string,
-      "\nShiny:", as.character(packageVersion("shiny")),
-      "\nContainer build:", Sys.getenv("BUILD_DATE", "unknown")
+      "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis"))
     )
   })
 }

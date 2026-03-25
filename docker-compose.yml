@@ -9,7 +9,43 @@ networks:
     driver: bridge  # Non-internal network allows host port publishing
 
 services:
-  # Main Shiny application
+  # TLS reverse proxy — the only service exposed to the host
+  caddy:
+    image: caddy:2-alpine@sha256:a6a76a559514be24ace7ed42caaa2bea3e1b26d05c7656303475614b6010be01
+    container_name: trisk-proxy
+    ports:
+      - "127.0.0.1:443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./tls:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - TRISK_USER=${TRISK_USER:-analyst}
+      - TRISK_PASS_HASH=${TRISK_PASS_HASH:?Set TRISK_PASS_HASH in .env — generate with: docker run caddy caddy hash-password}
+    restart: "no"
+    networks:
+      - trisk-internal
+      - trisk-host
+    # Resource limits
+    mem_limit: 256m
+    cpus: 0.5
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Required for binding to port 443
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Main Shiny application — only reachable via Caddy proxy
   trisk:
     build:
       context: .
@@ -18,22 +54,24 @@ services:
         BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
     image: theia-finance-labs/trisk:latest
     container_name: trisk-app
-    # Bind to localhost only — prevents exposure on all interfaces
-    ports:
-      - "127.0.0.1:3838:3838"
+    # No host ports — only reachable via caddy on internal network
+    expose:
+      - "3838"
     volumes:
       - ./data/input:/data/input:ro
       # Output is writable but noexec to limit RCE impact
       - ./data/output:/data/output:rw,noexec,nosuid
     environment:
-      - SHINY_LOG_LEVEL=WARN
+      - SHINY_LOG_LEVEL=${SHINY_LOG_LEVEL:-WARN}
       - TMPDIR=/tmp
+      - TRISK_DEBUG_LOG=${TRISK_DEBUG_LOG:-false}
     # Avoid zombie-service restarts on analyst workstations
     restart: "no"
     stop_grace_period: 30s
     networks:
       - trisk-internal
-      - trisk-host
+    depends_on:
+      - caddy
     # ── Runtime resource limits (compose v2, non-Swarm) ──
     mem_limit: 4g
     mem_reservation: 2g
@@ -49,6 +87,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+      - seccomp:security/trisk-seccomp.json
     # ── Log rotation (prevent disk fill on long-running workstations) ──
     logging:
       driver: json-file
@@ -95,6 +134,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+      - seccomp:security/trisk-seccomp.json
     # ── Log rotation ──
     logging:
       driver: json-file
@@ -105,3 +145,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=2g
       - /run:rw,noexec,nosuid,size=8m
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,27 @@
+{
+    # No automatic HTTPS (use manual certs for bank deployment)
+    auto_https off
+}
+
+:443 {
+    # TLS — mount your bank-issued cert + key into /etc/caddy/certs/
+    tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+
+    # Security headers
+    header {
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'"
+        Strict-Transport-Security "max-age=63072000; includeSubDomains"
+        -Server
+    }
+
+    # HTTP Basic Auth — override TRISK_USER and hash via: caddy hash-password
+    basicauth {
+        {$TRISK_USER:analyst} {$TRISK_PASS_HASH:JDJhJDE0JEdNMHFLLjVzZWMxbFRKQjZHZkxsdWVibXdEaVlNN01na1VxUjJPZXNmMUlwOWZ1VjdIMnlx}
+    }
+
+    reverse_proxy trisk:3838
+}

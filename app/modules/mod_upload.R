@@ -46,7 +46,8 @@ setup_upload <- function(input, output, session, rv, log_message) {
         log_message(paste("Warning: only", loaded, "of 5 datasets loaded."))
       }
     }, error = function(e) {
-      showNotification(paste("Error loading mock data:", e$message), type = "error")
+      showNotification("Error loading mock data. Check log for details.", type = "error")
+      message("[ERROR] Mock data load failed: ", e$message)
       log_message(paste("ERROR loading mock data:", e$message))
     })
   })
@@ -89,10 +90,15 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(paste("Portfolio rejected:", err), type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > 100000) {
+        showNotification("Portfolio exceeds 100,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       rv$portfolio <- df
       showNotification(paste("Portfolio loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading portfolio:", e$message), type = "error")
+      showNotification("Error loading portfolio. Check the file format and try again.", type = "error")
+      message("[ERROR] Portfolio load failed: ", e$message)
     })
   })
 
@@ -105,10 +111,15 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(paste("Assets rejected:", err), type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > 1000000) {
+        showNotification("Assets exceeds 1,000,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       rv$assets <- df
       showNotification(paste("Assets loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading assets:", e$message), type = "error")
+      showNotification("Error loading assets data. Ensure the CSV has the required columns.", type = "error")
+      message("[ERROR] Assets load failed: ", e$message)
     })
   })
 
@@ -121,10 +132,15 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification(paste("Financial data rejected:", err), type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > 100000) {
+        showNotification("Financial data exceeds 100,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       rv$financial <- df
       showNotification(paste("Financial data loaded:", nrow(df), "rows"), type = "message")
     }, error = function(e) {
-      showNotification(paste("Error loading financial data:", e$message), type = "error")
+      showNotification("Error loading financial data. Check the file format and try again.", type = "error")
+      message("[ERROR] Financial data load failed: ", e$message)
     })
   })
 
@@ -137,13 +153,18 @@ setup_upload <- function(input, output, session, rv, log_message) {
         showNotification("Scenarios rejected: missing required column 'scenario'", type = "error", duration = 8)
         return()
       }
+      if (nrow(df) > 500000) {
+        showNotification("Scenarios exceeds 500,000 row limit. Please reduce the file size.", type = "error")
+        return()
+      }
       rv$scenarios <- df
       showNotification(
         paste("Scenarios loaded:", length(unique(df$scenario)), "scenarios"),
         type = "message"
       )
     }, error = function(e) {
-      showNotification(paste("Error loading scenarios:", e$message), type = "error")
+      showNotification("Error loading scenarios. Check the file format and try again.", type = "error")
+      message("[ERROR] Scenarios load failed: ", e$message)
     })
   })
 

@@ -75,7 +75,8 @@ RUN R -e "\
   pak::pak(c( \
     'httpuv', 'htmltools', 'shiny', 'shinydashboard', 'shinyWidgets', \
     'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'data.table', 'writexl', \
-    'jsonlite', 'dplyr', 'tidyr' \
+    'jsonlite', 'dplyr', 'tidyr', \
+    'rmarkdown', 'knitr' \
   ), ask = FALSE, upgrade = FALSE)"
 
 # Verify core packages load
@@ -97,6 +98,15 @@ LABEL maintainer="Theia Finance Labs <info@theia-finance-labs.com>"
 LABEL description="TRISK Climate Transition Risk Stress Testing Tool"
 LABEL version="1.0.0"
 LABEL org.opencontainers.image.source="https://github.com/Theia-Finance-Labs/trisk.docker"
+LABEL org.opencontainers.image.title="TRISK Desktop"
+LABEL org.opencontainers.image.description="Climate Transition Risk Stress Testing Tool"
+LABEL org.opencontainers.image.vendor="Theia Finance Labs"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.revision="${VCS_REF}"
 
 # Runtime-only shared libraries (no -dev, no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -111,8 +121,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libharfbuzz0b \
     libfribidi0 \
     libpq5 \
-    curl \
-    pandoc \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy compiled R library tree from builder
@@ -136,10 +144,9 @@ COPY scripts/test_portfolio_pd.R /opt/trisk/scripts/
 COPY scripts/test_debug.R /opt/trisk/scripts/
 COPY scripts/run_tests.R /opt/trisk/scripts/
 
-# Startup script (Rscript avoids interactive-session banner in logs)
-RUN echo '#!/bin/bash' > /usr/local/bin/run-shiny.sh && \
-    echo "Rscript -e \"shiny::runApp('/opt/trisk/app', host='0.0.0.0', port=3838)\"" >> /usr/local/bin/run-shiny.sh && \
-    chmod +x /usr/local/bin/run-shiny.sh
+# Startup script (committed in source control)
+COPY scripts/run-shiny.sh /usr/local/bin/run-shiny.sh
+RUN chmod +x /usr/local/bin/run-shiny.sh
 
 # Create non-root user for runtime
 RUN groupadd -r trisk && useradd -r -g trisk -d /home/trisk -s /sbin/nologin trisk
@@ -158,8 +165,8 @@ USER trisk
 
 EXPOSE 3838
 
-# Healthcheck: verify Shiny returns HTTP 200 on the root URL
+# Healthcheck: verify Shiny returns HTTP 200 (no curl dependency)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD curl -fsS http://localhost:3838/ -o /dev/null -w '%{http_code}' | grep -q 200 || exit 1
+    CMD Rscript -e "tryCatch(readLines(url('http://localhost:3838/', open='r'), n=1), error=function(e) quit(status=1))" || exit 1
 
 CMD ["/usr/local/bin/run-shiny.sh"]

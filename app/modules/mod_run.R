@@ -383,8 +383,9 @@ setup_run <- function(input, output, session, rv, log_message) {
 
       }, error = function(e) {
         log_message(paste("ERROR:", e$message))
+        message("[ERROR] Analysis failed: ", e$message)
         showNotification(
-          paste("Analysis failed:", e$message),
+          "Analysis failed. Check the log for details.",
           type = "error",
           duration = 10
         )

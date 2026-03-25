@@ -134,7 +134,8 @@ setup_integration <- function(input, output, session, rv) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      showNotification("Error reading PD CSV. Check the file format and try again.", type = "error", duration = 8)
+      message("[ERROR] Internal PD CSV read failed: ", e$message)
     })
   })
 
@@ -472,7 +473,8 @@ setup_integration <- function(input, output, session, rv) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      showNotification(paste("Error reading CSV:", e$message), type = "error", duration = 8)
+      showNotification("Error reading EL CSV. Check the file format and try again.", type = "error", duration = 8)
+      message("[ERROR] Internal EL CSV read failed: ", e$message)
     })
   })
 

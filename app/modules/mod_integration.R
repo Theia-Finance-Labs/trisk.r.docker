@@ -1,553 +1,7 @@
 # mod_integration.R
-# PD and EL Integration: internal PD/EL adjustment methods, editable tables, CSV upload
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_integration <- function(input, output, session, rv) {
-  # ============================================
-  # INTEGRATION PAGE - PD Integration
-  # ============================================
-
-  # Method description
-  output$pd_method_description <- renderUI({
-    method <- input$pd_integration_method
-    desc <- switch(method,
-      "absolute" = tagList(
-        tags$b("Absolute Change Application"),
-        tags$p("TRISK-adjusted PD = Internal_PD + (PD_shock - PD_baseline)"),
-        tags$p("Adds the raw PD change from TRISK to your internal PD estimate.")
-      ),
-      "relative" = tagList(
-        tags$b("Relative Change Application"),
-        tags$p("TRISK-adjusted PD = Internal_PD * (1 + PD_change%)"),
-        tags$p("Scales your internal PD by the relative percentage shift from the TRISK model.")
-      ),
-      "zscore" = tagList(
-        tags$b("Z-Score Integration (Basel IRB)"),
-        tags$p(HTML("TRISK-adjusted PD = &Phi;(&Phi;<sup>-1</sup>(Internal_PD) + &Phi;<sup>-1</sup>(PD_shock) - &Phi;<sup>-1</sup>(PD_baseline))")),
-        tags$p("Combines PDs in the normal quantile (z-score) space using the Vasicek one-factor
-               model. This preserves non-linear tail behavior — critical for regulatory capital,
-               where the difference between 2% and 5% PD is much larger than 0.1% vs 0.4%."),
-        tags$p(class = "fs-12 fg-secondary", tags$em("Recommended for Basel III/IV IRB banks. Consistent with the
-               single-factor Gaussian copula framework underpinning regulatory capital formulas (CRR Art. 153)."))
-      )
-    )
-    desc
-  })
-
-  # PD input table (editable Internal_PD column)
-  output$pd_integration_table <- renderDT({
-    req(rv$results)
-    df <- rv$results
-
-    # Build display with key identifiers + PD columns
-    id_cols <- intersect(c("company_id", "company_name", "sector", "technology"), names(df))
-    pd_cols <- intersect(c("exposure_value_usd", "pd_baseline", "pd_shock"), names(df))
-    show_cols <- c(id_cols, pd_cols)
-
-    display_df <- df[, show_cols, drop = FALSE]
-
-    # Round pd_baseline and pd_shock for display
-    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
-    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
-
-    # Add computed PD change
-    if (all(c("pd_baseline", "pd_shock") %in% names(display_df))) {
-      display_df$PD_Change <- smart_round(display_df$pd_shock - display_df$pd_baseline)
-      display_df$PD_Change_Pct <- smart_round(
-        ifelse(display_df$pd_baseline != 0,
-               (display_df$pd_shock - display_df$pd_baseline) / display_df$pd_baseline * 100,
-               NA_real_))
-    }
-
-    # Editable Internal_PD column:
-    # Priority: (1) user-uploaded/edited values in rv$internal_pd, (2) pd_baseline, (3) zero
-    if (!is.null(rv$internal_pd) && length(rv$internal_pd) == nrow(df)) {
-      display_df$Internal_PD <- smart_round(rv$internal_pd)
-    } else if ("pd_baseline" %in% names(df)) {
-      display_df$Internal_PD <- smart_round(df$pd_baseline)
-    } else {
-      display_df$Internal_PD <- 0
-    }
-
-    datatable(
-      display_df,
-      editable = list(target = "cell", disable = list(columns = seq_len(ncol(display_df) - 1) - 1)),
-      options = list(pageLength = 20, scrollX = TRUE),
-      rownames = FALSE
-    )
-  })
-
-  # Observe edits to Internal_PD in the PD integration table
-  observeEvent(input$pd_integration_table_cell_edit, {
-    info <- input$pd_integration_table_cell_edit
-    req(rv$results)
-
-    # Initialize internal_pd vector if needed
-    if (is.null(rv$internal_pd)) {
-      if ("pd_baseline" %in% names(rv$results)) {
-        rv$internal_pd <- rv$results$pd_baseline
-      } else {
-        rv$internal_pd <- rep(0, nrow(rv$results))
-      }
-    }
-
-    # The editable column is the last one (Internal_PD)
-    row_idx <- info$row
-    new_val <- as.numeric(info$value)
-    if (!is.na(new_val) && row_idx >= 1 && row_idx <= length(rv$internal_pd)) {
-      rv$internal_pd[row_idx] <- new_val
-    }
-  })
-
-  # Upload Internal PDs from CSV
-  observeEvent(input$upload_internal_pd, {
-    req(input$upload_internal_pd, rv$results)
-    tryCatch({
-      uploaded <- read.csv(input$upload_internal_pd$datapath, stringsAsFactors = FALSE)
-      names(uploaded) <- tolower(names(uploaded))
-
-      # Schema + value validation
-      validation_err <- validate_internal_pd_csv(uploaded)
-      if (!is.null(validation_err)) {
-        showNotification(paste("Validation error:", validation_err),
-                        type = "error", duration = 8)
-        return()
-      }
-
-      # Match by company_id
-      df <- rv$results
-      internal_pd <- if ("pd_baseline" %in% names(df)) df$pd_baseline else rep(0, nrow(df))
-
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_pd[idx[1]])
-          if (!is.na(val)) {
-            internal_pd[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
-
-      rv$internal_pd <- internal_pd
-      showNotification(
-        paste0("Internal PDs loaded: ", matched, " of ", nrow(df), " counterparties matched."),
-        type = if (matched > 0) "message" else "warning", duration = 6
-      )
-    }, error = function(e) {
-      message(paste("ERROR (PD upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please ensure it is a valid CSV.", type = "error", duration = 8)
-    })
-  })
-
-  # Internal PD upload status
-  output$internal_pd_upload_status <- renderUI({
-    if (!is.null(rv$internal_pd)) {
-      # Safety: if results row count changed, warn and reset
-      if (!is.null(rv$results) && length(rv$internal_pd) != nrow(rv$results)) {
-        rv$internal_pd <- NULL
-        return(tags$span(class = "text-warning", icon("triangle-exclamation"),
-                        "Internal PDs reset (portfolio size changed)"))
-      }
-      n_custom <- if (!is.null(rv$results) && "pd_baseline" %in% names(rv$results)) {
-        sum(rv$internal_pd != rv$results$pd_baseline, na.rm = TRUE)
-      } else 0
-      if (n_custom > 0) {
-        tagList(
-          tags$span(class = "text-success", icon("check-circle"),
-                   paste0(n_custom, " custom PD values loaded")),
-          if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted fs-11",
-                                icon("clock-rotate-left"), " Preserved from previous run")
-        )
-      } else {
-        tags$span(class = "text-muted", icon("info-circle"),
-                 "Using pd_baseline as default")
-      }
-    }
-  })
-
-  # Apply PD integration
-  observeEvent(input$apply_pd_integration, {
-    req(rv$results)
-    df <- rv$results
-    method <- input$pd_integration_method
-
-    # Get internal PD values
-    internal_pd <- if (!is.null(rv$internal_pd)) {
-      rv$internal_pd
-    } else if ("pd_baseline" %in% names(df)) {
-      df$pd_baseline
-    } else {
-      rep(0, nrow(df))
-    }
-
-    pd_baseline <- if ("pd_baseline" %in% names(df)) df$pd_baseline else rep(0, nrow(df))
-    pd_shock <- if ("pd_shock" %in% names(df)) df$pd_shock else rep(0, nrow(df))
-
-    pd_change <- pd_shock - pd_baseline
-    pd_change_pct <- ifelse(pd_baseline != 0, pd_change / pd_baseline, 0)
-
-    adjusted_pd <- switch(method,
-      "absolute" = {
-        internal_pd + pd_change
-      },
-      "relative" = {
-        internal_pd * (1 + pd_change_pct)
-      },
-      "zscore" = {
-        # Basel IRB z-score integration
-        # adjusted = Phi(Phi^{-1}(internal) + Phi^{-1}(shock) - Phi^{-1}(baseline))
-        # Clip inputs to (0.0001, 0.9999) to avoid Inf from qnorm
-        clip_pd <- function(x) pmin(pmax(x, 0.0001), 0.9999)
-        z_internal <- qnorm(clip_pd(internal_pd))
-        z_shock <- qnorm(clip_pd(pd_shock))
-        z_baseline <- qnorm(clip_pd(pd_baseline))
-        pnorm(z_internal + z_shock - z_baseline)
-      }
-    )
-
-    # Floor at 0, cap at 1
-    adjusted_pd <- pmin(pmax(adjusted_pd, 0), 1)
-
-    # Build result dataframe
-    id_cols <- intersect(c("company_id", "company_name", "sector", "technology",
-                           "exposure_value_usd"), names(df))
-    result_df <- df[, id_cols, drop = FALSE]
-    result_df$Internal_PD <- smart_round(internal_pd)
-    result_df$PD_Baseline <- smart_round(pd_baseline)
-    result_df$PD_Shock <- smart_round(pd_shock)
-    result_df$PD_Change <- smart_round(pd_change)
-    result_df$PD_Change_Pct <- smart_round(pd_change_pct * 100)
-    result_df$TRISK_Adjusted_PD <- smart_round(adjusted_pd)
-    result_df$PD_Adjustment <- smart_round(adjusted_pd - internal_pd)
-
-    rv$pd_integration_result <- result_df
-
-    showNotification(
-      paste("PD integration complete using", switch(method,
-        "absolute" = "Absolute Change",
-        "relative" = "Relative Change",
-        "zscore" = "Z-Score (Basel IRB)"
-      ), "method."),
-      type = "message", duration = 5
-    )
-  })
-
-  # PD integration results table (adaptive color coding + friendly column names)
-  output$pd_integration_results <- renderDT({
-    req(rv$pd_integration_result)
-    df <- rv$pd_integration_result
-
-    # Rename columns in-place for cleaner display
-    pd_renames <- c(
-      "company_id"       = "Company ID",
-      "company_name"     = "Company",
-      "sector"           = "Sector",
-      "technology"       = "Technology",
-      "exposure_value_usd" = "Exposure (USD)",
-      "Internal_PD"      = "Internal PD",
-      "PD_Baseline"      = "TRISK PD Baseline",
-      "PD_Shock"         = "TRISK PD Shock",
-      "PD_Change"        = "PD Change",
-      "PD_Change_Pct"    = "PD Change %",
-      "TRISK_Adjusted_PD"= "Adjusted PD",
-      "PD_Adjustment"    = "PD Adjustment"
-    )
-    display_df <- df
-    for (old_name in names(pd_renames)) {
-      if (old_name %in% names(display_df)) {
-        names(display_df)[names(display_df) == old_name] <- pd_renames[old_name]
-      }
-    }
-
-    # Data-adaptive breakpoints for PD Adjustment
-    pd_adj_vals <- display_df[["PD Adjustment"]][!is.na(display_df[["PD Adjustment"]])]
-    pd_adj_max <- if (length(pd_adj_vals) > 0) max(abs(pd_adj_vals)) else 0.01
-    if (pd_adj_max == 0) pd_adj_max <- 0.01
-
-    brks_pd <- c(-pd_adj_max, -pd_adj_max * 0.5, -pd_adj_max * 0.1,
-                  pd_adj_max * 0.1, pd_adj_max * 0.5, pd_adj_max)
-    clrs_pd <- c("#1B4332", "#2D6A2E", "#5DAA5E", "#BAB6B5",
-                 "#C45555", "#8B2020", "#5C0A0A")
-
-    num_cols <- which(sapply(display_df, is.numeric)) - 1
-
-    dt <- datatable(
-      display_df,
-      options = list(pageLength = 20, scrollX = TRUE,
-                     columnDefs = list(list(className = "dt-right", targets = num_cols))),
-      rownames = FALSE
-    ) %>%
-      formatStyle("Adjusted PD",
-                  backgroundColor = "#FFFDE7",
-                  fontWeight = "bold") %>%
-      formatStyle("PD Adjustment",
-                  backgroundColor = styleInterval(brks_pd, clrs_pd),
-                  color = "white", fontWeight = "bold")
-    dt
-  })
-
-  # Portfolio-level PD integration aggregates (ValueBox-style cards above detail table)
-  output$pd_integration_portfolio_summary <- renderUI({
-    req(rv$pd_integration_result)
-    df <- rv$pd_integration_result
-
-    exp_col <- if ("exposure_value_usd" %in% names(df)) "exposure_value_usd" else NULL
-    total_exp <- if (!is.null(exp_col)) sum(df[[exp_col]], na.rm = TRUE) else 0
-
-    if (!is.null(exp_col) && total_exp > 0) {
-      w_internal_pd <- sum(df$Internal_PD * df[[exp_col]], na.rm = TRUE) / total_exp
-      w_adjusted_pd <- sum(df$TRISK_Adjusted_PD * df[[exp_col]], na.rm = TRUE) / total_exp
-      w_pd_adjustment <- w_adjusted_pd - w_internal_pd
-    } else {
-      w_internal_pd <- mean(df$Internal_PD, na.rm = TRUE)
-      w_adjusted_pd <- mean(df$TRISK_Adjusted_PD, na.rm = TRUE)
-      w_pd_adjustment <- w_adjusted_pd - w_internal_pd
-    }
-
-    adj_pct <- if (w_internal_pd != 0) {
-      raw_pct <- w_pd_adjustment / w_internal_pd * 100
-      # Cap display at 9999% to avoid overflow in ValueBox
-      if (abs(raw_pct) > 9999) {
-        paste0(" (>", if (raw_pct > 0) "+" else "-", "9999%)")
-      } else {
-        paste0(" (", round(raw_pct, 1), "%)")
-      }
-    } else ""
-
-    # Color: red if PD increased, green if decreased, grey if neutral
-    adj_color <- if (w_pd_adjustment > 0.0001) "red" else if (w_pd_adjustment < -0.0001) "green" else "navy"
-
-    tagList(
-      # NOTE: needs CSS class .portfolio-summary-heading { margin-top: 15px; margin-bottom: 10px; font-weight: 600; }
-      h4(icon("chart-bar"), "Portfolio-Level PD Aggregates",
-         class = "portfolio-summary-heading"),
-      fluidRow(
-        valueBox(
-          value = paste0(smart_round(w_internal_pd * 100), "%"),
-          subtitle = "Wtd Avg Internal PD",
-          icon = icon("shield-halved"),
-          color = "navy",
-          width = 3
-        ),
-        valueBox(
-          value = paste0(smart_round(w_adjusted_pd * 100), "%"),
-          subtitle = "Wtd Avg TRISK-Adjusted PD",
-          icon = icon("shield-virus"),
-          color = adj_color,
-          width = 3
-        ),
-        valueBox(
-          value = paste0(smart_round(w_pd_adjustment * 100), " pp", adj_pct),
-          subtitle = "Weighted Average PD Adjustment",
-          icon = icon("arrow-trend-up"),
-          color = adj_color,
-          width = 3
-        ),
-        valueBox(
-          value = format_number(total_exp),
-          subtitle = "Total Exposure",
-          icon = icon("coins"),
-          color = "navy",
-          width = 3
-        )
-      ),
-      hr()
-    )
-  })
-
-  # Sector/Technology PD Breakdown (collapsible summary table)
-  output$pd_sector_breakdown <- renderUI({
-    req(rv$pd_integration_result)
-    df <- rv$pd_integration_result
-
-    grp_cols <- intersect(c("sector", "technology"), names(df))
-    if (length(grp_cols) == 0) return(NULL)
-
-    grp_col <- grp_cols[1]
-    sectors <- unique(df[[grp_col]])
-
-    breakdown_rows <- lapply(sectors, function(s) {
-      sub_df <- df[df[[grp_col]] == s, , drop = FALSE]
-      n <- nrow(sub_df)
-      avg_internal <- mean(sub_df$Internal_PD, na.rm = TRUE)
-      avg_adjusted <- mean(sub_df$TRISK_Adjusted_PD, na.rm = TRUE)
-      avg_pd_adj <- mean(sub_df$PD_Adjustment, na.rm = TRUE)
-
-      # Direction indicator: red arrow-up for PD increase, green arrow-down
-      # for decrease
-      dir_icon <- if (avg_pd_adj > 1e-6) {
-        tags$span(class = "text-danger", icon("arrow-up"), " ")
-      } else if (avg_pd_adj < -1e-6) {
-        tags$span(class = "text-success", icon("arrow-down"), " ")
-      } else {
-        tags$span(class = "fg-secondary", icon("minus"), " ")
-      }
-
-      tags$tr(
-        tags$td(class = "td-pad fw-600", s),
-        tags$td(class = "td-right", n),
-        tags$td(class = "td-right", smart_round(avg_internal)),
-        tags$td(class = "td-right", smart_round(avg_adjusted)),
-        tags$td(class = "td-right", dir_icon, smart_round(avg_pd_adj)),
-        tags$td(class = "td-right",
-                paste0(smart_round(avg_pd_adj * 100), " pp"))
-      )
-    })
-
-    tagList(
-      tags$div(
-        class = "mb-15",
-        tags$details(
-          tags$summary(
-            class = "breakdown-summary",
-            icon("layer-group"), " PD Breakdown by Sector"
-          ),
-          tags$div(
-            class = "breakdown-body",
-            tags$table(
-              class = "table table-striped table-hover breakdown-table",
-              tags$thead(
-                tags$tr(
-                  class = "breakdown-thead",
-                  tags$th(class = "th-pad", "Sector"),
-                  tags$th(class = "th-right", "Count"),
-                  tags$th(class = "th-right", "Avg Internal PD"),
-                  tags$th(class = "th-right", "Avg Adjusted PD"),
-                  tags$th(class = "th-right", "Avg PD Adj."),
-                  tags$th(class = "th-right", "Avg PD Adj. (pp)")
-                )
-              ),
-              tags$tbody(breakdown_rows)
-            )
-          )
-        )
-      )
-    )
-  })
-
-  # PD Adjustment Bar Chart (plotly)
-  output$pd_adjustment_chart <- renderPlotly({
-    req(rv$pd_integration_result)
-    df <- rv$pd_integration_result
-
-    has_sector <- "sector" %in% names(df)
-    has_company <- "company_name" %in% names(df)
-
-    if (has_sector) {
-      chart_df <- df %>%
-        dplyr::group_by(.data$sector) %>%
-        dplyr::summarise(
-          PD_Adjustment = mean(.data$PD_Adjustment, na.rm = TRUE),
-          n = dplyr::n(),
-          .groups = "drop"
-        ) %>%
-        dplyr::arrange(.data$PD_Adjustment)
-
-      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0,
-                               BRAND_CORAL, STATUS_GREEN)
-      chart_df$hover_text <- paste0(
-        "<b>",
-        htmltools::htmlEscape(as.character(chart_df$sector)),
-        "</b><br>",
-        "Avg PD Adjustment: ",
-        sapply(chart_df$PD_Adjustment, smart_round), "<br>",
-        "Counterparties: ", chart_df$n
-      )
-
-      p <- plot_ly(
-        chart_df,
-        y = ~reorder(sector, PD_Adjustment),
-        x = ~PD_Adjustment,
-        type = "bar",
-        orientation = "h",
-        marker = list(color = ~color),
-        text = ~hover_text,
-        hoverinfo = "text"
-      ) %>%
-        layout(
-          title = list(text = "Avg PD Adjustment by Sector",
-                       font = list(size = 14)),
-          xaxis = list(title = "PD Adjustment", zeroline = TRUE,
-                       zerolinecolor = "#999", zerolinewidth = 1.5),
-          yaxis = list(title = ""),
-          plot_bgcolor = "#FEFEFE",
-          paper_bgcolor = "#FEFEFE",
-          margin = list(l = 120, r = 20, t = 40, b = 40),
-          showlegend = FALSE
-        )
-    } else if (has_company) {
-      chart_df <- df %>%
-        dplyr::arrange(dplyr::desc(abs(.data$PD_Adjustment))) %>%
-        head(15) %>%
-        dplyr::arrange(.data$PD_Adjustment)
-
-      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0,
-                               BRAND_CORAL, STATUS_GREEN)
-      chart_df$hover_text <- paste0(
-        "<b>",
-        htmltools::htmlEscape(as.character(chart_df$company_name)),
-        "</b><br>",
-        "PD Adjustment: ",
-        sapply(chart_df$PD_Adjustment, smart_round)
-      )
-
-      p <- plot_ly(
-        chart_df,
-        y = ~reorder(company_name, PD_Adjustment),
-        x = ~PD_Adjustment,
-        type = "bar",
-        orientation = "h",
-        marker = list(color = ~color),
-        text = ~hover_text,
-        hoverinfo = "text"
-      ) %>%
-        layout(
-          title = list(
-            text = "Top 15 Counterparties by PD Adjustment",
-            font = list(size = 14)
-          ),
-          xaxis = list(title = "PD Adjustment", zeroline = TRUE,
-                       zerolinecolor = "#999", zerolinewidth = 1.5),
-          yaxis = list(title = ""),
-          plot_bgcolor = "#FEFEFE",
-          paper_bgcolor = "#FEFEFE",
-          margin = list(l = 150, r = 20, t = 40, b = 40),
-          showlegend = FALSE
-        )
-    } else {
-      chart_df <- df %>%
-        dplyr::mutate(
-          label = paste0("Row ", dplyr::row_number())
-        ) %>%
-        dplyr::arrange(.data$PD_Adjustment)
-
-      chart_df$color <- ifelse(chart_df$PD_Adjustment > 0,
-                               BRAND_CORAL, STATUS_GREEN)
-
-      p <- plot_ly(
-        chart_df,
-        y = ~reorder(label, PD_Adjustment),
-        x = ~PD_Adjustment,
-        type = "bar",
-        orientation = "h",
-        marker = list(color = ~color)
-      ) %>%
-        layout(
-          title = list(text = "PD Adjustment by Counterparty",
-                       font = list(size = 14)),
-          xaxis = list(title = "PD Adjustment"),
-          yaxis = list(title = ""),
-          plot_bgcolor = "#FEFEFE",
-          paper_bgcolor = "#FEFEFE",
-          showlegend = FALSE
-        )
-    }
-
-    p
-  })
 
   # ============================================
   # INTEGRATION PAGE - EL Integration
@@ -633,7 +87,16 @@ setup_integration <- function(input, output, session, rv) {
   observeEvent(input$upload_internal_el, {
     req(input$upload_internal_el, rv$results)
     tryCatch({
+      file_check <- validate_file_type(input$upload_internal_el$datapath, input$upload_internal_el$name)
+      if (!is.null(file_check)) {
+        showNotification(file_check, type = "error")
+        return()
+      }
       uploaded <- read.csv(input$upload_internal_el$datapath, stringsAsFactors = FALSE)
+      if (nrow(uploaded) > MAX_UPLOAD_ROWS) {
+        showNotification(paste0("File exceeds row limit (", format(MAX_UPLOAD_ROWS, big.mark = ","), " max)."), type = "error")
+        return()
+      }
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -647,18 +110,15 @@ setup_integration <- function(input, output, session, rv) {
       df <- rv$results
       internal_el <- if ("expected_loss_baseline" %in% names(df)) df$expected_loss_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_el[idx[1]])
-          if (!is.na(val)) {
-            internal_el[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      uploaded_map <- stats::setNames(
+        as.numeric(uploaded$internal_el),
+        as.character(uploaded$company_id)
+      )
+      result_ids <- as.character(df$company_id)
+      matched_vals <- uploaded_map[result_ids]
+      has_match <- !is.na(matched_vals)
+      internal_el[has_match] <- matched_vals[has_match]
+      matched <- sum(has_match)
 
       rv$internal_el <- internal_el
       showNotification(
@@ -666,17 +126,23 @@ setup_integration <- function(input, output, session, rv) {
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
-      message(paste("ERROR (EL upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please ensure it is a valid CSV.", type = "error", duration = 8)
+      message(paste("ERROR (EL CSV read):", conditionMessage(e)))
+      showNotification("Could not read the EL CSV file. Please check the file format.", type = "error", duration = 8)
     })
+  })
+
+  # Reset stale internal EL when results row count changes
+  observe({
+    req(rv$results, rv$internal_el)
+    if (length(rv$internal_el) != nrow(rv$results)) {
+      rv$internal_el <- NULL
+    }
   })
 
   # Internal EL upload status
   output$internal_el_upload_status <- renderUI({
     if (!is.null(rv$internal_el)) {
-      # Safety: if results row count changed, warn and reset
       if (!is.null(rv$results) && length(rv$internal_el) != nrow(rv$results)) {
-        rv$internal_el <- NULL
         return(tags$span(class = "text-warning", icon("triangle-exclamation"),
                         "Internal ELs reset (portfolio size changed)"))
       }
@@ -688,7 +154,7 @@ setup_integration <- function(input, output, session, rv) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom EL values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted fs-11",
+            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
                                 icon("clock-rotate-left"), " Preserved from previous run")
         )
       } else {
@@ -849,7 +315,7 @@ setup_integration <- function(input, output, session, rv) {
 
     tagList(
       h4(icon("chart-bar"), "Portfolio-Level EL Aggregates",
-         class = "portfolio-summary-heading"),
+         style = "margin-top: 15px; margin-bottom: 10px; font-weight: 600;"),
       fluidRow(
         valueBox(
           value = format_number(total_internal_el),
@@ -885,7 +351,7 @@ setup_integration <- function(input, output, session, rv) {
         valueBox(
           value = tags$span(bps_label,
                             title = "Adjusted EL as basis points of total exposure (|EL| / Exposure * 10,000)",
-                            class = "cursor-help"),
+                            style = "cursor: help;"),
           subtitle = "Adjusted EL / Exposure",
           icon = icon("percent"),
           color = if (!is.na(el_bps) && el_bps > 50) "red" else if (!is.na(el_bps) && el_bps > 20) "yellow" else "green",
@@ -919,55 +385,49 @@ setup_integration <- function(input, output, session, rv) {
       el_bps <- if (exp_val > 0) abs(adj_el) / exp_val * 10000 else NA_real_
 
       # Direction indicator
-      # NOTE: needs CSS class .dir-danger { color: #C44245; } .dir-success { color: #6B9F3B; }
       dir_icon <- if (el_adj < -0.01) {
-        tags$span(class = "text-danger", icon("arrow-down"), " ")
+        tags$span(style = "color: #C44245;", icon("arrow-down"), " ")
       } else if (el_adj > 0.01) {
-        tags$span(class = "text-success", icon("arrow-up"), " ")
+        tags$span(style = "color: #6B9F3B;", icon("arrow-up"), " ")
       } else {
-        tags$span(class = "fg-secondary", icon("minus"), " ")
+        tags$span(style = "color: #666;", icon("minus"), " ")
       }
 
       tags$tr(
-        tags$td(class = "td-pad fw-600", s),
-        tags$td(class = "td-right", n),
-        tags$td(class = "td-right", format_number(exp_val)),
-        tags$td(class = "td-right", format_number(int_el)),
-        tags$td(class = "td-right", format_number(adj_el)),
-        tags$td(class = "td-right", dir_icon, format_number(el_adj)),
-        tags$td(class = "td-right",
+        tags$td(style = "padding: 6px 12px; font-weight: 600;", s),
+        tags$td(style = "padding: 6px 12px; text-align: right;", n),
+        tags$td(style = "padding: 6px 12px; text-align: right;", format_number(exp_val)),
+        tags$td(style = "padding: 6px 12px; text-align: right;", format_number(int_el)),
+        tags$td(style = "padding: 6px 12px; text-align: right;", format_number(adj_el)),
+        tags$td(style = "padding: 6px 12px; text-align: right;", dir_icon, format_number(el_adj)),
+        tags$td(style = "padding: 6px 12px; text-align: right;",
                 if (!is.na(el_bps)) paste0(round(el_bps, 1), " bps") else "N/A")
       )
     })
 
-    # NOTE: needs CSS classes:
-    # .breakdown-summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 8px 0; color: #1A1A1A; }
-    # .breakdown-body { margin-top: 8px; overflow-x: auto; }
-    # .breakdown-table { width: 100%; font-size: 13px; border-collapse: collapse; }
-    # .breakdown-thead { background: #F0E6EA; border-bottom: 2px solid #DDD0D4; }
-    # .th-pad { padding: 8px 12px; }
     tagList(
       tags$div(
-        class = "mb-15",
+        style = "margin-bottom: 15px;",
         tags$details(
           tags$summary(
-            class = "breakdown-summary",
+            style = "cursor: pointer; font-weight: 600; font-size: 15px; padding: 8px 0; color: #1A1A1A;",
             icon("layer-group"), " EL Breakdown by Sector"
           ),
           tags$div(
-            class = "breakdown-body",
+            style = "margin-top: 8px; overflow-x: auto;",
             tags$table(
-              class = "table table-striped table-hover breakdown-table",
+              class = "table table-striped table-hover",
+              style = "width: 100%; font-size: 13px; border-collapse: collapse;",
               tags$thead(
                 tags$tr(
-                  class = "breakdown-thead",
-                  tags$th(class = "th-pad", "Sector"),
-                  tags$th(class = "th-right", "Count"),
-                  tags$th(class = "th-right", "Exposure"),
-                  tags$th(class = "th-right", "Internal EL"),
-                  tags$th(class = "th-right", "Adjusted EL"),
-                  tags$th(class = "th-right", "EL Adj."),
-                  tags$th(class = "th-right", "EL/Exposure")
+                  style = "background: #F0E6EA; border-bottom: 2px solid #DDD0D4;",
+                  tags$th(style = "padding: 8px 12px;", "Sector"),
+                  tags$th(style = "padding: 8px 12px; text-align: right;", "Count"),
+                  tags$th(style = "padding: 8px 12px; text-align: right;", "Exposure"),
+                  tags$th(style = "padding: 8px 12px; text-align: right;", "Internal EL"),
+                  tags$th(style = "padding: 8px 12px; text-align: right;", "Adjusted EL"),
+                  tags$th(style = "padding: 8px 12px; text-align: right;", "EL Adj."),
+                  tags$th(style = "padding: 8px 12px; text-align: right;", "EL/Exposure")
                 )
               ),
               tags$tbody(breakdown_rows)
@@ -1001,7 +461,7 @@ setup_integration <- function(input, output, session, rv) {
 
       chart_df$color <- ifelse(chart_df$EL_Adjustment < 0, BRAND_CORAL, STATUS_GREEN)
       chart_df$hover_text <- paste0(
-        "<b>", htmltools::htmlEscape(as.character(chart_df$sector)), "</b><br>",
+        "<b>", htmltools::htmlEscape(chart_df$sector), "</b><br>",
         "EL Adjustment: ", sapply(chart_df$EL_Adjustment, format_number), "<br>",
         "Exposure: ", sapply(chart_df$Exposure, format_number), "<br>",
         "Counterparties: ", chart_df$n
@@ -1034,7 +494,7 @@ setup_integration <- function(input, output, session, rv) {
 
       chart_df$color <- ifelse(chart_df$EL_Adjustment < 0, BRAND_CORAL, STATUS_GREEN)
       chart_df$hover_text <- paste0(
-        "<b>", htmltools::htmlEscape(as.character(chart_df$company_name)), "</b><br>",
+        "<b>", htmltools::htmlEscape(chart_df$company_name), "</b><br>",
         "EL Adjustment: ", sapply(chart_df$EL_Adjustment, format_number)
       )
 
@@ -1082,4 +542,150 @@ setup_integration <- function(input, output, session, rv) {
 
     p
   })
+
+  # ============================================
+  # Downloads
+  # ============================================
+
+  output$download_excel <- downloadHandler(
+    filename = function() {
+      paste0("trisk_results_", rv$run_id, ".xlsx")
+    },
+    content = function(file) {
+      req(rv$results)
+      audit_log("export", list(format = "xlsx", run_id = rv$run_id, rows = nrow(rv$results)))
+
+      df <- rv$results
+      grp_cols <- intersect(c("sector", "technology"), names(df))
+
+      summary_df <- if (length(grp_cols) > 0) {
+        tryCatch({
+          df %>%
+            group_by(across(all_of(grp_cols))) %>%
+            summarise(n_rows = n(), .groups = "drop")
+        }, error = function(e) df)
+      } else {
+        df
+      }
+
+      sheets <- list(
+        "Summary" = summary_df,
+        "Full Results" = df
+      )
+
+      # Add multi-horizon results if available
+      if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
+        sheets[["Multi-Horizon"]] <- bind_rows(rv$results_by_year, .id = "shock_year")
+      }
+
+      # Add multi-scenario comparison if available
+      if (!is.null(rv$results_by_scenario) && length(rv$results_by_scenario) > 1) {
+        all_scen_rows <- list()
+        for (scen_code in names(rv$results_by_scenario)) {
+          for (yr_key in names(rv$results_by_scenario[[scen_code]])) {
+            df_s <- rv$results_by_scenario[[scen_code]][[yr_key]]
+            df_s$target_scenario <- scen_code
+            df_s$shock_year <- as.integer(yr_key)
+            all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
+          }
+        }
+        sheets[["Scenario Comparison"]] <- bind_rows(all_scen_rows)
+      }
+
+      # Add integration results if available
+      if (!is.null(rv$pd_integration_result)) {
+        sheets[["PD Integration"]] <- rv$pd_integration_result
+      }
+      if (!is.null(rv$el_integration_result)) {
+        sheets[["EL Integration"]] <- rv$el_integration_result
+      }
+
+      # Sanitize all sheets to export-safe columns
+      sheets <- lapply(sheets, sanitize_export)
+
+      # Guard against OOM: writexl builds the entire workbook in memory.
+      # For large exports (>100K rows), write CSV instead which streams to disk.
+      total_rows <- sum(vapply(sheets, nrow, integer(1)))
+      if (total_rows > 100000) {
+        showNotification(
+          paste0("Large export (", format(total_rows, big.mark = ","),
+                 " rows) — writing CSV instead of Excel to avoid memory issues."),
+          type = "warning", duration = 8)
+        data.table::fwrite(sheets[["Full Results"]], file)
+      } else {
+        writexl::write_xlsx(sheets, file)
+      }
+    }
+  )
+
+  output$download_csv <- downloadHandler(
+    filename = function() {
+      paste0("trisk_results_", rv$run_id, ".csv")
+    },
+    content = function(file) {
+      req(rv$results)
+      audit_log("export", list(format = "csv", run_id = rv$run_id, rows = nrow(rv$results)))
+      write_csv(sanitize_export(rv$results), file)
+    }
+  )
+
+  output$download_json <- downloadHandler(
+    filename = function() {
+      paste0("trisk_results_", rv$run_id, ".json")
+    },
+    content = function(file) {
+      req(rv$results)
+      audit_log("export", list(format = "json", run_id = rv$run_id, rows = nrow(rv$results)))
+      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
+    }
+  )
+
+  output$download_config <- downloadHandler(
+    filename = function() {
+      paste0("trisk_config_", rv$run_id, ".json")
+    },
+    content = function(file) {
+      audit_log("export", list(format = "config_json", run_id = rv$run_id))
+      config <- list(
+        run_id = rv$run_id,
+        timestamp = as.character(Sys.time()),
+        parameters = list(
+          baseline_scenario = input$baseline_scenario %||% "",
+          target_scenario = input$target_scenario %||% "",
+          scenario_pairs = lapply(rv$scenario_groups, function(key) {
+            entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+            if (key == "core") {
+              bl <- input$baseline_scenario; tgt <- input$target_scenario
+            } else {
+              bl <- input[[paste0("baseline_scenario_", key)]]
+              tgt <- input[[paste0("target_scenario_", key)]]
+            }
+            list(group = key, label = entry$label,
+                 baseline = bl %||% "", target = tgt %||% "",
+                 sectors = entry$sectors)
+          }),
+          scenario_geography = input$scenario_geography,
+          shock_years = paste(input$shock_years, collapse = ", "),
+          risk_free_rate = input$risk_free_rate,
+          discount_rate = input$discount_rate,
+          growth_rate = input$growth_rate,
+          market_passthrough = input$market_passthrough,
+          carbon_price_model = input$carbon_price_model
+        ),
+        data_summary = list(
+          portfolio_rows = nrow(rv$portfolio),
+          assets_rows = nrow(rv$assets),
+          financial_rows = nrow(rv$financial)
+        ),
+        versions = list(
+          trisk_model = as.character(packageVersion("trisk.model")),
+          trisk_analysis = as.character(packageVersion("trisk.analysis"))
+        )
+      )
+      jsonlite::write_json(config, file, pretty = TRUE, auto_unbox = TRUE)
+    }
+  )
+
+  # ============================================
+
 }

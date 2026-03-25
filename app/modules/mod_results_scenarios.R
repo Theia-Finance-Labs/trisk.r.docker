@@ -1,5 +1,5 @@
 # mod_results_scenarios.R
-# Scenario Comparison + Distribution Analysis dashboards
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_results_scenarios <- function(input, output, session, rv) {
 
@@ -37,13 +37,9 @@ setup_results_scenarios <- function(input, output, session, rv) {
       group_by(target_scenario, scenario_label, scenario_category, shock_year) %>%
       summarise(
         n_companies = n(),
-        avg_pd_shock = if ("exposure_value_usd" %in% names(scd))
-          weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE)
-        else mean(pd_shock, na.rm = TRUE),
+        avg_pd_shock = mean(pd_shock, na.rm = TRUE),
         max_pd_shock = max(pd_shock, na.rm = TRUE),
-        avg_pd_change = if ("exposure_value_usd" %in% names(scd))
-          weighted.mean(pd_shock - pd_baseline, exposure_value_usd, na.rm = TRUE)
-        else mean(pd_shock - pd_baseline, na.rm = TRUE),
+        avg_pd_change = mean(pd_shock - pd_baseline, na.rm = TRUE),
         avg_npv_change = if ("crispy_perc_value_change" %in% names(scd))
           mean(crispy_perc_value_change, na.rm = TRUE) else NA_real_,
         total_el_shock = if ("expected_loss_shock" %in% names(scd))
@@ -59,13 +55,13 @@ setup_results_scenarios <- function(input, output, session, rv) {
   output$scenario_comparison_ui <- renderUI({
     scd <- scenario_comparison_data()
     if (is.null(scd)) {
-      return(div(class = "empty-state",
-        icon("layer-group", class = "empty-state-icon"),
+      return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
+        icon("layer-group", style = "font-size: 48px; margin-bottom: 15px;"),
         h4("Scenario Comparison requires 2+ target scenarios"),
         p("Select multiple target scenarios on the Configure tab to enable cross-scenario analysis.",
-          class = "fs-14"),
+          style = "font-size: 14px;"),
         actionLink("goto_config_scenario", "Configure target scenarios",
-                    icon = icon("cog"), class = "fs-14")
+                    icon = icon("cog"), style = "font-size: 14px;")
       ))
     }
 
@@ -79,63 +75,18 @@ setup_results_scenarios <- function(input, output, session, rv) {
         fluidRow(
           column(8,
             h4(icon("layer-group"), paste0(" Scenario Comparison: ", n_scen, " scenarios"),
-               class = "section-title"),
+               style = "margin: 0; font-weight: 700;"),
             tags$small(paste0(n_yrs, " shock year(s) | ", n_co, " companies | ",
                              n_scen * n_yrs, " total runs"))
           ),
-          column(4, class = "text-right",
+          column(4, style = "text-align: right;",
             downloadButton("download_scenario_csv", "Export CSV",
                           class = "btn btn-xs btn-export")
           )
         )
       ),
 
-      # Row 1: Distribution Summary Statistics (moved to top)
-      fluidRow(
-        box(title = "Distribution Summary Statistics", width = 12, status = "danger",
-            solidHeader = TRUE, collapsible = TRUE,
-            tags$small("Cross-scenario quantiles for key portfolio metrics at each shock year."),
-            DTOutput("dist_summary_table", height = "250px")
-        )
-      ),
-
-      # ---- SCENARIO DISTRIBUTION (Probabilistic) ----
-      div(class = "section-header section-header--purple mt-20",
-        h4(icon("chart-area"), " Scenario Distribution \u2014 Probabilistic Analysis",
-           class = "section-title"),
-        tags$small("Treating selected scenarios as a distribution of plausible outcomes. ",
-                   "Confidence bands show the range of uncertainty across scenario pathways.")
-      ),
-
-      # Row 2: Fan chart + Violin plots
-      fluidRow(
-        box(title = "PD Fan Chart \u2014 Uncertainty Over Time", width = 7, status = "danger",
-            solidHeader = TRUE, collapsible = TRUE,
-            tags$small("Median PD with P10\u2013P90 and P25\u2013P75 confidence bands across all scenarios."),
-            plotlyOutput("dist_fan_chart", height = "380px")
-        ),
-        box(title = "PD Distribution by Scenario", width = 5, status = "danger",
-            solidHeader = TRUE, collapsible = TRUE,
-            tags$small("Company-level PD spread per scenario (violin + box plot)."),
-            plotlyOutput("dist_violin", height = "380px")
-        )
-      ),
-
-      # Row 3: Exceedance curve + NPV fan chart
-      fluidRow(
-        box(title = "PD Exceedance Curve", width = 6, status = "danger",
-            solidHeader = TRUE, collapsible = TRUE,
-            tags$small("Probability that portfolio avg PD exceeds a given threshold, across scenarios."),
-            plotlyOutput("dist_exceedance", height = "350px")
-        ),
-        box(title = "NPV Change Fan Chart", width = 6, status = "danger",
-            solidHeader = TRUE, collapsible = TRUE,
-            tags$small("Median NPV change with P10\u2013P90 bands across scenarios."),
-            plotlyOutput("dist_npv_fan", height = "350px")
-        )
-      ),
-
-      # Row 4: Scenario Ranking Table + Tornado Chart
+      # Row 1: Scenario Ranking Table + Tornado Chart
       fluidRow(
         box(title = "Scenario Impact Ranking", width = 6, status = "danger",
             solidHeader = TRUE, collapsible = TRUE,
@@ -149,7 +100,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
         )
       ),
 
-      # Row 5: Grouped bar chart + Spider/radar
+      # Row 2: Grouped bar chart + Spider/radar
       fluidRow(
         box(title = "PD by Scenario & Sector", width = 6, status = "danger",
             solidHeader = TRUE, collapsible = TRUE,
@@ -162,12 +113,52 @@ setup_results_scenarios <- function(input, output, session, rv) {
         )
       ),
 
-      # Row 6: Company-level heatmap
+      # Row 3: Company-level heatmap
       fluidRow(
         box(title = "Company \u00D7 Scenario Heatmap", width = 12, status = "danger",
             solidHeader = TRUE, collapsible = TRUE,
             tags$small("Rows = companies, Columns = scenarios. Cell color = PD shock intensity."),
             plotlyOutput("scenario_company_heatmap", height = "400px")
+        )
+      ),
+
+      # ---- SCENARIO DISTRIBUTION (Probabilistic) ----
+      div(class = "section-header section-header--purple", style = "margin: 20px 0 16px 0;",
+        h4(icon("chart-area"), " Scenario Distribution \u2014 Probabilistic Analysis",
+           style = "margin: 0; font-weight: 700;"),
+        tags$small("Treating selected scenarios as a distribution of plausible outcomes. ",
+                   "Confidence bands show the range of uncertainty across scenario pathways.")
+      ),
+
+      # Row 4: Fan chart + Violin plots
+      fluidRow(
+        box(title = "PD Fan Chart \u2014 Uncertainty Over Time", width = 7, status = "danger",
+            solidHeader = TRUE, collapsible = TRUE,
+            tags$small("Median PD with P10\u2013P90 and P25\u2013P75 confidence bands across all scenarios."),
+            plotlyOutput("dist_fan_chart", height = "380px")
+        ),
+        box(title = "PD Distribution by Scenario", width = 5, status = "danger",
+            solidHeader = TRUE, collapsible = TRUE,
+            tags$small("Company-level PD spread per scenario (violin + box plot)."),
+            plotlyOutput("dist_violin", height = "380px")
+        )
+      ),
+
+      # Row 5: Exceedance curve
+      fluidRow(
+        box(title = "PD Exceedance Curve", width = 12, status = "danger",
+            solidHeader = TRUE, collapsible = TRUE,
+            tags$small("Probability that portfolio avg PD exceeds a given threshold, across scenarios."),
+            plotlyOutput("dist_exceedance", height = "350px")
+        )
+      ),
+
+      # Row 6: Summary statistics table
+      fluidRow(
+        box(title = "Distribution Summary Statistics", width = 12, status = "danger",
+            solidHeader = TRUE, collapsible = TRUE,
+            tags$small("Cross-scenario quantiles for key portfolio metrics at each shock year."),
+            DTOutput("dist_summary_table", height = "250px")
         )
       )
     )
@@ -178,8 +169,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
     sps <- scenario_portfolio_summary()
     req(sps)
 
-    # Use earliest year for ranking
-    earliest_yr <- min(sps$shock_year)
+    # Use latest shock year for ranking (maximum stress impact)
     ranking <- sps %>%
       filter(shock_year == max(sps$shock_year)) %>%
       arrange(desc(avg_pd_shock)) %>%
@@ -187,16 +177,15 @@ setup_results_scenarios <- function(input, output, session, rv) {
         rank = row_number(),
         avg_pd_pct = round(avg_pd_shock * 100, 3),
         max_pd_pct = round(max_pd_shock * 100, 3),
-        avg_npv_pct = round(avg_npv_change * 100, 2),
         el_change = round(total_el_change, 0)
       ) %>%
-      select(Rank = rank, Scenario = scenario_label, Code = target_scenario,
-             Category = scenario_category,
+      select(Rank = rank, Scenario = scenario_label, Category = scenario_category,
              `Avg PD (%)` = avg_pd_pct, `Max PD (%)` = max_pd_pct,
-             `NPV Change (%)` = avg_npv_pct, `EL Change ($)` = el_change)
+             `EL Change ($)` = el_change)
 
     datatable(ranking, rownames = FALSE, options = list(
       dom = "t", pageLength = 20, ordering = FALSE,
+      scrollY = "250px", scrollCollapse = TRUE,
       columnDefs = list(list(className = "dt-center", targets = "_all"))
     )) %>%
       formatStyle("Avg PD (%)", backgroundColor = styleInterval(
@@ -205,7 +194,6 @@ setup_results_scenarios <- function(input, output, session, rv) {
 
   # ---- Sensitivity Tornado Chart ----
   output$scenario_tornado <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     sps <- scenario_portfolio_summary()
     req(sps)
 
@@ -213,13 +201,13 @@ setup_results_scenarios <- function(input, output, session, rv) {
     sps_yr <- sps %>% filter(shock_year == latest_yr)
 
     metrics <- data.frame(
-      metric = c("Avg PD (%)", "Max PD (%)", "NPV Change (%)"),
+      metric = c("Avg PD (%)", "Max PD (%)", "EL Change ($K)"),
       min_val = c(min(sps_yr$avg_pd_shock * 100), min(sps_yr$max_pd_shock * 100),
-                  min(sps_yr$avg_npv_change * 100)),
+                  min(sps_yr$total_el_change / 1000)),
       max_val = c(max(sps_yr$avg_pd_shock * 100), max(sps_yr$max_pd_shock * 100),
-                  max(sps_yr$avg_npv_change * 100)),
+                  max(sps_yr$total_el_change / 1000)),
       median_val = c(median(sps_yr$avg_pd_shock * 100), median(sps_yr$max_pd_shock * 100),
-                     median(sps_yr$avg_npv_change * 100)),
+                     median(sps_yr$total_el_change / 1000)),
       stringsAsFactors = FALSE
     )
     metrics$range <- metrics$max_val - metrics$min_val
@@ -234,22 +222,14 @@ setup_results_scenarios <- function(input, output, session, rv) {
       add_markers(data = metrics, x = ~median_val, y = ~metric, marker = list(
         color = "#1A1A1A", size = 10, symbol = "diamond"), name = "Median",
         hoverinfo = "text", text = ~paste0("Median: ", round(median_val, 2))) %>%
-      layout(xaxis = list(title = "Value", zeroline = TRUE, gridcolor = tc$gridcolor),
-             yaxis = list(title = "", gridcolor = tc$gridcolor),
+      layout(xaxis = list(title = "Value", zeroline = TRUE),
+             yaxis = list(title = ""),
              margin = list(l = 120),
-             showlegend = FALSE,
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+             showlegend = FALSE)
   })
 
   # ---- Scenario × Sector Grouped Bar Chart ----
   output$scenario_sector_bars <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     scd <- scenario_comparison_data()
     req(scd)
 
@@ -257,29 +237,19 @@ setup_results_scenarios <- function(input, output, session, rv) {
     sector_scen <- scd %>%
       filter(shock_year == latest_yr) %>%
       group_by(scenario_label, sector) %>%
-      summarise(avg_pd = if ("exposure_value_usd" %in% names(scd))
-          weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE) * 100
-        else mean(pd_shock, na.rm = TRUE) * 100, .groups = "drop")
+      summarise(avg_pd = mean(pd_shock, na.rm = TRUE) * 100, .groups = "drop")
 
     plot_ly(sector_scen, x = ~sector, y = ~avg_pd, color = ~scenario_label,
             type = "bar", hoverinfo = "text",
             text = ~paste0(scenario_label, "\n", sector, ": ", round(avg_pd, 3), "%")) %>%
       layout(barmode = "group",
-             xaxis = list(title = "Sector", gridcolor = tc$gridcolor),
-             yaxis = list(title = "Avg PD Shock (%)", gridcolor = tc$gridcolor),
-             legend = list(orientation = "h", y = -0.2),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+             xaxis = list(title = "Sector"),
+             yaxis = list(title = "Avg PD Shock (%)"),
+             legend = list(orientation = "h", y = -0.2))
   })
 
   # ---- Scenario Radar Chart ----
   output$scenario_radar <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     sps <- scenario_portfolio_summary()
     req(sps)
 
@@ -296,13 +266,12 @@ setup_results_scenarios <- function(input, output, session, rv) {
     radar_df <- sps_yr %>%
       mutate(
         pd_norm = normalize(avg_pd_shock),
-        npv_norm = normalize(abs(avg_npv_change)),
         el_norm = normalize(abs(total_el_change)),
         max_pd_norm = normalize(max_pd_shock)
       )
 
-    dims <- c("pd_norm", "npv_norm", "el_norm", "max_pd_norm")
-    dim_labels <- c("Avg PD", "NPV Impact", "EL Impact", "Max PD")
+    dims <- c("pd_norm", "el_norm", "max_pd_norm")
+    dim_labels <- c("Avg PD", "EL Impact", "Max PD")
 
     p <- plot_ly(type = "scatterpolar", fill = "toself")
     colors <- c(BRAND_CORAL, STATUS_BLUE, STATUS_GREEN, "#8B6914", "#888888", "#C0393B")
@@ -322,27 +291,31 @@ setup_results_scenarios <- function(input, output, session, rv) {
     p %>% layout(
       polar = list(radialaxis = list(visible = TRUE, range = c(0, 1))),
       legend = list(orientation = "h", y = -0.15, font = list(size = 10)),
-      margin = list(t = 30),
-      font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-      paper_bgcolor = tc$paper_bgcolor,
-      plot_bgcolor = tc$plot_bgcolor,
-      hoverlabel = PLOTLY_HOVERLABEL
-    ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      margin = list(t = 30)
+    )
   })
 
   # ---- Company × Scenario Heatmap ----
   output$scenario_company_heatmap <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     scd <- scenario_comparison_data()
     req(scd)
 
     latest_yr <- max(scd$shock_year)
+
+    # After portfolio enrichment, companies may have multiple rows (one per technology).
+    # Aggregate to company-level using exposure-weighted mean PD.
+    has_exposure <- "exposure_value_usd" %in% names(scd)
     heatmap_df <- scd %>%
       filter(shock_year == latest_yr) %>%
-      select(company_name, scenario_label, pd_shock) %>%
+      group_by(company_name, scenario_label) %>%
+      summarise(
+        pd_shock = if (has_exposure) {
+          safe_weighted_mean(pd_shock, exposure_value_usd)
+        } else {
+          mean(pd_shock, na.rm = TRUE)
+        },
+        .groups = "drop"
+      ) %>%
       mutate(pd_pct = round(pd_shock * 100, 3))
 
     # Pivot to matrix
@@ -350,7 +323,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
       select(company_name, scenario_label, pd_pct) %>%
       tidyr::pivot_wider(names_from = scenario_label, values_from = pd_pct)
 
-    companies <- mat$company_name
+    companies <- htmltools::htmlEscape(mat$company_name)
     scenarios <- setdiff(names(mat), "company_name")
     z_matrix <- as.matrix(mat[, scenarios])
 
@@ -368,16 +341,9 @@ setup_results_scenarios <- function(input, output, session, rv) {
             colorbar = list(title = "PD Shock (%)"),
             hoverinfo = "text",
             text = text_matrix) %>%
-      layout(xaxis = list(title = "", tickangle = -30, gridcolor = tc$gridcolor),
-             yaxis = list(title = "", gridcolor = tc$gridcolor),
-             margin = list(b = 120, l = 120),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      layout(xaxis = list(title = "", tickangle = -30),
+             yaxis = list(title = ""),
+             margin = list(b = 120, l = 120))
   })
 
   # ========================================================
@@ -416,7 +382,6 @@ setup_results_scenarios <- function(input, output, session, rv) {
 
   # ---- PD Fan Chart ----
   output$dist_fan_chart <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     dq <- dist_quantiles()
     req(dq)
 
@@ -456,23 +421,15 @@ setup_results_scenarios <- function(input, output, session, rv) {
     }
 
     p %>% layout(
-      xaxis = list(title = "Shock Year", dtick = 5, gridcolor = tc$gridcolor),
-      yaxis = list(title = "Portfolio Avg PD (%)", gridcolor = tc$gridcolor),
+      xaxis = list(title = "Shock Year", dtick = 5),
+      yaxis = list(title = "Portfolio Avg PD (%)"),
       legend = list(orientation = "h", y = -0.2, font = list(size = 9)),
-      hovermode = "x unified",
-      font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-      paper_bgcolor = tc$paper_bgcolor,
-      plot_bgcolor = tc$plot_bgcolor,
-      hoverlabel = PLOTLY_HOVERLABEL
-    ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      hovermode = "x unified"
+    )
   })
 
   # ---- PD Violin / Box Plot ----
   output$dist_violin <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     scd <- scenario_comparison_data()
     req(scd)
 
@@ -489,22 +446,14 @@ setup_results_scenarios <- function(input, output, session, rv) {
             fillcolor = "rgba(245, 61, 63, 0.15)",
             line = list(color = BRAND_CORAL),
             hoverinfo = "y") %>%
-      layout(xaxis = list(title = "", tickangle = -25, gridcolor = tc$gridcolor),
-             yaxis = list(title = "PD Shock (%)", gridcolor = tc$gridcolor),
+      layout(xaxis = list(title = "", tickangle = -25),
+             yaxis = list(title = "PD Shock (%)"),
              showlegend = FALSE,
-             margin = list(b = 100),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+             margin = list(b = 100))
   })
 
   # ---- PD Exceedance Curve ----
   output$dist_exceedance <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     sps <- scenario_portfolio_summary()
     req(sps)
 
@@ -528,21 +477,13 @@ setup_results_scenarios <- function(input, output, session, rv) {
                   text = paste0("PD > ", round(pd_vals, 3), "%: ",
                                round(exceed_probs * 100, 1), "% of scenarios"),
                   hoverinfo = "text", showlegend = FALSE) %>%
-      layout(xaxis = list(title = "Portfolio Avg PD Threshold (%)", gridcolor = tc$gridcolor),
-             yaxis = list(title = "Exceedance Probability (%)", range = c(0, 105), gridcolor = tc$gridcolor),
-             showlegend = FALSE,
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      layout(xaxis = list(title = "Portfolio Avg PD Threshold (%)"),
+             yaxis = list(title = "Exceedance Probability (%)", range = c(0, 105)),
+             showlegend = FALSE)
   })
 
   # ---- NPV Change Fan Chart ----
   output$dist_npv_fan <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     dq <- dist_quantiles()
     req(dq)
     sps <- scenario_portfolio_summary()
@@ -571,18 +512,11 @@ setup_results_scenarios <- function(input, output, session, rv) {
     }
 
     p %>% layout(
-      xaxis = list(title = "Shock Year", dtick = 5, gridcolor = tc$gridcolor),
-      yaxis = list(title = "Average NPV Change (%)", gridcolor = tc$gridcolor),
+      xaxis = list(title = "Shock Year", dtick = 5),
+      yaxis = list(title = "Average NPV Change (%)"),
       legend = list(orientation = "h", y = -0.2, font = list(size = 9)),
-      hovermode = "x unified",
-      font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-      paper_bgcolor = tc$paper_bgcolor,
-      plot_bgcolor = tc$plot_bgcolor,
-      hoverlabel = PLOTLY_HOVERLABEL
-    ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      hovermode = "x unified"
+    )
   })
 
   # ---- Distribution Summary Statistics Table ----
@@ -599,15 +533,11 @@ setup_results_scenarios <- function(input, output, session, rv) {
         `PD Median (%)` = round(pd_median * 100, 4),
         `PD P75 (%)` = round(pd_p75 * 100, 4),
         `PD P90 (%)` = round(pd_p90 * 100, 4),
-        `NPV P10 (%)` = round(npv_p10 * 100, 2),
-        `NPV Median (%)` = round(npv_median * 100, 2),
-        `NPV P90 (%)` = round(npv_p90 * 100, 2),
         `EL Median ($)` = round(el_median, 0),
         `EL P90 ($)` = round(el_p90, 0)
       ) %>%
       select(`Shock Year`, `N Scenarios`,
              `PD P10 (%)`, `PD P25 (%)`, `PD Median (%)`, `PD P75 (%)`, `PD P90 (%)`,
-             `NPV P10 (%)`, `NPV Median (%)`, `NPV P90 (%)`,
              `EL Median ($)`, `EL P90 ($)`)
 
     datatable(display_df, rownames = FALSE, options = list(
@@ -628,5 +558,7 @@ setup_results_scenarios <- function(input, output, session, rv) {
       if (!is.null(scd)) write.csv(sanitize_export(scd), file, row.names = FALSE)
     }
   )
+
+  # ============================================
 
 }

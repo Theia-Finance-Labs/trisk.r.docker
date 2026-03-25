@@ -1,7 +1,10 @@
 # mod_results_attribution.R
-# Attribution / Waterfall Dashboard: risk decomposition by company, sector, technology
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_results_attribution <- function(input, output, session, rv) {
+
+  # ATTRIBUTION / WATERFALL DASHBOARD
+  # ============================================
 
   # Reactive: attribution data — builds the decomposition of PD/NPV/EL changes
   # by sector, technology, and company, using the primary results (first scenario, first year).
@@ -19,29 +22,41 @@ setup_results_attribution <- function(input, output, session, rv) {
     total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
 
     # --- Company-level attribution ---
-    company_label_col <- if (has_company && "company_name" %in% names(df)) "company_name" else "company_id"
-    company_df <- df %>%
+    # After portfolio enrichment, results may have multiple rows per company
+    # (one per technology). Aggregate to true company-level for attribution.
+    has_valid_company_name_attr <- "company_name" %in% names(df) && any(!is.na(df$company_name))
+    company_label_col <- if (has_valid_company_name_attr) "company_name" else "company_id"
+    row_df <- df %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
-        pd_contribution = pd_change * weight,  # weighted contribution to portfolio PD change
-        company_label = .data[[company_label_col]]
+        pd_contribution = pd_change * weight,
+        company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]])),
+        el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
+        npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
       )
+
+    company_df <- row_df %>%
+      group_by(company_label, sector) %>%
+      summarise(
+        # Weighted means MUST come before exposure_value_usd is overwritten by sum()
+        pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+        pd_shock    = safe_weighted_mean(pd_shock, exposure_value_usd),
+        pd_change   = safe_weighted_mean(pd_change, exposure_value_usd),
+        npv_change_pct = if (has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
+        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
+        weight      = sum(weight, na.rm = TRUE),
+        pd_contribution = sum(pd_contribution, na.rm = TRUE),
+        el_change   = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
+        .groups = "drop"
+      )
+
     # Guard NA labels
     company_df$company_label <- ifelse(
       is.na(company_df$company_label),
       paste0("Company_", seq_len(nrow(company_df))),
       as.character(company_df$company_label)
     )
-
-    if (has_el) {
-      company_df <- company_df %>%
-        mutate(el_change = expected_loss_shock - expected_loss_baseline)
-    }
-    if (has_npv) {
-      company_df <- company_df %>%
-        mutate(npv_change_pct = crispy_perc_value_change * 100)
-    }
 
     # --- Sector-level attribution ---
     sector_df <- company_df %>%
@@ -50,25 +65,26 @@ setup_results_attribution <- function(input, output, session, rv) {
         n_companies = n(),
         total_exposure = sum(exposure_value_usd, na.rm = TRUE),
         weight = sum(weight, na.rm = TRUE),
-        avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
-        avg_pd_shock = weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE),
+        avg_pd_baseline = safe_weighted_mean(pd_baseline, exposure_value_usd),
+        avg_pd_shock = safe_weighted_mean(pd_shock, exposure_value_usd),
         avg_pd_change = avg_pd_shock - avg_pd_baseline,
         pd_contribution = sum(pd_contribution, na.rm = TRUE),
         el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
-        npv_change_pct = if (has_npv) weighted.mean(npv_change_pct, exposure_value_usd, na.rm = TRUE) else NA_real_,
+        npv_change_pct = if (has_npv) safe_weighted_mean(npv_change_pct, exposure_value_usd) else NA_real_,
         .groups = "drop"
       ) %>%
       arrange(desc(abs(pd_contribution)))
 
     # --- Technology-level attribution (if available) ---
+    # Use row_df (pre-company-aggregation) since it still has the technology column
     tech_df <- if (has_tech) {
-      company_df %>%
+      row_df %>%
         group_by(sector, technology) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
-          avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
+          avg_pd_change = safe_weighted_mean(pd_change, exposure_value_usd),
           pd_contribution = sum(pd_contribution, na.rm = TRUE),
           el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
           .groups = "drop"
@@ -77,12 +93,13 @@ setup_results_attribution <- function(input, output, session, rv) {
     } else NULL
 
     # --- Portfolio-level waterfall steps ---
-    portfolio_pd_baseline <- weighted.mean(df$pd_baseline, df$exposure_value_usd, na.rm = TRUE)
-    portfolio_pd_shock <- weighted.mean(df$pd_shock, df$exposure_value_usd, na.rm = TRUE)
+    portfolio_pd_baseline <- safe_weighted_mean(df$pd_baseline, df$exposure_value_usd)
+    portfolio_pd_shock <- safe_weighted_mean(df$pd_shock, df$exposure_value_usd)
     portfolio_pd_change <- portfolio_pd_shock - portfolio_pd_baseline
 
     list(
       company = company_df,
+      company_detail = row_df,   # per-row (technology-level) for detailed table
       sector = sector_df,
       tech = tech_df,
       portfolio_pd_baseline = portfolio_pd_baseline,
@@ -99,13 +116,13 @@ setup_results_attribution <- function(input, output, session, rv) {
   output$attribution_ui <- renderUI({
     ad <- attribution_data()
     if (is.null(ad)) {
-      return(div(class = "empty-state",
-        icon("chart-bar", class = "empty-state-icon"),
+      return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
+        icon("chart-bar", style = "font-size: 48px; margin-bottom: 15px;"),
         h4("Run analysis to view attribution breakdown"),
         p("Results are needed to decompose risk changes by sector, technology, and company.",
-          class = "fs-14"),
+          style = "font-size: 14px;"),
         actionLink("goto_run_attribution", "Go to Run Analysis",
-                    icon = icon("play"), class = "fs-14")
+                    icon = icon("play"), style = "font-size: 14px;")
       ))
     }
 
@@ -118,71 +135,53 @@ setup_results_attribution <- function(input, output, session, rv) {
         fluidRow(
           column(8,
             h4(icon("chart-bar"), " Risk Attribution Dashboard",
-               class = "section-title"),
+               style = "margin: 0; font-weight: 700;"),
             tags$small(paste0(n_sectors, " sectors | ", n_co, " companies | ",
                              "Portfolio PD change: ", round(ad$portfolio_pd_change * 100, 4), " pp"),
-                      class = "opacity-85")
+                      style = "opacity: 0.85;")
           ),
-          column(4, class = "text-right",
+          column(4, style = "text-align: right;",
             downloadButton("download_attribution_csv", "Export CSV",
                           class = "btn-sm btn-export")
           )
         )
       ),
+      tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Decomposes the portfolio PD change into sector and company contributions. The waterfall shows how each sector moves the portfolio from baseline PD to shocked PD, exposure-weighted."),
 
       # Row 1: Waterfall chart (top-down PD decomposition)
       fluidRow(
         column(12,
-          div(class = "card-surface mb-16",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("exchange-alt"), " PD Waterfall: Baseline \u2192 Sector Contributions \u2192 Shocked PD",
-               class = "fw-600 mt-0"),
+               style = "font-weight: 600; margin-top: 0;"),
             tags$small("Each bar shows how much each sector contributes to the total portfolio PD change (exposure-weighted).",
-                      class = "card-subtitle"),
+                      style = "color: #666; display: block; margin-bottom: 10px;"),
             plotlyOutput("attr_waterfall", height = "400px")
           )
         )
       ),
 
-      # Row 2: Company movers + Sector×Driver heatmap
+      # Row 2: Company movers (full width — marginal contribution treemap removed)
       fluidRow(
-        column(6,
-          div(class = "card-surface mb-16",
+        column(12,
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("sort-amount-down"), " Top Risk Movers (Companies)",
-               class = "fw-600 mt-0"),
-            tags$small("Companies with the largest marginal contribution to portfolio PD change.",
-                      class = "card-subtitle"),
+               style = "font-weight: 600; margin-top: 0;"),
+            tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Companies with the largest exposure-weighted PD change \u2014 the names driving your portfolio's climate transition risk."),
             plotlyOutput("attr_company_movers", height = "380px")
-          )
-        ),
-        column(6,
-          div(class = "card-surface mb-16",
-            h5(icon("chart-pie"), " Marginal Contribution to Portfolio Risk",
-               class = "fw-600 mt-0"),
-            tags$small("Each company's share of the total portfolio PD change (absolute).",
-                      class = "card-subtitle"),
-            plotlyOutput("attr_marginal_contribution", height = "380px")
           )
         )
       ),
 
-      # Row 3: Sector×Technology heatmap + EL waterfall
-      fluidRow(
-        column(6,
-          div(class = "card-surface mb-16",
-            h5(icon("th"), " Sector \u00D7 Technology Attribution",
-               class = "fw-600 mt-0"),
-            tags$small("PD contribution by sector and technology combination.",
-                      class = "card-subtitle"),
-            plotlyOutput("attr_sector_tech_heatmap", height = "380px")
-          )
-        ),
-        column(6,
-          div(class = "card-surface mb-16",
-            h5(icon("money-bill-wave"), " Expected Loss Attribution by Sector",
-               class = "fw-600 mt-0"),
-            tags$small("Change in expected loss (EL) decomposed by sector.",
-                      class = "card-subtitle"),
-            plotlyOutput("attr_el_waterfall", height = "380px")
+      # Row 3: EL Waterfall (complements PD waterfall with dollar-impact view)
+      if (ad$has_el) fluidRow(
+        column(12,
+          div(class = "card-surface", style = "margin-bottom: 16px;",
+            h5(icon("money-bill-wave"), " Expected Loss Waterfall by Sector",
+               style = "font-weight: 600; margin-top: 0;"),
+            tags$small("Shows each sector's contribution to the total Expected Loss increase. Red bars = EL increased (more provisioning needed), green = EL decreased.",
+                      style = "color: #666; display: block; margin-bottom: 10px;"),
+            plotlyOutput("attr_el_waterfall", height = "400px")
           )
         )
       ),
@@ -190,9 +189,9 @@ setup_results_attribution <- function(input, output, session, rv) {
       # Row 4: Attribution summary table
       fluidRow(
         column(12,
-          div(class = "card-surface mb-16",
+          div(class = "card-surface", style = "margin-bottom: 16px;",
             h5(icon("table"), " Detailed Attribution Table",
-               class = "fw-600 mt-0"),
+               style = "font-weight: 600; margin-top: 0;"),
             DTOutput("attr_detail_table")
           )
         )
@@ -204,7 +203,6 @@ setup_results_attribution <- function(input, output, session, rv) {
   output$attr_waterfall <- renderPlotly({
     ad <- attribution_data()
     req(ad)
-    tc <- plotly_theme_colors(input)
 
     sector_df <- ad$sector
     baseline <- ad$portfolio_pd_baseline * 100  # convert to percentage points
@@ -225,7 +223,7 @@ setup_results_attribution <- function(input, output, session, rv) {
     # Hover text
     wf_text <- c(
       paste0("Baseline PD: ", round(baseline, 4), "%"),
-      paste0(htmltools::htmlEscape(as.character(sector_df$sector)),
+      paste0(sector_df$sector,
              "\nContribution: ", ifelse(sector_df$pd_contribution >= 0, "+", ""),
              round(sector_df$pd_contribution * 100, 4), " pp",
              "\nWeight: ", round(sector_df$weight * 100, 1), "%",
@@ -250,34 +248,43 @@ setup_results_attribution <- function(input, output, session, rv) {
       texttemplate = "%{y:.4f}"
     ) %>%
       layout(
-        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-        paper_bgcolor = tc$paper_bgcolor,
-        plot_bgcolor = tc$plot_bgcolor,
-        hoverlabel = PLOTLY_HOVERLABEL,
         xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11),
-                     categoryorder = "array", categoryarray = wf_labels, gridcolor = tc$gridcolor),
-        yaxis = list(title = "Portfolio PD (%)", tickformat = ".4f", gridcolor = tc$gridcolor),
+                     categoryorder = "array", categoryarray = wf_labels),
+        yaxis = list(title = "Portfolio PD (%)", tickformat = ".4f"),
         margin = list(b = 100, t = 30),
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      config(displayModeBar = FALSE)
   })
 
   # ---- Top Company Risk Movers (horizontal bar chart) ----
   output$attr_company_movers <- renderPlotly({
     ad <- attribution_data()
-    req(ad)
+    req(ad, ad$company)
+    req(nrow(ad$company) > 0)
+    req(all(c("company_label", "sector", "pd_change", "exposure_value_usd",
+              "weight", "pd_contribution") %in% names(ad$company)))
+
     tc <- plotly_theme_colors(input)
 
     company_df <- ad$company %>%
+      filter(!is.na(pd_contribution), is.finite(pd_contribution)) %>%
       arrange(desc(abs(pd_contribution))) %>%
       head(15)
+
+    req(nrow(company_df) > 0)
 
     # Sort by contribution for display (largest positive at top)
     company_df <- company_df %>%
       arrange(pd_contribution)
+
+    # Disambiguate labels: append sector if any company appears in multiple sectors
+    company_df <- company_df %>%
+      mutate(display_label = if (any(duplicated(company_label))) {
+        paste0(company_label, " (", sector, ")")
+      } else {
+        company_label
+      })
 
     colors <- ifelse(company_df$pd_contribution >= 0, BRAND_CORAL, STATUS_GREEN)
 
@@ -292,7 +299,7 @@ setup_results_attribution <- function(input, output, session, rv) {
     )
 
     plot_ly(
-      y = factor(company_df$company_label, levels = company_df$company_label),
+      y = factor(company_df$display_label, levels = company_df$display_label),
       x = company_df$pd_contribution * 100,
       type = "bar",
       orientation = "h",
@@ -318,165 +325,18 @@ setup_results_attribution <- function(input, output, session, rv) {
              displaylogo = PLOTLY_CONFIG$displaylogo)
   })
 
-  # ---- Marginal Contribution (treemap with sector hierarchy) ----
-  output$attr_marginal_contribution <- renderPlotly({
-    ad <- attribution_data()
-    req(ad)
-    tc <- plotly_theme_colors(input)
 
-    company_df <- ad$company %>%
-      mutate(abs_contribution = abs(pd_contribution)) %>%
-      arrange(desc(abs_contribution)) %>%
-      head(20)
-
-    total_abs <- sum(company_df$abs_contribution)
-
-    company_df <- company_df %>%
-      mutate(
-        share_pct = abs_contribution / total_abs * 100,
-        direction = ifelse(pd_contribution >= 0, "Risk Increase", "Risk Decrease")
-      ) %>%
-      arrange(desc(share_pct))
-
-    # Build hierarchical data: sector parents + company children
-    sectors <- unique(company_df$sector)
-
-    # Sector-level parent nodes (parent = "" means root)
-    sector_labels <- as.character(sectors)
-    sector_parents <- rep("", length(sectors))
-    sector_values <- vapply(sectors, function(s) {
-      sum(company_df$share_pct[company_df$sector == s])
-    }, numeric(1))
-    sector_colors <- rep("#888888", length(sectors))
-    sector_text <- paste0(
-      htmltools::htmlEscape(sector_labels),
-      "\nTotal share: ", round(sector_values, 1), "%"
-    )
-
-    # Company-level child nodes (parent = sector name)
-    company_labels <- as.character(company_df$company_label)
-    company_parents <- as.character(company_df$sector)
-    company_values <- company_df$share_pct
-    company_colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
-    company_text <- paste0(
-      htmltools::htmlEscape(as.character(company_df$company_label)),
-      "\nSector: ", htmltools::htmlEscape(as.character(company_df$sector)),
-      "\nShare of total PD change: ", round(company_df$share_pct, 1), "%",
-      "\nDirection: ", company_df$direction,
-      "\nContribution: ", round(company_df$pd_contribution * 100, 4), " pp"
-    )
-
-    # Combine sector + company into single vectors
-    all_labels <- c(sector_labels, company_labels)
-    all_parents <- c(sector_parents, company_parents)
-    all_values <- c(sector_values, company_values)
-    all_colors <- c(sector_colors, company_colors)
-    all_text <- c(sector_text, company_text)
-
-    plot_ly(
-      labels = all_labels,
-      parents = all_parents,
-      values = all_values,
-      type = "treemap",
-      branchvalues = "total",
-      marker = list(
-        colors = all_colors,
-        line = list(color = "white", width = 1)
-      ),
-      text = all_text,
-      hoverinfo = "text",
-      textinfo = "label+percent parent",
-      textfont = list(size = 11)
-    ) %>%
-      layout(
-        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-        paper_bgcolor = tc$paper_bgcolor,
-        plot_bgcolor = tc$plot_bgcolor,
-        hoverlabel = PLOTLY_HOVERLABEL,
-        margin = list(l = 5, r = 5, t = 5, b = 5)
-      ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
-  })
-
-  # ---- Sector × Technology Attribution Heatmap ----
-  output$attr_sector_tech_heatmap <- renderPlotly({
-    ad <- attribution_data()
-    req(ad, ad$has_tech, ad$tech)
-    tc <- plotly_theme_colors(input)
-
-    tech_df <- ad$tech
-    if (is.null(tech_df) || nrow(tech_df) == 0) {
-      return(plotly_empty() %>% layout(title = "No technology data"))
-    }
-
-    sectors <- sort(unique(tech_df$sector))
-    techs <- sort(unique(tech_df$technology))
-
-    # Build matrix
-    z_matrix <- matrix(0, nrow = length(techs), ncol = length(sectors))
-    text_matrix <- matrix("", nrow = length(techs), ncol = length(sectors))
-
-    for (r in seq_along(techs)) {
-      for (cc in seq_along(sectors)) {
-        match_row <- tech_df %>%
-          filter(sector == sectors[cc], technology == techs[r])
-        if (nrow(match_row) > 0) {
-          z_matrix[r, cc] <- match_row$pd_contribution[1] * 100
-          text_matrix[r, cc] <- paste0(
-            htmltools::htmlEscape(as.character(techs[r])), " / ", htmltools::htmlEscape(as.character(sectors[cc])),
-            "\nPD Contribution: ", round(match_row$pd_contribution[1] * 100, 4), " pp",
-            "\nCompanies: ", match_row$n_companies[1],
-            "\nExposure: $", format(round(match_row$total_exposure[1]), big.mark = ",")
-          )
-        } else {
-          text_matrix[r, cc] <- paste0(htmltools::htmlEscape(as.character(techs[r])), " / ", htmltools::htmlEscape(as.character(sectors[cc])), "\nNo data")
-        }
-      }
-    }
-
-    # Custom diverging color scale: green (negative/good) -> white -> red (positive/bad)
-    colorscale <- list(
-      list(0, STATUS_GREEN),
-      list(0.5, "#FFFFFF"),
-      list(1, BRAND_CORAL)
-    )
-
-    plot_ly(
-      x = sectors,
-      y = techs,
-      z = z_matrix,
-      type = "heatmap",
-      colorscale = colorscale,
-      zmid = 0,
-      text = text_matrix,
-      hoverinfo = "text",
-      colorbar = list(title = "PD Contr.\n(pp)", len = 0.6)
-    ) %>%
-      layout(
-        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-        paper_bgcolor = tc$paper_bgcolor,
-        plot_bgcolor = tc$plot_bgcolor,
-        hoverlabel = PLOTLY_HOVERLABEL,
-        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 10), gridcolor = tc$gridcolor),
-        yaxis = list(title = "", tickfont = list(size = 10), gridcolor = tc$gridcolor),
-        margin = list(l = 100, b = 80, t = 10)
-      ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
-  })
 
   # ---- Expected Loss Attribution by Sector (waterfall) ----
   output$attr_el_waterfall <- renderPlotly({
     ad <- attribution_data()
     req(ad, ad$has_el)
-    tc <- plotly_theme_colors(input)
 
+    # Sort for clean waterfall cascade: EL increases first (el_change < 0 means loss increased,
+    # so -el_change > 0), then decreases. This prevents bars from "hovering" in the middle.
     sector_df <- ad$sector %>%
       filter(!is.na(el_change)) %>%
-      arrange(desc(abs(el_change)))
+      arrange(el_change)
 
     if (nrow(sector_df) == 0) {
       return(plotly_empty() %>% layout(title = "No EL data available"))
@@ -484,17 +344,20 @@ setup_results_attribution <- function(input, output, session, rv) {
 
     total_el_change <- sum(sector_df$el_change, na.rm = TRUE)
 
-    # Build waterfall: sector contributions + total
-    wf_labels <- c(sector_df$sector, "Total EL\nChange")
-    wf_values <- c(sector_df$el_change, total_el_change)
+    # Negate el_change so increases in loss display as positive (upward) bars
+    # el_change is negative when loss increases (EL = -(EAD*PD)), so -el_change > 0 for increased loss
+    wf_labels <- c(sector_df$sector, "Total EL\nIncrease")
+    wf_values <- c(-sector_df$el_change, -total_el_change)
     wf_measure <- c(rep("relative", nrow(sector_df)), "total")
 
     hover_text <- c(
-      paste0(htmltools::htmlEscape(as.character(sector_df$sector)),
-             "\nEL Change: $", format(round(sector_df$el_change), big.mark = ","),
+      paste0(sector_df$sector,
+             "\nEL ", ifelse(sector_df$el_change < 0, "Increase", "Decrease"),
+             ": $", format(round(abs(sector_df$el_change)), big.mark = ","),
              "\nExposure: $", format(round(sector_df$total_exposure), big.mark = ","),
              "\nCompanies: ", sector_df$n_companies),
-      paste0("Total EL Change: $", format(round(total_el_change), big.mark = ","))
+      paste0("Total EL ", ifelse(total_el_change < 0, "Increase", "Decrease"),
+             ": $", format(round(abs(total_el_change)), big.mark = ","))
     )
 
     plot_ly(
@@ -505,26 +368,21 @@ setup_results_attribution <- function(input, output, session, rv) {
       text = hover_text,
       hoverinfo = "text",
       connector = list(line = list(color = "#DDD0D4", width = 1, dash = "dot")),
-      # For EL: negative change (more loss) = bad = red, positive = green
-      increasing = list(marker = list(color = STATUS_GREEN)),
-      decreasing = list(marker = list(color = BRAND_CORAL)),
+      # Positive bars (EL increased) = red; negative bars (EL decreased) = green
+      increasing = list(marker = list(color = STATUS_RED)),
+      decreasing = list(marker = list(color = STATUS_GREEN)),
       totals = list(marker = list(color = "#333333")),
       textposition = "outside",
       texttemplate = "$%{y:,.0f}"
     ) %>%
       layout(
-        font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-        paper_bgcolor = tc$paper_bgcolor,
-        plot_bgcolor = tc$plot_bgcolor,
-        hoverlabel = PLOTLY_HOVERLABEL,
-        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11), gridcolor = tc$gridcolor),
-        yaxis = list(title = "EL Change ($)", tickformat = "$,.0f", gridcolor = tc$gridcolor),
+        xaxis = list(title = "", tickangle = -30, tickfont = list(size = 11),
+                     categoryorder = "array", categoryarray = wf_labels),
+        yaxis = list(title = "Expected Loss Increase ($)", tickformat = "$,.0f"),
         margin = list(b = 100, t = 30),
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      config(displayModeBar = FALSE)
   })
 
   # ---- Detailed Attribution Table ----
@@ -532,9 +390,10 @@ setup_results_attribution <- function(input, output, session, rv) {
     ad <- attribution_data()
     req(ad)
 
-    company_df <- ad$company
+    # Use technology-level detail rows for the full breakdown table
+    detail_df <- ad$company_detail
 
-    display_df <- company_df %>%
+    display_df <- detail_df %>%
       arrange(desc(abs(pd_contribution))) %>%
       transmute(
         Company = company_label,
@@ -551,11 +410,9 @@ setup_results_attribution <- function(input, output, session, rv) {
       )
 
     if (ad$has_el) {
-      display_df$`EL Change ($)` <- round(company_df$el_change, 0)
+      display_df$`EL Change ($)` <- round(detail_df$el_change, 0)
     }
-    if (ad$has_npv) {
-      display_df$`NPV Change (%)` <- round(company_df$npv_change_pct, 2)
-    }
+    # NPV column removed from attribution detail table
 
     datatable(display_df, rownames = FALSE,
       options = list(
@@ -594,7 +451,7 @@ setup_results_attribution <- function(input, output, session, rv) {
     content = function(file) {
       ad <- attribution_data()
       if (!is.null(ad)) {
-        export_df <- ad$company %>%
+        export_df <- ad$company_detail %>%
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))
@@ -602,5 +459,6 @@ setup_results_attribution <- function(input, output, session, rv) {
       }
     }
   )
+
 
 }

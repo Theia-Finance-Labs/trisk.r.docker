@@ -1,187 +1,29 @@
 # mod_download.R
-# Export handlers (Excel, CSV, JSON, Config) and metadata display
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_download <- function(input, output, session, rv) {
 
-  # ============================================
-  # Downloads
-  # ============================================
-
-  output$download_excel <- downloadHandler(
-    filename = function() {
-      paste0("trisk_results_", rv$run_id, ".xlsx")
-    },
-    content = function(file) {
-      req(rv$results)
-
-      df <- rv$results
-      grp_cols <- intersect(c("sector", "technology"), names(df))
-
-      summary_df <- if (length(grp_cols) > 0) {
-        tryCatch({
-          df %>%
-            group_by(across(all_of(grp_cols))) %>%
-            summarise(n_rows = n(), .groups = "drop")
-        }, error = function(e) df)
-      } else {
-        df
-      }
-
-      sheets <- list(
-        "Summary" = summary_df,
-        "Full Results" = sanitize_export(df)
-      )
-
-      # Add multi-horizon results if available
-      if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
-        sheets[["Multi-Horizon"]] <- sanitize_export(bind_rows(rv$results_by_year, .id = "shock_year"))
-      }
-
-      # Add multi-scenario comparison if available
-      if (!is.null(rv$results_by_scenario) && length(rv$results_by_scenario) > 1) {
-        all_scen_rows <- list()
-        for (scen_code in names(rv$results_by_scenario)) {
-          for (yr_key in names(rv$results_by_scenario[[scen_code]])) {
-            df_s <- rv$results_by_scenario[[scen_code]][[yr_key]]
-            df_s$target_scenario <- scen_code
-            df_s$shock_year <- as.integer(yr_key)
-            all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
-          }
-        }
-        sheets[["Scenario Comparison"]] <- sanitize_export(bind_rows(all_scen_rows))
-      }
-
-      # Add integration results if available
-      if (!is.null(rv$pd_integration_result)) {
-        sheets[["PD Integration"]] <- sanitize_export(rv$pd_integration_result)
-      }
-      if (!is.null(rv$el_integration_result)) {
-        sheets[["EL Integration"]] <- sanitize_export(rv$el_integration_result)
-      }
-
-      sheets <- lapply(sheets, sanitize_formula_injection)
-      writexl::write_xlsx(sheets, file)
-    }
-  )
-
-  output$download_csv <- downloadHandler(
-    filename = function() {
-      paste0("trisk_results_", rv$run_id, ".csv")
-    },
-    content = function(file) {
-      req(rv$results)
-      df <- sanitize_formula_injection(sanitize_export(rv$results))
-      write_csv(df, file)
-    }
-  )
-
-  output$download_json <- downloadHandler(
-    filename = function() {
-      paste0("trisk_results_", rv$run_id, ".json")
-    },
-    content = function(file) {
-      req(rv$results)
-      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
-    }
-  )
-
-  output$download_config <- downloadHandler(
-    filename = function() {
-      paste0("trisk_config_", rv$run_id, ".json")
-    },
-    content = function(file) {
-      config <- list(
-        run_id = rv$run_id,
-        timestamp = as.character(Sys.time()),
-        parameters = list(
-          baseline_scenarios = paste(input$baseline_scenario, collapse = ", "),
-          target_scenarios = paste(input$target_scenarios, collapse = ", "),
-          scenario_geography = input$scenario_geography,
-          shock_years = paste(input$shock_years, collapse = ", "),
-          risk_free_rate = input$risk_free_rate,
-          discount_rate = input$discount_rate,
-          growth_rate = input$growth_rate,
-          market_passthrough = input$market_passthrough,
-          carbon_price_model = input$carbon_price_model
-        ),
-        data_summary = list(
-          portfolio_rows = nrow(rv$portfolio),
-          assets_rows = nrow(rv$assets),
-          financial_rows = nrow(rv$financial)
-        ),
-        input_checksums = list(
-          portfolio = compute_file_checksum(input$portfolio_file$datapath),
-          assets = compute_file_checksum(input$assets_file$datapath),
-          financial = compute_file_checksum(input$financial_file$datapath),
-          scenarios = compute_file_checksum(input$scenarios_file$datapath)
-        ),
-        environment = list(
-          trisk_model_sha = Sys.getenv("TRISK_MODEL_SHA", "unknown"),
-          scenarios_sha256 = Sys.getenv("SCENARIOS_SHA256", "unknown"),
-          build_date = Sys.getenv("BUILD_DATE", "unknown")
-        ),
-        versions = list(
-          trisk_model = as.character(packageVersion("trisk.model")),
-          trisk_analysis = as.character(packageVersion("trisk.analysis"))
-        )
-      )
-      jsonlite::write_json(config, file, pretty = TRUE, auto_unbox = TRUE)
-    }
-  )
-
-  # ============================================
-  # HTML Report Export
-  # ============================================
-
-  output$download_report_html <- downloadHandler(
-    filename = function() {
-      paste0("trisk_report_", rv$run_id, ".html")
-    },
-    content = function(file) {
-      req(rv$results)
-
-      # Copy template to temp dir so rmarkdown::render can write intermediates
-      tempReport <- file.path(tempdir(), "report.Rmd")
-      file.copy("report_template.Rmd", tempReport, overwrite = TRUE)
-
-      # Build config list for the report
-      config <- list(
-        run_id = rv$run_id,
-        baseline = paste(input$baseline_scenario, collapse = ", "),
-        target = paste(input$target_scenarios, collapse = ", "),
-        geography = input$scenario_geography,
-        shock_years = paste(input$shock_years, collapse = ", "),
-        risk_free_rate = input$risk_free_rate,
-        discount_rate = input$discount_rate,
-        growth_rate = input$growth_rate
-      )
-
-      rmarkdown::render(
-        tempReport,
-        output_file = file,
-        params = list(
-          results = sanitize_export(rv$results),
-          config = config,
-          run_id = rv$run_id
-        ),
-        envir = new.env(parent = globalenv())
-      )
-    }
-  )
-
-  # ============================================
-  # Metadata
   # ============================================
 
   output$metadata_summary <- renderText({
     if (is.null(rv$run_id)) {
       "No analysis run yet."
     } else {
+      # Build pairs summary for metadata
+      pairs_str <- paste(sapply(rv$scenario_groups, function(key) {
+        entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+        if (key == "core") {
+          bl <- input$baseline_scenario; tgt <- input$target_scenario
+        } else {
+          bl <- input[[paste0("baseline_scenario_", key)]]
+          tgt <- input[[paste0("target_scenario_", key)]]
+        }
+        paste0("  ", entry$label, ": ", bl %||% "(none)", " -> ", tgt %||% "(none)")
+      }), collapse = "\n")
       paste(
         "Run ID:", rv$run_id,
         "\nTimestamp:", as.character(Sys.time()),
-        "\nBaseline(s):", paste(input$baseline_scenario, collapse = ", "),
-        "\nTarget(s):", paste(input$target_scenarios, collapse = ", "),
+        "\nScenario Pairs:\n", pairs_str,
         "\nGeography:", input$scenario_geography,
         "\nResults rows:", if (!is.null(rv$results)) as.character(nrow(rv$results)) else "N/A"
       )
@@ -189,7 +31,6 @@ setup_download <- function(input, output, session, rv) {
   })
 
   output$version_info <- renderText({
-    # Only expose package versions — no R version, OS, env vars, or build metadata
     paste(
       "trisk.model:", as.character(packageVersion("trisk.model")),
       "\ntrisk.analysis:", as.character(packageVersion("trisk.analysis"))

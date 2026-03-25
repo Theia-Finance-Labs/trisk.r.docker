@@ -1,61 +1,29 @@
 # mod_results_horizon.R
-# Horizon Analysis: multi-year time-series charts, YoY table, CSV export
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_results_horizon <- function(input, output, session, rv) {
 
-  # Combine all shock-year results into a single long-form dataframe
+  # HORIZON ANALYSIS (Multi-Year Time-Series)
+  # ============================================
+
+  # Combine all shock-year results (requires ≥ 2 years for horizon view)
   horizon_data <- reactive({
     req(rv$results_by_year)
     if (length(rv$results_by_year) < 2) return(NULL)
-    bind_rows(rv$results_by_year, .id = "shock_year_chr") %>%
-      mutate(shock_year = as.integer(shock_year_chr))
+    all_years_data()
   })
-
-  # ---- Horizon: portfolio-level aggregation by shock year ----
-  horizon_by_year <- reactive({
-    hd <- horizon_data()
-    req(hd)
-    hd %>%
-      group_by(shock_year) %>%
-      summarise(
-        avg_pd     = if ("exposure_value_usd" %in% names(hd))
-          weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE) * 100
-        else mean(pd_shock, na.rm = TRUE) * 100,
-        avg_npv    = if ("crispy_perc_value_change" %in% names(hd)) mean(crispy_perc_value_change, na.rm = TRUE) * 100 else NA_real_,
-        total_el   = if ("expected_loss_shock" %in% names(hd)) sum(expected_loss_shock, na.rm = TRUE) else NA_real_,
-        pd_p25     = quantile(pd_shock, 0.25, na.rm = TRUE) * 100,
-        pd_p75     = quantile(pd_shock, 0.75, na.rm = TRUE) * 100,
-        .groups = "drop"
-      )
-  }) %>% bindCache(rv$run_id)
-
-  # ---- Horizon: sector-level aggregation by shock year × sector ----
-  horizon_by_sector <- reactive({
-    hd <- horizon_data()
-    req(hd, "sector" %in% names(hd))
-    hd %>%
-      group_by(shock_year, sector) %>%
-      summarise(
-        avg_pd   = if ("exposure_value_usd" %in% names(hd))
-          weighted.mean(pd_shock, exposure_value_usd, na.rm = TRUE) * 100
-        else mean(pd_shock, na.rm = TRUE) * 100,
-        pd_p25   = quantile(pd_shock, 0.25, na.rm = TRUE) * 100,
-        pd_p75   = quantile(pd_shock, 0.75, na.rm = TRUE) * 100,
-        .groups = "drop"
-      )
-  }) %>% bindCache(rv$run_id)
 
   # Main Horizon Analysis UI
   output$horizon_analysis_ui <- renderUI({
     if (is.null(rv$results_by_year) || length(rv$results_by_year) < 2) {
       return(tags$div(
-        class = "empty-state-40",
-        icon("clock", class = "empty-state-icon-muted"),
+        style = "text-align: center; padding: 40px; color: #666;",
+        icon("clock", style = "font-size: 48px; color: #DDD0D4;"),
         tags$h4("Horizon Analysis requires 2+ shock years"),
         tags$p("Select 2 or more shock years on the Configure tab, then re-run."),
         actionLink("goto_config_horizon", "Configure shock years",
-                    icon = icon("cog"), class = "fs-14"),
-        tags$p(class = "fs-13 fg-muted mt-8",
+                    icon = icon("cog"), style = "font-size: 14px;"),
+        tags$p(style = "font-size: 13px; color: #999; margin-top: 8px;",
                "Tip: select years like 2030, 2035, 2040, 2045, 2050 for a full term structure.")
       ))
     }
@@ -64,24 +32,25 @@ setup_results_horizon <- function(input, output, session, rv) {
 
     tagList(
       # Header with summary
-      div(class = "section-header section-header--dark",
+      tags$div(style = "margin-bottom: 15px; padding: 12px; background: #F0E6EA; border-radius: 8px;",
         fluidRow(
           column(8,
-            h4(icon("chart-area"), " Multi-Horizon Risk Analysis",
-               class = "section-title"),
-            tags$small(paste0(length(years), " shock years: ",
-                             paste(years, collapse = ", "),
-                             " | ", nrow(rv$results_by_year[[1]]), " companies"),
-                      class = "opacity-85")
+            tags$h4(style = "margin: 0 0 4px 0; font-weight: 700;",
+                    icon("chart-area"), " Multi-Horizon Risk Analysis"),
+            tags$p(style = "margin: 0; font-size: 13px; color: #666;",
+                   paste0(length(years), " shock years analyzed: ",
+                          paste(years, collapse = ", "),
+                          " | ", nrow(rv$results_by_year[[1]]), " companies"))
           ),
-          column(4, class = "text-right",
+          column(4, style = "text-align: right; padding-top: 8px;",
             downloadButton("download_horizon_csv", "Export Multi-Horizon CSV",
-                          class = "btn-sm btn-export")
+                          class = "btn-sm", style = paste0("background:", BRAND_CORAL, "; color: white; border: none;"))
           )
         )
       ),
+      tags$p(class = "fs-12 fg-secondary mb-8", tags$i(class = "fa fa-info-circle mr-6"), "Shows how risk evolves across different shock years. A later shock year means companies have longer to accumulate misalignment, amplifying the transition impact."),
 
-      # Row 1: Year-over-year table (moved to top)
+      # Row 1: Year-over-year metrics table (moved to top for quick reference)
       fluidRow(
         box(width = 12, title = "Year-over-Year Metrics", status = "info", solidHeader = FALSE,
             collapsible = TRUE,
@@ -90,198 +59,138 @@ setup_results_horizon <- function(input, output, session, rv) {
 
       # Row 2: Portfolio-level time-series line charts
       fluidRow(
-        box(width = 4, title = "Average PD (Shock) Over Time", status = "danger", solidHeader = FALSE,
+        box(width = 6, title = "Average PD (Shock) Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_pd_line", height = "300px")),
-        box(width = 4, title = "Average NPV Change Over Time", status = "danger", solidHeader = FALSE,
-            plotlyOutput("horizon_npv_line", height = "300px")),
-        box(width = 4, title = "Total EL (Shock) Over Time", status = "danger", solidHeader = FALSE,
+        box(width = 6, title = "Total EL (Shock) Over Time", status = "danger", solidHeader = FALSE,
             plotlyOutput("horizon_el_line", height = "300px"))
       ),
 
-      # Row 3: PD Evolution by Sector (clustered bar chart)
+      # Row 3: Sector-faceted evolution
       fluidRow(
         box(width = 12, title = "PD Evolution by Sector", status = "info", solidHeader = FALSE,
             collapsible = TRUE,
             plotlyOutput("horizon_sector_facet", height = "400px"))
       ),
 
-      # Row 4: Company PD Scatter + Risk migration matrix
-      fluidRow(
-        box(width = 7, title = "Company PD Scatter by Year", status = "info", solidHeader = FALSE,
-            collapsible = TRUE,
-            tags$p(class = "history-meta",
-                   "Each dot = one company at one shock year. Size reflects exposure weight."),
-            plotlyOutput("horizon_company_pd_scatter", height = "400px")),
-        box(width = 5, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
-            collapsible = TRUE,
-            tags$p(class = "history-meta",
-                   "How companies move between PD risk buckets from earliest to latest horizon."),
-            plotlyOutput("horizon_migration_heatmap", height = "350px"))
-      ),
-
-      # Row 5: PD Term Structure
+      # Row 4: PD Term Structure
       fluidRow(
         box(width = 12, title = "PD Term Structure", status = "warning", solidHeader = FALSE,
             collapsible = TRUE,
-            tags$p(class = "history-meta",
-                   "PD curve across shock years — analogous to a credit term structure."),
-            plotlyOutput("horizon_term_structure", height = "350px"))
+            tags$p(style = "font-size: 12px; color: #666;",
+                   "PD curve across shock years — analogous to a credit term structure. Shaded band = interquartile range (P25–P75)."),
+            plotlyOutput("horizon_term_structure", height = "380px"))
+      ),
+
+      # Row 5: Risk Migration Matrix + Company PD Trajectories
+      fluidRow(
+        box(width = 6, title = "Risk Migration Matrix", status = "warning", solidHeader = FALSE,
+            collapsible = TRUE,
+            tags$p(style = "font-size: 12px; color: #666;",
+                   "How companies migrate between PD risk buckets from the earliest to latest shock year. Analogous to a credit rating transition matrix."),
+            plotlyOutput("horizon_migration_heatmap", height = "380px")),
+        box(width = 6, title = "Company PD Trajectories", status = "warning", solidHeader = FALSE,
+            collapsible = TRUE,
+            tags$p(style = "font-size: 12px; color: #666;",
+                   "Individual company PD paths across shock years (thin lines) vs portfolio average (bold). Shows dispersion of risk outcomes."),
+            plotlyOutput("horizon_company_trajectories", height = "380px"))
       )
     )
   })
 
   # ---- Horizon: Portfolio PD line chart ----
   output$horizon_pd_line <- renderPlotly({
-    tc <- plotly_theme_colors(input)
-    agg <- horizon_by_year()
-    req(agg)
+    hd <- horizon_data()
+    req(hd)
+    agg <- hd %>% group_by(shock_year) %>%
+      summarise(avg_pd = mean(pd_shock, na.rm = TRUE) * 100, .groups = "drop")
     plot_ly(agg, x = ~shock_year, y = ~avg_pd, type = "scatter", mode = "lines+markers",
             line = list(color = BRAND_CORAL, width = 3),
             marker = list(color = BRAND_CORAL, size = 10),
             hovertemplate = "Year: %{x}<br>Avg PD: %{y:.4f}%<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5, gridcolor = tc$gridcolor),
-             yaxis = list(title = "Avg PD (Shock) %", gridcolor = tc$gridcolor),
-             margin = list(t = 10),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      layout(xaxis = list(title = "Shock Year", tickvals = agg$shock_year, ticktext = as.character(agg$shock_year)),
+             yaxis = list(title = "Avg PD (Shock) %"),
+             margin = list(t = 10))
   })
 
-  # ---- Horizon: Portfolio NPV line chart ----
-  output$horizon_npv_line <- renderPlotly({
-    tc <- plotly_theme_colors(input)
-    agg <- horizon_by_year()
-    req(agg, !all(is.na(agg$avg_npv)))
-    plot_ly(agg, x = ~shock_year, y = ~avg_npv, type = "scatter", mode = "lines+markers",
-            line = list(color = STATUS_BLUE, width = 3),
-            marker = list(color = STATUS_BLUE, size = 10),
-            hovertemplate = "Year: %{x}<br>Avg NPV Change: %{y:.2f}%<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5, gridcolor = tc$gridcolor),
-             yaxis = list(title = "Avg NPV Change %", gridcolor = tc$gridcolor),
-             margin = list(t = 10),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
-  })
+  # Horizon NPV line chart removed
 
   # ---- Horizon: Portfolio EL line chart ----
   output$horizon_el_line <- renderPlotly({
-    tc <- plotly_theme_colors(input)
-    agg <- horizon_by_year()
-    req(agg, !all(is.na(agg$total_el)))
+    hd <- horizon_data()
+    req(hd)
+    agg <- hd %>% group_by(shock_year) %>%
+      summarise(total_el = sum(abs(expected_loss_shock), na.rm = TRUE), .groups = "drop")
     plot_ly(agg, x = ~shock_year, y = ~total_el, type = "scatter", mode = "lines+markers",
             line = list(color = STATUS_RED, width = 3),
             marker = list(color = STATUS_RED, size = 10),
-            hovertemplate = "Year: %{x}<br>Total EL: %{y:,.0f}<extra></extra>") %>%
-      layout(xaxis = list(title = "Shock Year", dtick = 5, gridcolor = tc$gridcolor),
-             yaxis = list(title = "Total EL (Shock)", gridcolor = tc$gridcolor),
-             margin = list(t = 10),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+            hovertemplate = "Year: %{x}<br>Total EL: $%{y:,.0f}<extra></extra>") %>%
+      layout(xaxis = list(title = "Shock Year", tickvals = agg$shock_year, ticktext = as.character(agg$shock_year)),
+             yaxis = list(title = "Total Expected Loss ($)"),
+             margin = list(t = 10))
   })
 
-  # ---- Horizon: Sector PD evolution (clustered bar chart) ----
+  # ---- Horizon: Sector-faceted PD evolution ----
   output$horizon_sector_facet <- renderPlotly({
-    tc <- plotly_theme_colors(input)
-    agg <- horizon_by_sector()
-    req(agg)
-
-    # Convert shock_year to factor for discrete x-axis (clustered bars)
-    agg$year_factor <- factor(agg$shock_year)
-
-    plot_ly(agg, x = ~year_factor, y = ~avg_pd, color = ~sector,
-            type = "bar",
-            hovertemplate = "%{fullData.name}<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>") %>%
-      layout(barmode = "group",
-             xaxis = list(title = "Shock Year", gridcolor = tc$gridcolor),
-             yaxis = list(title = "Exp-Wtd Avg PD (Shock) %", gridcolor = tc$gridcolor),
-             legend = list(orientation = "h", y = -0.2),
-             margin = list(t = 10, b = 60),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
-  })
-
-  # ---- Horizon: Company PD Scatter by Year ----
-  output$horizon_company_pd_scatter <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     hd <- horizon_data()
     req(hd)
-    id_col <- if ("company_name" %in% names(hd)) "company_name" else "company_id"
     has_sector <- "sector" %in% names(hd)
+    if (!has_sector) return(plotly_empty())
 
-    total_exp <- sum(hd$exposure_value_usd, na.rm = TRUE)
-    scatter_df <- hd %>%
-      mutate(
-        pd_pct = pd_shock * 100,
-        year_factor = factor(shock_year),
-        weight = exposure_value_usd / total_exp,
-        company_label = .data[[id_col]]
-      )
+    agg <- hd %>% group_by(shock_year, sector) %>%
+      summarise(avg_pd = mean(pd_shock, na.rm = TRUE) * 100, .groups = "drop")
 
-    # Scale marker sizes: weight -> [4, 18] pixel range
-    w_max <- max(scatter_df$weight, na.rm = TRUE)
-    scatter_df$marker_size <- if (w_max > 0) {
-      (scatter_df$weight / w_max) * 14 + 4
-    } else {
-      rep(8, nrow(scatter_df))
+    p <- plot_ly(agg, x = ~shock_year, y = ~avg_pd, color = ~sector,
+                 type = "scatter", mode = "lines+markers",
+                 hovertemplate = "%{fullData.name}<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>") %>%
+      layout(xaxis = list(title = "Shock Year", tickvals = unique(agg$shock_year), ticktext = as.character(unique(agg$shock_year))),
+             yaxis = list(title = "Avg PD (Shock) %"),
+             legend = list(orientation = "h", y = -0.2),
+             margin = list(t = 10, b = 60))
+    p
+  })
+
+  # ---- Horizon: Company PD Trajectories (spaghetti plot) ----
+  output$horizon_company_trajectories <- renderPlotly({
+    hd <- horizon_data()
+    req(hd)
+    id_col <- if ("company_name" %in% names(hd) && any(!is.na(hd$company_name))) "company_name" else "company_id"
+    all_years <- sort(unique(hd$shock_year))
+
+    company_data <- hd %>%
+      group_by(across(all_of(id_col)), shock_year) %>%
+      summarise(pd = mean(pd_shock, na.rm = TRUE) * 100, .groups = "drop")
+
+    avg_data <- hd %>% group_by(shock_year) %>%
+      summarise(pd = mean(pd_shock, na.rm = TRUE) * 100, .groups = "drop") %>%
+      mutate(!!id_col := "Portfolio Average")
+
+    p <- plot_ly()
+    # Individual company lines (thin, transparent)
+    companies <- unique(company_data[[id_col]])
+    for (comp in companies) {
+      cd <- company_data[company_data[[id_col]] == comp, ]
+      p <- p %>% add_trace(data = cd, x = ~shock_year, y = ~pd,
+                           type = "scatter", mode = "lines",
+                           line = list(width = 1.5, color = "rgba(200,150,160,0.5)"),
+                           name = comp, legendgroup = "companies",
+                           showlegend = (comp == companies[1]),
+                           hovertemplate = paste0(comp, "<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>"))
     }
-
-    hover_text <- paste0(
-      htmltools::htmlEscape(as.character(scatter_df$company_label)),
-      if (has_sector) paste0("\nSector: ", htmltools::htmlEscape(as.character(scatter_df$sector))) else "",
-      "\nYear: ", scatter_df$shock_year,
-      "\nPD: ", round(scatter_df$pd_pct, 4), "%",
-      "\nWeight: ", round(scatter_df$weight * 100, 2), "%"
-    )
-
-    if (has_sector) {
-      plot_ly(scatter_df, x = ~year_factor, y = ~pd_pct, color = ~sector,
-              type = "scatter", mode = "markers",
-              marker = list(size = ~marker_size, opacity = 0.6,
-                           line = list(color = "white", width = 0.5)),
-              text = hover_text, hoverinfo = "text")
-    } else {
-      plot_ly(scatter_df, x = ~year_factor, y = ~pd_pct,
-              type = "scatter", mode = "markers",
-              marker = list(size = ~marker_size, opacity = 0.6,
-                           color = BRAND_CORAL,
-                           line = list(color = "white", width = 0.5)),
-              text = hover_text, hoverinfo = "text")
-    } %>%
-      layout(xaxis = list(title = "Shock Year", gridcolor = tc$gridcolor),
-             yaxis = list(title = "PD (Shock) %", gridcolor = tc$gridcolor),
-             legend = list(orientation = "h", y = -0.15),
-             margin = list(t = 10, b = 50),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+    # Portfolio average (thick, dark)
+    p <- p %>% add_trace(data = avg_data, x = ~shock_year, y = ~pd,
+                         type = "scatter", mode = "lines+markers",
+                         line = list(width = 4, color = BRAND_CORAL),
+                         marker = list(size = 8, color = BRAND_CORAL),
+                         name = "Portfolio Avg", legendgroup = "avg",
+                         hovertemplate = "Portfolio Avg<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>")
+    p %>% layout(xaxis = list(title = "Shock Year", tickvals = all_years, ticktext = as.character(all_years)),
+                 yaxis = list(title = "PD (Shock) %"),
+                 legend = list(orientation = "h", y = -0.15),
+                 margin = list(t = 10, b = 50))
   })
 
   # ---- Horizon: Risk migration matrix ----
   output$horizon_migration_heatmap <- renderPlotly({
-    tc <- plotly_theme_colors(input)
     req(rv$results_by_year)
     years <- sort(as.integer(names(rv$results_by_year)))
     if (length(years) < 2) return(plotly_empty())
@@ -289,7 +198,7 @@ setup_results_horizon <- function(input, output, session, rv) {
     first_year <- rv$results_by_year[[as.character(years[1])]]
     last_year <- rv$results_by_year[[as.character(years[length(years)])]]
 
-    # Assign risk buckets
+    # Assign risk buckets (aligned with Basel IRB rating grades)
     pd_bucket <- function(pd) {
       cut(pd, breaks = c(-Inf, 0.001, 0.005, 0.01, 0.05, Inf),
           labels = c("Very Low\n(<0.1%)", "Low\n(0.1-0.5%)", "Medium\n(0.5-1%)",
@@ -313,54 +222,71 @@ setup_results_horizon <- function(input, output, session, rv) {
 
     plot_ly(x = colnames(mtx_df), y = rownames(mtx_df), z = as.matrix(mtx_df),
             type = "heatmap",
-            colorscale = list(c(0, "#FBF5F2"), c(0.5, "#EF7173"), c(1, "#8B2020")),
+            colorscale = list(c(0, "#F5F0F2"), c(0.5, "#EF7173"), c(1, "#C0393B")),
             hovertemplate = "From: %{y}<br>To: %{x}<br>Count: %{z}<extra></extra>") %>%
-      layout(xaxis = list(title = paste0("Risk Bucket (", years[length(years)], ")"), tickangle = 0, gridcolor = tc$gridcolor),
-             yaxis = list(title = paste0("Risk Bucket (", years[1], ")"), autorange = "reversed", gridcolor = tc$gridcolor),
-             margin = list(t = 10, l = 100, b = 80),
-             font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-             paper_bgcolor = tc$paper_bgcolor,
-             plot_bgcolor = tc$plot_bgcolor,
-             hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+      layout(xaxis = list(title = paste0("PD Bucket (", years[length(years)], ")"), tickangle = 0),
+             yaxis = list(title = paste0("PD Bucket (", years[1], ")"), autorange = "reversed"),
+             margin = list(t = 10, l = 100, b = 80))
   })
 
   # ---- Horizon: PD Term Structure ----
   output$horizon_term_structure <- renderPlotly({
-    tc <- plotly_theme_colors(input)
-    portfolio_agg <- horizon_by_year()
-    req(portfolio_agg)
-
-    # Dashed line when sector breakdown exists (visual cue that sectors are also available)
     hd <- horizon_data()
-    has_sector <- !is.null(hd) && "sector" %in% names(hd)
-    dash_style <- if (has_sector) "dash" else "solid"
+    req(hd)
 
-    p <- plot_ly() %>%
-      add_trace(data = portfolio_agg, x = ~shock_year, y = ~pd_p75, type = "scatter", mode = "lines",
-                line = list(width = 0), showlegend = FALSE, hoverinfo = "skip") %>%
-      add_trace(data = portfolio_agg, x = ~shock_year, y = ~pd_p25, type = "scatter", mode = "lines",
-                fill = "tonexty", fillcolor = "rgba(239,113,115,0.2)",
-                line = list(width = 0), showlegend = FALSE, hoverinfo = "skip") %>%
-      add_trace(data = portfolio_agg, x = ~shock_year, y = ~avg_pd, type = "scatter", mode = "lines+markers",
-                line = list(color = BRAND_CORAL, width = 3, dash = dash_style),
-                marker = list(color = BRAND_CORAL, size = 8),
-                name = "Portfolio Avg",
-                hovertemplate = "Portfolio<br>Year: %{x}<br>PD: %{y:.4f}%<br>(IQR band shown)<extra></extra>")
-
-    p %>% layout(xaxis = list(title = "Shock Year", dtick = 5, gridcolor = tc$gridcolor),
-                 yaxis = list(title = "PD (Shock) %", gridcolor = tc$gridcolor),
+    has_sector <- "sector" %in% names(hd)
+    if (has_sector) {
+      agg <- hd %>% group_by(shock_year, sector) %>%
+        summarise(
+          avg_pd = mean(pd_shock, na.rm = TRUE) * 100,
+          p25 = quantile(pd_shock, 0.25, na.rm = TRUE) * 100,
+          p75 = quantile(pd_shock, 0.75, na.rm = TRUE) * 100,
+          .groups = "drop"
+        )
+      # Show one line per sector + confidence ribbon for the portfolio
+      portfolio_agg <- hd %>% group_by(shock_year) %>%
+        summarise(
+          avg_pd = mean(pd_shock, na.rm = TRUE) * 100,
+          p25 = quantile(pd_shock, 0.25, na.rm = TRUE) * 100,
+          p75 = quantile(pd_shock, 0.75, na.rm = TRUE) * 100,
+          .groups = "drop"
+        )
+      p <- plot_ly() %>%
+        add_trace(data = portfolio_agg, x = ~shock_year, y = ~p75, type = "scatter", mode = "lines",
+                  line = list(width = 0), showlegend = FALSE, hoverinfo = "skip") %>%
+        add_trace(data = portfolio_agg, x = ~shock_year, y = ~p25, type = "scatter", mode = "lines",
+                  fill = "tonexty", fillcolor = "rgba(239,113,115,0.2)",
+                  line = list(width = 0), showlegend = FALSE, hoverinfo = "skip") %>%
+        add_trace(data = portfolio_agg, x = ~shock_year, y = ~avg_pd, type = "scatter", mode = "lines+markers",
+                  line = list(color = BRAND_CORAL, width = 3, dash = "dash"),
+                  marker = list(color = BRAND_CORAL, size = 8),
+                  name = "Portfolio Avg",
+                  hovertemplate = "Portfolio<br>Year: %{x}<br>PD: %{y:.4f}%<br>(IQR band shown)<extra></extra>")
+    } else {
+      portfolio_agg <- hd %>% group_by(shock_year) %>%
+        summarise(
+          avg_pd = mean(pd_shock, na.rm = TRUE) * 100,
+          p25 = quantile(pd_shock, 0.25, na.rm = TRUE) * 100,
+          p75 = quantile(pd_shock, 0.75, na.rm = TRUE) * 100,
+          .groups = "drop"
+        )
+      p <- plot_ly() %>%
+        add_trace(data = portfolio_agg, x = ~shock_year, y = ~p75, type = "scatter", mode = "lines",
+                  line = list(width = 0), showlegend = FALSE, hoverinfo = "skip") %>%
+        add_trace(data = portfolio_agg, x = ~shock_year, y = ~p25, type = "scatter", mode = "lines",
+                  fill = "tonexty", fillcolor = "rgba(239,113,115,0.2)",
+                  line = list(width = 0), showlegend = FALSE, hoverinfo = "skip") %>%
+        add_trace(data = portfolio_agg, x = ~shock_year, y = ~avg_pd, type = "scatter", mode = "lines+markers",
+                  line = list(color = BRAND_CORAL, width = 3),
+                  marker = list(color = BRAND_CORAL, size = 8),
+                  name = "Portfolio Avg",
+                  hovertemplate = "Year: %{x}<br>Avg PD: %{y:.4f}%<br>(IQR band shown)<extra></extra>")
+    }
+    all_years <- unique(portfolio_agg$shock_year)
+    p %>% layout(xaxis = list(title = "Shock Year", tickvals = all_years, ticktext = as.character(all_years)),
+                 yaxis = list(title = "PD (Shock) %"),
                  legend = list(orientation = "h", y = -0.2),
-                 margin = list(t = 10, b = 50),
-                 font = list(family = "Inter, sans-serif", size = 12, color = tc$font_color),
-                 paper_bgcolor = tc$paper_bgcolor,
-                 plot_bgcolor = tc$plot_bgcolor,
-                 hoverlabel = PLOTLY_HOVERLABEL) %>%
-      config(displayModeBar = PLOTLY_CONFIG$displayModeBar,
-             modeBarButtonsToRemove = PLOTLY_CONFIG$modeBarButtonsToRemove,
-             displaylogo = PLOTLY_CONFIG$displaylogo)
+                 margin = list(t = 10, b = 50))
   })
 
   # ---- Horizon: Year-over-Year metrics table ----
@@ -375,12 +301,8 @@ setup_results_horizon <- function(input, output, session, rv) {
         `Shock Year` = yr,
         `Avg PD (%)` = round(mean(df$pd_shock, na.rm = TRUE) * 100, 4),
         `Max PD (%)` = round(max(df$pd_shock, na.rm = TRUE) * 100, 4),
-        `Avg NPV Change (%)` = if ("crispy_perc_value_change" %in% names(df))
-          round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2) else NA_real_,
-        `Total EL` = if ("expected_loss_shock" %in% names(df))
-          round(sum(df$expected_loss_shock, na.rm = TRUE), 0) else NA_real_,
-        `Total EL Change` = if (all(c("expected_loss_shock", "expected_loss_baseline") %in% names(df)))
-          round(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE), 0) else NA_real_,
+        `Total EL ($)` = round(sum(abs(df$expected_loss_shock), na.rm = TRUE), 0),
+        `EL Change ($)` = round(sum(abs(df$expected_loss_shock) - abs(df$expected_loss_baseline), na.rm = TRUE), 0),
         Companies = nrow(df),
         check.names = FALSE
       )
@@ -390,7 +312,6 @@ setup_results_horizon <- function(input, output, session, rv) {
     # Add YoY delta columns
     if (nrow(yoy_df) >= 2) {
       yoy_df$`PD Delta (pp)` <- c(NA, round(diff(yoy_df$`Avg PD (%)`), 4))
-      yoy_df$`NPV Delta (pp)` <- c(NA, round(diff(yoy_df$`Avg NPV Change (%)`), 2))
     }
 
     datatable(yoy_df, options = list(dom = "t", pageLength = 20, scrollX = TRUE,
@@ -399,10 +320,7 @@ setup_results_horizon <- function(input, output, session, rv) {
       formatStyle("Avg PD (%)",
                   background = styleColorBar(range(yoy_df$`Avg PD (%)`, na.rm = TRUE), BRAND_CORAL_LT),
                   backgroundSize = "98% 60%", backgroundRepeat = "no-repeat",
-                  backgroundPosition = "center") %>%
-      formatStyle("Avg NPV Change (%)",
-                  color = styleInterval(0, c(STATUS_RED, STATUS_GREEN)),
-                  fontWeight = "bold")
+                  backgroundPosition = "center")
   })
 
   # ---- Horizon: CSV Export ----
@@ -412,9 +330,10 @@ setup_results_horizon <- function(input, output, session, rv) {
     },
     content = function(file) {
       req(rv$results_by_year)
-      combined <- sanitize_export(bind_rows(rv$results_by_year, .id = "shock_year"))
-      write.csv(combined, file, row.names = FALSE)
+      combined <- bind_rows(rv$results_by_year, .id = "shock_year")
+      write.csv(sanitize_export(combined), file, row.names = FALSE)
     }
   )
+
 
 }

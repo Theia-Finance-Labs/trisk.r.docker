@@ -1,7 +1,8 @@
 # mod_config.R
-# Configuration: scenario selection, parameter sync, defaults, warnings
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_config <- function(input, output, session, rv) {
+
   # ============================================
   # Update scenario choices (filtered by scenario_type)
   # ============================================
@@ -9,33 +10,24 @@ setup_config <- function(input, output, session, rv) {
   observe({
     req(rv$scenarios)
 
-    has_type_col <- "scenario_type" %in% names(rv$scenarios)
     all_scenarios <- sort(unique(rv$scenarios$scenario))
 
+    # Filter by scenario_type: baseline dropdown shows only baselines,
+    # target dropdown shows only target/shock scenarios
+    has_type_col <- "scenario_type" %in% names(rv$scenarios)
     if (has_type_col) {
-      baseline_scenarios <- sort(unique(
-        rv$scenarios$scenario[tolower(rv$scenarios$scenario_type) == "baseline"]
-      ))
-      target_scenarios <- sort(unique(
-        rv$scenarios$scenario[tolower(rv$scenarios$scenario_type) == "target"]
-      ))
-      if (length(baseline_scenarios) == 0) baseline_scenarios <- all_scenarios
-      if (length(target_scenarios) == 0) target_scenarios <- all_scenarios
+      baseline_scenarios <- sort(get_scenarios_by_type(rv$scenarios, "baseline"))
+      target_scenarios <- sort(get_scenarios_by_type(rv$scenarios, "target"))
     } else {
       baseline_scenarios <- all_scenarios
       target_scenarios <- all_scenarios
     }
 
-    geographies <- if ("scenario_geography" %in% names(rv$scenarios)) {
-      sort(unique(rv$scenarios$scenario_geography))
-    } else {
-      "Global"
-    }
+    geographies <- sort(unique(rv$scenarios$scenario_geography))
 
     # Determine the primary default baseline (NGFS GCAM 2024 CP preferred)
     ngfs_gcam_cp_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?CP$", baseline_scenarios, value = TRUE)
-    baseline_default <- if (length(ngfs_gcam_cp_candidates) > 0) {
-      # Pick the most recent year
+    bl_default <- if (length(ngfs_gcam_cp_candidates) > 0) {
       ngfs_gcam_cp_candidates[length(ngfs_gcam_cp_candidates)]
     } else if ("NGFS2023GCAM_CP" %in% baseline_scenarios) {
       "NGFS2023GCAM_CP"
@@ -44,7 +36,7 @@ setup_config <- function(input, output, session, rv) {
     }
 
     ngfs_gcam_nz_candidates <- grep("^NGFS\\d{4}[_]?GCAM[_]?NZ2050$", target_scenarios, value = TRUE)
-    target_default <- if (length(ngfs_gcam_nz_candidates) > 0) {
+    tgt_default <- if (length(ngfs_gcam_nz_candidates) > 0) {
       ngfs_gcam_nz_candidates[length(ngfs_gcam_nz_candidates)]
     } else if ("NGFS2023GCAM_NZ2050" %in% target_scenarios) {
       "NGFS2023GCAM_NZ2050"
@@ -54,60 +46,157 @@ setup_config <- function(input, output, session, rv) {
 
     geo_default <- if ("Global" %in% geographies) "Global" else geographies[1]
 
-    # Build flat labeled choices for baseline multi-select (selectize doesn't do optgroups well in multi mode)
-    baseline_labels <- sapply(baseline_scenarios, function(s) {
-      paste0(scenario_label(s), "  [", s, "]")
-    }, USE.NAMES = FALSE)
-    baseline_choices_flat <- setNames(baseline_scenarios, baseline_labels)
+    # Store choices for renderUI — no updateSelectizeInput needed
+    rv$baseline_choices <- build_scenario_choices(baseline_scenarios)
+    rv$target_choices <- build_scenario_choices(target_scenarios)
 
-    # For multi-select target, we need a flat named vector
-    target_labels <- sapply(target_scenarios, function(s) {
-      paste0(scenario_label(s), "  [", s, "]")
-    }, USE.NAMES = FALSE)
-    target_choices_flat <- setNames(target_scenarios, target_labels)
+    rv$baseline_default <- bl_default
+    rv$target_default <- tgt_default
 
-    updateSelectizeInput(session, "baseline_scenario",
-                         choices = baseline_choices_flat, selected = baseline_default,
-                         server = FALSE)
-    updateSelectizeInput(session, "target_scenarios",
-                         choices = target_choices_flat, selected = target_default,
-                         server = FALSE)
     updateSelectInput(session, "scenario_geography",
                       choices = geographies, selected = geo_default)
 
-    # Store target scenarios by category for quick-select buttons
+    # Store filtered scenario lists
     rv$target_scenarios_all <- target_scenarios
-    rv$target_scenario_categories <- sapply(target_scenarios, scenario_category, USE.NAMES = TRUE)
-    # Store all available baseline scenario codes for baseline matching
     rv$available_baselines <- baseline_scenarios
+
+    # --- Multi-pair auto-init disabled ---
+    # if (length(rv$pair_ids) == 0) {
+    #   add_pair_to_ui(baseline_selected = bl_default, target_selected = tgt_default)
+    # }
   })
 
-  # ---- Quick-select buttons for target scenarios ----
-  observeEvent(input$sel_orderly, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Orderly", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
+  # ============================================
+  # Dynamic sector-aware scenario rows
+  # ============================================
+
+  output$scenario_rows_ui <- renderUI({
+    req(rv$scenarios)
+
+    groups <- rv$scenario_groups
+    if (is.null(groups) || length(groups) == 0) groups <- "core"
+
+    baseline_choices <- rv$baseline_choices
+    target_choices   <- rv$target_choices
+
+    # Can't render dropdowns until choices are built
+    if (is.null(baseline_choices) || is.null(target_choices)) return(NULL)
+
+    rows <- lapply(groups, function(key) {
+      entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+
+      # Check if the default scenarios exist in available choices
+      all_bl_codes  <- unlist(baseline_choices, use.names = FALSE)
+      all_tgt_codes <- unlist(target_choices, use.names = FALSE)
+      bl_available  <- entry$baseline %in% all_bl_codes
+      tgt_available <- entry$target %in% all_tgt_codes
+
+      # Core row keeps the canonical IDs for backward compatibility
+      bl_id  <- if (key == "core") "baseline_scenario" else paste0("baseline_scenario_", key)
+      tgt_id <- if (key == "core") "target_scenario"   else paste0("target_scenario_", key)
+
+      # Select the right default
+      bl_selected  <- if (bl_available) entry$baseline
+                      else if (key == "core") rv$baseline_default
+                      else NULL
+      tgt_selected <- if (tgt_available) entry$target
+                      else if (key == "core") rv$target_default
+                      else NULL
+
+      div(
+        class = "scenario-pair-row",
+        style = if (key != "core") "margin-top: 12px; padding-top: 10px; border-top: 1px solid #444;" else "",
+
+        # Row header with label + optional tooltip
+        fluidRow(
+          column(12,
+            tags$label(
+              class = "control-label",
+              style = "font-weight: 600; margin-bottom: 4px; font-size: 13px;",
+              entry$label,
+              if (!is.null(entry$tooltip)) {
+                tags$span(
+                  class = "cursor-help",
+                  title = entry$tooltip,
+                  style = "margin-left: 6px; color: #999; font-weight: normal; font-size: 12px;",
+                  icon("info-circle"),
+                  tags$small(paste0(" ", entry$tooltip))
+                )
+              }
+            )
+          )
+        ),
+
+        # Baseline + Target dropdowns side-by-side
+        fluidRow(
+          column(6,
+            selectizeInput(
+              inputId  = bl_id,
+              label    = "Baseline (Business-as-Usual)",
+              choices  = baseline_choices,
+              selected = bl_selected,
+              multiple = FALSE,
+              options  = list(placeholder = "Select baseline scenario...")
+            )
+          ),
+          column(6,
+            selectizeInput(
+              inputId  = tgt_id,
+              label    = "Target (Transition Goal)",
+              choices  = target_choices,
+              selected = tgt_selected,
+              multiple = FALSE,
+              options  = list(placeholder = "Select target scenario...")
+            )
+          )
+        ),
+
+        # Warning if default scenario not in loaded data
+        if (!is.null(entry$tooltip) && (!bl_available || !tgt_available)) {
+          div(
+            class = "alert alert-info",
+            style = "padding: 6px 10px; margin: 0 0 6px 0; font-size: 12px;",
+            icon("info-circle"),
+            " Default scenario not found in loaded data. Please select manually."
+          )
+        },
+
+        # Help text explaining baseline vs target vs shock (core row only)
+        if (key == "core") {
+          tags$p(class = "fs-11 fg-secondary mt-4",
+            icon("info-circle"),
+            " The ", tags$b("baseline"), " represents the business-as-usual pathway (e.g., Current Policies). ",
+            "The ", tags$b("target"), " is the climate goal (e.g., Net Zero 2050). ",
+            "The ", tags$b("shock scenario"), " is computed by the model: at the shock year, companies are forced from baseline to target.")
+        }
+      )
+    })
+
+    do.call(tagList, rows)
   })
-  observeEvent(input$sel_disorderly, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Disorderly", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
-  observeEvent(input$sel_hotthouse, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Hot House", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
-  observeEvent(input$sel_all_targets, {
-    req(rv$target_scenarios_all)
-    updateSelectizeInput(session, "target_scenarios", selected = rv$target_scenarios_all)
-  })
-  observeEvent(input$sel_clear_targets, {
-    updateSelectizeInput(session, "target_scenarios", selected = character(0))
-  })
+
+  # --- Per-pair geography fallback ---
+  # When a scenario pair doesn't support the selected geography (e.g. IPR only has
+  # "Global" while user selected "OecdAndEu"), fall back to "Global".
+  get_geography_for_pair <- function(scenario_code, selected_geography) {
+    available_geos <- unique(rv$scenarios$scenario_geography[rv$scenarios$scenario == scenario_code])
+    if (selected_geography %in% available_geos) {
+      return(list(geography = selected_geography, fallback = FALSE))
+    }
+    return(list(geography = "Global", fallback = TRUE))
+  }
+  #
+  # observeEvent(input$add_pair, {
+  #   req(rv$baseline_choices)
+  #   add_pair_to_ui()
+  # })
+  #
+  # observeEvent(input$sel_ngfs_nz, { ... })
+  # observeEvent(input$sel_sector, { ... })
+  # observeEvent(input$sel_ipr, { ... })
+  # observeEvent(input$sel_clear_targets, { clear_all_pairs() })
+  #
+  # --- END MULTI-PAIR HELPERS & QUICK-SELECT ---
 
   # ---- Slider <-> Numeric input sync (Advanced Assumptions) ----
   observeEvent(input$risk_free_rate, {
@@ -182,63 +271,28 @@ setup_config <- function(input, output, session, rv) {
     showNotification("All parameters reset to defaults.", type = "message", duration = 3)
   })
 
-  # ---- Scenario safety warnings ----
+  # ---- Scenario safety warnings (all pairs) ----
   output$scenario_warnings <- renderUI({
+    groups <- rv$scenario_groups
+    if (is.null(groups)) groups <- "core"
+
     warnings <- list()
 
-    # No baseline selected
-    if (is.null(input$baseline_scenario) || length(input$baseline_scenario) == 0) {
-      warnings <- c(warnings, list(
-        div(class = "alert alert-danger alert-compact",
-            icon("exclamation-triangle"), " No baseline scenario selected. Analysis requires at least one baseline.")
-      ))
-    }
-
-    # No target selected
-    if (is.null(input$target_scenarios) || length(input$target_scenarios) == 0) {
-      warnings <- c(warnings, list(
-        div(class = "alert alert-danger alert-compact",
-            icon("exclamation-triangle"), " No target scenario selected. Select at least one target.")
-      ))
-    }
-
-    # Baseline == one of the targets
-    if (!is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0 &&
-        !is.null(input$target_scenarios) && any(input$baseline_scenario %in% input$target_scenarios)) {
-      overlap <- intersect(input$baseline_scenario, input$target_scenarios)
-      warnings <- c(warnings, list(
-        div(class = "alert alert-warning alert-compact",
-            icon("exclamation-circle"), paste0(" Baseline also selected as target: ",
-                                              paste(overlap, collapse = ", "),
-                                              ". Results will show zero change for those scenarios."))
-      ))
-    }
-
-    # Show baseline mapping info when targets are selected
-    if (!is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0 &&
-        !is.null(input$target_scenarios) && length(input$target_scenarios) > 0) {
-      bmap <- build_baseline_map(input$target_scenarios, input$baseline_scenario, input$baseline_scenario[1])
-      # Show mapping if multiple distinct baselines are used
-      unique_baselines <- unique(unname(bmap))
-      if (length(unique_baselines) > 1) {
-        mapping_lines <- sapply(names(bmap), function(tgt) {
-          tags$li(class = "fs-12",
-                  tags$code(scenario_label(tgt)), " \u2192 baseline: ", tags$code(scenario_label(bmap[tgt])))
-        }, USE.NAMES = FALSE)
+    for (key in groups) {
+      entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+      if (key == "core") {
+        bl <- input$baseline_scenario; tgt <- input$target_scenario
+      } else {
+        bl <- input[[paste0("baseline_scenario_", key)]]
+        tgt <- input[[paste0("target_scenario_", key)]]
+      }
+      if (!is.null(bl) && !is.null(tgt) && nzchar(bl) && nzchar(tgt) && bl == tgt) {
         warnings <- c(warnings, list(
-          div(class = "alert alert-info alert-compact",
-              icon("info-circle"), " Multiple baselines active. Mapping:",
-              tags$ul(class = "compact-list", mapping_lines))
+          div(class = "alert alert-warning", style = "padding: 8px 12px; margin-bottom: 6px; font-size: 13px;",
+              icon("exclamation-circle"),
+              paste0(" ", entry$label, ": Baseline and target are the same. Results will show zero change."))
         ))
       }
-    }
-
-    # Performance warning: >5 targets
-    if (!is.null(input$target_scenarios) && length(input$target_scenarios) > 5) {
-      warnings <- c(warnings, list(
-        div(class = "alert alert-info alert-compact",
-            icon("info-circle"), paste0(" ", length(input$target_scenarios), " target scenarios selected. Runs with >5 targets may be slow."))
-      ))
     }
 
     if (length(warnings) > 0) do.call(tagList, warnings) else NULL
@@ -278,4 +332,6 @@ setup_config <- function(input, output, session, rv) {
   observeEvent(input$goto_run_concentration, {
     updateTabItems(session, "tabs", selected = "run")
   })
+
+
 }

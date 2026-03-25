@@ -1,21 +1,40 @@
 # mod_run.R
-# Run Analysis: execution loop, run history, comparison, navigation
+# Auto-extracted from server.R during modularization (2026-03-25)
 
 setup_run <- function(input, output, session, rv, log_message) {
+
   # ============================================
   # Run checklist
   # ============================================
 
   output$run_checklist <- renderUI({
+    bl <- input$baseline_scenario
+    tgt <- input$target_scenario
+    has_core_selected <- !is.null(bl) && nzchar(bl) && !is.null(tgt) && nzchar(tgt)
+
     checks <- list(
       portfolio = !is.null(rv$portfolio) && is.null(validate_portfolio(rv$portfolio)),
       assets = !is.null(rv$assets) && is.null(validate_assets(rv$assets)),
       financial = !is.null(rv$financial) && is.null(validate_financial(rv$financial)),
       scenarios = !is.null(rv$scenarios),
       carbon = !is.null(rv$carbon),
-      baseline = !is.null(input$baseline_scenario) && length(input$baseline_scenario) > 0,
-      target = !is.null(input$target_scenarios) && length(input$target_scenarios) > 0
+      pair = has_core_selected
     )
+
+    # Build sector coverage info
+    sector_items <- list()
+    if (!is.null(rv$detected_sectors) && length(rv$detected_sectors) > 0) {
+      sector_items <- list(
+        tags$p(
+          icon("check-circle", class = "status-ok"),
+          paste(" Portfolio sectors:", paste(rv$detected_sectors, collapse = ", "))
+        ),
+        tags$p(
+          icon("check-circle", class = "status-ok"),
+          paste(" Scenario pairs:", length(rv$scenario_groups))
+        )
+      )
+    }
 
     tagList(
       tags$p(
@@ -39,13 +58,10 @@ setup_run <- function(input, output, session, rv, log_message) {
         " Carbon price data available"
       ),
       tags$p(
-        if (checks$baseline) icon("check-circle", class = "status-ok") else icon("times-circle", class = "status-missing"),
-        " Baseline scenario selected"
+        if (checks$pair) icon("check-circle", class = "status-ok") else icon("times-circle", class = "status-missing"),
+        " Baseline and target scenarios selected"
       ),
-      tags$p(
-        if (checks$target) icon("check-circle", class = "status-ok") else icon("times-circle", class = "status-missing"),
-        " Target scenario selected"
-      ),
+      do.call(tagList, sector_items),
       hr(),
       if (all(unlist(checks))) {
         tags$p(class = "status-ok", strong(icon("rocket"), " Ready to run analysis!"))
@@ -56,11 +72,25 @@ setup_run <- function(input, output, session, rv, log_message) {
   })
 
   output$config_summary <- renderText({
-    target_labels <- paste(sapply(input$target_scenarios, scenario_label), collapse = ", ")
+    groups <- rv$scenario_groups
+    if (is.null(groups)) groups <- "core"
+
+    pair_lines <- sapply(groups, function(key) {
+      entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+      if (key == "core") {
+        bl <- input$baseline_scenario; tgt <- input$target_scenario
+      } else {
+        bl <- input[[paste0("baseline_scenario_", key)]]
+        tgt <- input[[paste0("target_scenario_", key)]]
+      }
+      bl_label <- if (!is.null(bl) && nzchar(bl)) scenario_label(bl) else "(none)"
+      tgt_label <- if (!is.null(tgt) && nzchar(tgt)) scenario_label(tgt) else "(none)"
+      paste0(entry$label, ": ", tgt_label, " vs ", bl_label)
+    })
+
     paste(
-      "Baseline Scenario(s):", paste(sapply(input$baseline_scenario, scenario_label), collapse = ", "),
-      "\nTarget Scenario(s):", target_labels,
-      "\nGeography:", input$scenario_geography,
+      paste(pair_lines, collapse = "\n"),
+      paste("\nGeography:", input$scenario_geography),
       "\nShock Year(s):", paste(input$shock_years, collapse = ", "),
       "\nRisk-Free Rate:", input$risk_free_rate,
       "\nDiscount Rate:", input$discount_rate,
@@ -83,10 +113,21 @@ setup_run <- function(input, output, session, rv, log_message) {
       showNotification("Please select at least one shock year on the Configure tab.", type = "error")
       return()
     }
-    # Validate at least one target scenario selected
-    if (is.null(input$target_scenarios) || length(input$target_scenarios) == 0) {
-      showNotification("Please select at least one target scenario on the Configure tab.", type = "error")
+    # Validate at least the core scenarios are selected
+    if (is.null(input$baseline_scenario) || input$baseline_scenario == "" ||
+        is.null(input$target_scenario) || input$target_scenario == "") {
+      showNotification("Please select both a baseline and a target scenario on the Configure tab.", type = "error")
       return()
+    }
+    # Validate additional sector-specific pairs (if present)
+    for (key in setdiff(rv$scenario_groups, "core")) {
+      bl_key <- input[[paste0("baseline_scenario_", key)]]
+      tgt_key <- input[[paste0("target_scenario_", key)]]
+      if (is.null(bl_key) || bl_key == "" || is.null(tgt_key) || tgt_key == "") {
+        showNotification(
+          paste0("Please select scenarios for the ", SECTOR_SCENARIO_DEFAULTS[[key]]$label, " pair, or remove those sectors from your portfolio."),
+          type = "warning")
+      }
     }
 
     if (!is.null(rv$results)) {
@@ -99,11 +140,11 @@ setup_run <- function(input, output, session, rv, log_message) {
           tags$li("Replace current TRISK results with new ones"),
           tags$li("Reset PD/EL integration results (must re-calculate)"),
           if (!is.null(rv$internal_pd) || !is.null(rv$internal_el))
-            tags$li(tags$span(class = "text-success",
+            tags$li(tags$span(style = "color: #6B9F3B;",
                               icon("check-circle"),
                               " Your uploaded Internal PD/EL values will be ", tags$b("preserved")))
         ),
-        tags$p(class = "mt-10",
+        tags$p(style = "margin-top: 10px;",
                tags$em("Tip: You can compare previous runs from the Portfolio Results tab.")),
         footer = tagList(
           modalButton("Cancel"),
@@ -130,11 +171,21 @@ setup_run <- function(input, output, session, rv, log_message) {
 
     # --- SAVE CURRENT RUN TO HISTORY (before overwriting) ---
     if (!is.null(rv$results)) {
+      # Collect all active scenario pairs for history
+      hist_pairs <- lapply(rv$scenario_groups, function(key) {
+        entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+        if (key == "core") {
+          bl <- input$baseline_scenario; tgt <- input$target_scenario
+        } else {
+          bl <- input[[paste0("baseline_scenario_", key)]]
+          tgt <- input[[paste0("target_scenario_", key)]]
+        }
+        list(group = key, label = entry$label, baseline = bl, target = tgt)
+      })
       current_config <- list(
-        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-        baseline_scenarios = input$baseline_scenario,
-        target_scenario = paste(input$target_scenarios, collapse = ", "),
-        target_scenarios = input$target_scenarios,
+        baseline_scenario = input$baseline_scenario,
+        target_scenario = input$target_scenario,
+        scenario_pairs = hist_pairs,
         scenario_geography = input$scenario_geography,
         shock_year = paste(input$shock_years, collapse = ", "),
         shock_years = input$shock_years,
@@ -159,7 +210,6 @@ setup_run <- function(input, output, session, rv, log_message) {
       rv$run_history <- c(list(history_entry), rv$run_history)
       if (length(rv$run_history) > 5) {
         rv$run_history <- rv$run_history[1:5]
-        gc()
       }
       rv$compare_run_idx <- NULL
 
@@ -178,30 +228,54 @@ setup_run <- function(input, output, session, rv, log_message) {
 
         incProgress(0.2, detail = "Preparing data...")
         log_message("--- Input Data ---")
-        log_message(paste("  Portfolio:", nrow(rv$portfolio), "rows,", ncol(rv$portfolio), "columns"))
-        log_message(paste("  Assets:", nrow(rv$assets), "rows,", length(unique(rv$assets$company_id)), "companies"))
-        log_message(paste("  Financial:", nrow(rv$financial), "rows"))
-        log_message(paste("  Scenarios:", nrow(rv$scenarios), "rows,", length(unique(rv$scenarios$scenario)), "scenarios"))
+        log_message(paste("  Portfolio rows:", nrow(rv$portfolio)))
+        log_message(paste("  Portfolio columns:", ncol(rv$portfolio)))
+        log_message(paste("  Assets rows:", nrow(rv$assets)))
+        log_message(paste("  Assets companies:", length(unique(rv$assets$company_id))))
+        log_message(paste("  Financial rows:", nrow(rv$financial)))
+        log_message(paste("  Scenarios rows:", nrow(rv$scenarios)))
+        log_message(paste("  Scenarios count:", length(unique(rv$scenarios$scenario))))
         log_message(paste("  Carbon price rows:", if (!is.null(rv$carbon)) nrow(rv$carbon) else "NULL"))
-        target_scenarios_run <- input$target_scenarios
-        n_scenarios <- length(target_scenarios_run)
+        if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
+          log_message(paste("  Debug - Portfolio columns:", paste(names(rv$portfolio), collapse = ", ")))
+          log_message(paste("  Debug - Scenarios available:", paste(unique(rv$scenarios$scenario), collapse = ", ")))
+        }
+        # ---- COLLECT SCENARIO PAIRS FROM SECTOR-AWARE UI ----
+        groups <- rv$scenario_groups
+        if (is.null(groups) || length(groups) == 0) groups <- "core"
 
-        # ---- BUILD BASELINE MAP ----
-        # The user may select multiple baselines; the first one is the default.
-        # Each target scenario is mapped to its family-matched baseline.
-        selected_baselines <- input$baseline_scenario
-        default_baseline <- selected_baselines[1]
-        baseline_map <- build_baseline_map(target_scenarios_run, selected_baselines, default_baseline)
+        scenario_pairs <- list()
+        for (key in groups) {
+          entry <- SECTOR_SCENARIO_DEFAULTS[[key]]
+          # Core row uses canonical IDs; extra rows use suffixed IDs
+          if (key == "core") {
+            bl  <- input$baseline_scenario
+            tgt <- input$target_scenario
+          } else {
+            bl  <- input[[paste0("baseline_scenario_", key)]]
+            tgt <- input[[paste0("target_scenario_", key)]]
+          }
+          # Skip pairs where user hasn't selected anything
+          if (!is.null(bl) && nzchar(bl) && !is.null(tgt) && nzchar(tgt)) {
+            scenario_pairs[[key]] <- list(
+              key      = key,
+              label    = entry$label,
+              baseline = bl,
+              target   = tgt,
+              sectors  = entry$sectors
+            )
+          }
+        }
+        req(length(scenario_pairs) > 0)
+        n_scenario_pairs <- length(scenario_pairs)
 
         log_message("--- Parameters ---")
-        log_message(paste("  Selected baseline(s):", paste(selected_baselines, collapse = ", ")))
-        log_message(paste("  Default baseline:", default_baseline))
-        log_message(paste("  Baseline mapping:"))
-        for (tgt in names(baseline_map)) {
-          log_message(paste0("    ", tgt, " -> ", baseline_map[tgt]))
+        log_message(paste("  Scenario pairs:", n_scenario_pairs))
+        for (key in names(scenario_pairs)) {
+          p <- scenario_pairs[[key]]
+          log_message(paste0("    ", p$label, ": ", p$baseline, " -> ", p$target,
+                            " [sectors: ", paste(p$sectors, collapse = ", "), "]"))
         }
-        log_message(paste("  Target scenario(s):", paste(target_scenarios_run, collapse = ", ")))
-        log_message(paste("  Number of target scenarios:", n_scenarios))
         log_message(paste("  Geography:", input$scenario_geography))
         log_message(paste("  Shock year(s):", paste(input$shock_years, collapse = ", ")))
         log_message(paste("  Risk-free rate:", input$risk_free_rate))
@@ -212,177 +286,177 @@ setup_run <- function(input, output, session, rv, log_message) {
 
         incProgress(0.2, detail = "Preparing data...")
 
-        # Validate year range compatibility between assets and scenarios
+        # ---- ENRICH PORTFOLIO WITH TECHNOLOGY (local copy, never mutate rv$portfolio) ----
+        # trisk.analysis::join_trisk_outputs_to_portfolio() joins results back
+        # to the portfolio by (company_id, country_iso2, sector, technology, term).
+        # User-uploaded portfolios are often company-level (no technology column).
+        # Expand each company to one row per technology from the assets data.
+        portfolio_for_run <- rv$portfolio
+        if (!"technology" %in% names(portfolio_for_run)) {
+          company_techs <- rv$assets %>%
+            dplyr::distinct(.data$company_id, .data$sector, .data$technology)
+          portfolio_for_run <- portfolio_for_run %>%
+            dplyr::select(-any_of("sector")) %>%
+            dplyr::inner_join(company_techs, by = "company_id")
+          log_message(paste("  Portfolio enriched: added technology column from assets data.",
+                           nrow(rv$portfolio), "->", nrow(portfolio_for_run), "rows"))
+        }
+
+        # ---- ENRICH PORTFOLIO COMPANY NAMES FROM ASSETS ----
+        if ("company_name" %in% names(portfolio_for_run) && all(is.na(portfolio_for_run$company_name)) &&
+            "company_name" %in% names(rv$assets)) {
+          asset_names <- rv$assets %>%
+            dplyr::distinct(.data$company_id, asset_company_name = .data$company_name)
+          portfolio_for_run <- portfolio_for_run %>%
+            dplyr::left_join(asset_names, by = "company_id") %>%
+            dplyr::mutate(company_name = dplyr::coalesce(.data$asset_company_name, .data$company_name)) %>%
+            dplyr::select(-"asset_company_name")
+          log_message("  Enriched portfolio company_name from assets data")
+        }
+
+        # ---- PREPARE ASSETS FOR RUN ----
         assets_for_run <- rv$assets
-        assets_min_year <- min(assets_for_run$production_year)
-        assets_max_year <- max(assets_for_run$production_year)
 
-        all_baselines_used <- unique(unname(baseline_map))
-        selected_scenarios <- rv$scenarios %>%
-          filter(
-            .data$scenario %in% c(all_baselines_used, target_scenarios_run),
-            .data$scenario_geography %in% input$scenario_geography
-          )
-        scen_min_year <- min(selected_scenarios$scenario_year)
-        scen_max_year <- max(selected_scenarios$scenario_year)
-
-        log_message("--- Year Range Check ---")
-        log_message(paste("  Assets years:", assets_min_year, "-", assets_max_year))
-        log_message(paste("  Scenario years (filtered):", scen_min_year, "-", scen_max_year))
-
-        if (assets_min_year < scen_min_year) {
-          log_message(paste("  WARNING: Assets start year", assets_min_year,
-                           "< scenario start year", scen_min_year,
-                           "- trimming assets"))
-          assets_for_run <- assets_for_run %>% filter(.data$production_year >= scen_min_year)
-          log_message(paste("  Assets after trim:", nrow(assets_for_run), "rows,",
-                           "years:", min(assets_for_run$production_year), "-", max(assets_for_run$production_year)))
+        # ---- IDENTIFY PAIRS WITH MATCHING PORTFOLIO COMPANIES ----
+        pairs_with_data <- list()
+        for (key in names(scenario_pairs)) {
+          pair <- scenario_pairs[[key]]
+          portfolio_subset <- portfolio_for_run %>%
+            dplyr::filter(.data$sector %in% pair$sectors)
+          if (nrow(portfolio_subset) > 0) {
+            pairs_with_data[[key]] <- pair
+            pairs_with_data[[key]]$n_companies <- nrow(portfolio_subset)
+            log_message(paste0("  ", pair$label, ": ", nrow(portfolio_subset),
+                              " portfolio rows in sectors [",
+                              paste(pair$sectors, collapse = ", "), "]"))
+          } else {
+            log_message(paste0("  Skipping ", pair$label,
+                              ": no portfolio companies in sectors [",
+                              paste(pair$sectors, collapse = ", "), "]"))
+          }
         }
 
-        if (assets_max_year > scen_max_year) {
-          log_message(paste("  WARNING: Assets end year", assets_max_year,
-                           "> scenario end year", scen_max_year,
-                           "- trimming assets"))
-          assets_for_run <- assets_for_run %>% filter(.data$production_year <= scen_max_year)
-          log_message(paste("  Assets after trim:", nrow(assets_for_run), "rows,",
-                           "years:", min(assets_for_run$production_year), "-", max(assets_for_run$production_year)))
+        if (length(pairs_with_data) == 0) {
+          showNotification("No scenario pairs match any companies in your portfolio.", type = "error")
+          return()
         }
 
-        # ---- PRE-FLIGHT DATA COMPATIBILITY CHECK ----
-        # The trisk.model inner-joins assets with financial data on company_id.
-        # If few companies overlap, the analysis will fail with a cryptic
-        # "nrow(assets_data_filtered) > 0 is not TRUE" error.  Catch this early
-        # and present a clear, actionable message instead.
-
-        asset_companies <- unique(assets_for_run$company_id)
-        fin_companies   <- unique(rv$financial$company_id)
-        shared_companies <- intersect(asset_companies, fin_companies)
-        n_asset  <- length(asset_companies)
-        n_fin    <- length(fin_companies)
-        n_shared <- length(shared_companies)
-
-        log_message("--- Data Compatibility Check ---")
-        log_message(paste("  Asset companies:", n_asset))
-        log_message(paste("  Financial companies:", n_fin))
-        log_message(paste("  Overlapping companies:", n_shared))
-
-        if (n_shared == 0) {
-          stop(paste0(
-            "No companies in common between Assets data (", n_asset,
-            " companies) and Financial data (", n_fin, " companies). ",
-            "The model requires matching company_id values across both datasets. ",
-            "Please ensure your Assets and Financial files cover the same companies."
-          ))
-        }
-
-        overlap_pct <- round(100 * n_shared / n_asset, 1)
-        if (overlap_pct < 5) {
-          log_message(paste0("  WARNING: Only ", overlap_pct, "% of asset companies (",
-                             n_shared, "/", n_asset, ") have financial data"))
-        }
-
-        # Check technology overlap: do the matched companies' technologies
-        # intersect with the selected scenarios' technologies?
-        matched_assets <- assets_for_run %>%
-          filter(.data$company_id %in% shared_companies)
-        asset_techs <- unique(matched_assets$technology)
-
-        scen_techs <- unique(selected_scenarios$technology)
-        tech_overlap <- intersect(asset_techs, scen_techs)
-
-        log_message(paste("  Asset technologies (matched companies):",
-                          paste(sort(asset_techs), collapse = ", ")))
-        log_message(paste("  Scenario technologies:",
-                          paste(sort(scen_techs), collapse = ", ")))
-        log_message(paste("  Technology overlap:",
-                          paste(sort(tech_overlap), collapse = ", ")))
-
-        if (length(tech_overlap) == 0) {
-          stop(paste0(
-            "No technology overlap between your portfolio and the selected scenario(s). ",
-            "Companies with financial data produce: ",
-            paste(sort(asset_techs), collapse = ", "), ". ",
-            "The selected scenarios cover: ",
-            paste(sort(head(scen_techs, 10)), collapse = ", "),
-            if (length(scen_techs) > 10) paste0(" (and ", length(scen_techs) - 10, " more)") else "",
-            ". Please select a different scenario or load data with matching technologies."
-          ))
-        }
-
-        log_message(paste("  Pre-flight check PASSED:",
-                          n_shared, "companies,", length(tech_overlap), "technologies in common"))
-
-        # ---- MULTI-SCENARIO × MULTI-HORIZON LOOP ----
+        # ---- MULTI-PAIR × MULTI-HORIZON LOOP ----
         shock_years <- sort(as.integer(input$shock_years))
         n_years <- length(shock_years)
-        total_runs <- n_scenarios * n_years
+        total_runs <- length(pairs_with_data) * n_years
         run_count <- 0
 
-        # extract_result_df() is defined in global.R — no local shadow needed
+        all_combined_results <- list()  # year -> combined df across all pairs
 
-        # Store results: scenario -> year -> df
-        all_scenario_results <- list()
+        for (yr_i in seq_along(shock_years)) {
+          yr <- shock_years[yr_i]
+          year_results <- list()
 
-        for (scen_i in seq_along(target_scenarios_run)) {
-          target_scen <- target_scenarios_run[scen_i]
-          scen_label <- scenario_label(target_scen)
-          all_year_results <- list()
-
-          # Resolve baseline for this target scenario
-          matched_baseline <- baseline_map[target_scen]
-
-          for (yr_i in seq_along(shock_years)) {
-            yr <- shock_years[yr_i]
+          for (key in names(pairs_with_data)) {
+            pair <- pairs_with_data[[key]]
             run_count <- run_count + 1
             progress_val <- 0.2 + 0.6 * (run_count / total_runs)
             incProgress(progress_val - (0.2 + 0.6 * ((run_count - 1) / total_runs)),
-                        detail = paste0("Scenario ", scen_i, "/", n_scenarios,
-                                       ", year ", yr, " (", run_count, "/", total_runs, ")..."))
-            log_message(paste0("--- Scenario: ", target_scen, " | Baseline: ", matched_baseline,
-                              " | Year: ", yr, " (", run_count, "/", total_runs, ") ---"))
+                        detail = paste0(pair$label, ", year ", yr,
+                                       " (", run_count, "/", total_runs, ")..."))
 
-            raw_results <- run_trisk_on_portfolio(
-              assets_data = assets_for_run,
-              scenarios_data = rv$scenarios,
-              financial_data = rv$financial,
-              carbon_data = rv$carbon,
-              portfolio_data = rv$portfolio,
-              baseline_scenario = matched_baseline,
-              target_scenario = target_scen,
-              scenario_geography = input$scenario_geography,
-              shock_year = yr,
-              risk_free_rate = input$risk_free_rate,
-              discount_rate = input$discount_rate,
-              growth_rate = input$growth_rate,
-              market_passthrough = input$market_passthrough
-            )
+            tryCatch({
+              # Per-pair geography fallback: use selected geography if available,
+              # otherwise fall back to "Global" (e.g. IPR/MissionPossible don't have OecdAndEu)
+              geo_result <- get_geography_for_pair(pair$baseline, input$scenario_geography)
+              pair_geography <- geo_result$geography
+              if (geo_result$fallback) {
+                log_message(paste0("  Geography fallback for ", pair$label,
+                                  ": ", input$scenario_geography, " -> ", pair_geography))
+              }
 
-            result_df <- extract_result_df(raw_results)
-            result_df <- compute_el_columns(result_df)
-            result_df$shock_year <- yr
-            result_df$target_scenario <- target_scen
-            result_df$baseline_scenario <- matched_baseline
-            all_year_results[[as.character(yr)]] <- result_df
-            log_message(paste0("  ", nrow(result_df), " rows"))
+              log_message(paste0("--- ", pair$label, ": ", pair$target,
+                                " <- ", pair$baseline,
+                                " | Geography: ", pair_geography,
+                                " | Year: ", yr,
+                                " | Sectors: ", paste(pair$sectors, collapse = ", "),
+                                " (", run_count, "/", total_runs, ") ---"))
+
+              # Filter portfolio and assets to this pair's sectors
+              portfolio_subset <- portfolio_for_run %>%
+                dplyr::filter(.data$sector %in% pair$sectors)
+              assets_subset <- assets_for_run %>%
+                dplyr::filter(.data$sector %in% pair$sectors)
+
+              # Per-pair year range validation (using pair-specific geography)
+              pair_scenarios <- rv$scenarios %>%
+                dplyr::filter(
+                  .data$scenario %in% c(pair$baseline, pair$target),
+                  .data$scenario_geography %in% pair_geography
+                )
+              if (nrow(pair_scenarios) > 0) {
+                scen_min <- min(pair_scenarios$scenario_year)
+                scen_max <- max(pair_scenarios$scenario_year)
+                assets_subset <- assets_subset %>%
+                  dplyr::filter(.data$production_year >= scen_min,
+                                .data$production_year <= scen_max)
+              }
+
+              raw_results <- run_trisk_on_portfolio(
+                assets_data = assets_subset,
+                scenarios_data = rv$scenarios,
+                financial_data = rv$financial,
+                carbon_data = rv$carbon,
+                portfolio_data = portfolio_subset,
+                baseline_scenario = pair$baseline,
+                target_scenario = pair$target,
+                scenario_geography = pair_geography,
+                shock_year = yr,
+                risk_free_rate = input$risk_free_rate,
+                discount_rate = input$discount_rate,
+                growth_rate = input$growth_rate,
+                market_passthrough = input$market_passthrough
+              )
+
+              result_df <- extract_result_df(raw_results)
+              result_df <- compute_el_columns(result_df)
+              result_df$shock_year <- yr
+              result_df$target_scenario <- pair$target
+              result_df$baseline_scenario <- pair$baseline
+              result_df$scenario_group <- key
+              year_results[[key]] <- result_df
+              log_message(paste0("  ", nrow(result_df), " rows from ", pair$label))
+            }, error = function(e) {
+              log_message(paste0("  WARNING: ", pair$label, " failed for year ", yr,
+                                ": ", conditionMessage(e)))
+              showNotification(
+                paste0(pair$label, " (year ", yr, "): ", conditionMessage(e)),
+                type = "warning", duration = 10
+              )
+            })
           }
 
-          all_scenario_results[[target_scen]] <- all_year_results
-          rm(all_year_results); gc()
+          # Combine all sector results for this year
+          all_combined_results[[as.character(yr)]] <- dplyr::bind_rows(year_results)
         }
 
-        # Primary results = first scenario, first year (backward compatibility)
-        primary_scenario <- target_scenarios_run[1]
+        # ---- STORE COMBINED RESULTS ----
         primary_year <- as.character(shock_years[1])
-        rv$results <- all_scenario_results[[primary_scenario]][[primary_year]]
-        rv$results_by_year <- all_scenario_results[[primary_scenario]]
-        rv$results_by_scenario <- all_scenario_results
-        log_message("Computed EL and derived columns for all scenarios × shock years")
+        rv$results <- all_combined_results[[primary_year]]
+        rv$results_by_year <- all_combined_results
 
-        log_message("--- Results (Primary) ---")
-        log_message(paste("  Primary scenario:", primary_scenario))
+        # For backward compatibility, store under primary target scenario
+        primary_target <- if ("core" %in% names(pairs_with_data)) {
+          pairs_with_data[["core"]]$target
+        } else {
+          pairs_with_data[[1]]$target
+        }
+        rv$results_by_scenario <- list()
+        rv$results_by_scenario[[primary_target]] <- all_combined_results
+
+        log_message("--- Combined Results ---")
+        log_message(paste("  Scenario pairs executed:", length(pairs_with_data)))
         log_message(paste("  Primary shock year:", primary_year))
-        log_message(paste("  Result:", nrow(rv$results), "rows,", ncol(rv$results), "columns"))
-        log_message(paste("  Total scenarios:", n_scenarios, "| Total years:", n_years,
+        log_message(paste("  Result rows (combined):", nrow(rv$results)))
+        log_message(paste("  Result columns:", ncol(rv$results)))
+        log_message(paste("  Total pairs:", length(pairs_with_data),
+                         "| Total years:", n_years,
                          "| Total runs:", total_runs))
 
         if ("sector" %in% names(rv$results)) {
@@ -392,9 +466,9 @@ setup_run <- function(input, output, session, rv, log_message) {
           log_message(paste("  Distinct technologies:", length(unique(rv$results$technology))))
         }
         if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
-          log_message(paste("  Debug - columns:", paste(names(rv$results), collapse = ", ")))
+          log_message(paste("  Debug - Result columns:", paste(names(rv$results), collapse = ", ")))
           if ("crispy_perc_value_change" %in% names(rv$results)) {
-            log_message(paste("  Debug - Avg NPV change:", smart_round(mean(rv$results$crispy_perc_value_change, na.rm = TRUE) * 100), "%"))
+            log_message(paste("  Debug - Avg PD shock:", smart_round(mean(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
           }
           if ("pd_shock" %in% names(rv$results)) {
             log_message(paste("  Debug - Max PD shock:", smart_round(max(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
@@ -420,30 +494,23 @@ setup_run <- function(input, output, session, rv, log_message) {
 
         incProgress(0.9, detail = "Finalizing...")
         log_message(paste("Analysis complete! Run ID:", rv$run_id))
+        audit_log("analysis_run", list(run_id = rv$run_id,
+                                       n_scenario_pairs = length(pairs_with_data),
+                                       n_years = n_years, result_rows = nrow(rv$results)))
 
         n_yr_label <- if (n_years > 1) paste0(" across ", n_years, " shock years") else ""
         showNotification(paste0("Analysis completed successfully!", n_yr_label), type = "message", duration = 5)
-
-        # Reclaim memory after large analysis
-        gc()
 
         # Switch to results tab
         updateTabsetPanel(session, "tabs", selected = "results")
 
       }, error = function(e) {
-        err_msg <- conditionMessage(e)
-        log_message(paste("ERROR:", err_msg))
-        message(paste("ERROR (analysis):", err_msg))
-
-        # Show actionable message for pre-flight errors; generic otherwise
-        is_preflight <- grepl("No companies in common|No technology overlap", err_msg)
-        display_msg <- if (is_preflight) err_msg
-                       else "Analysis failed. Please check your data and configuration, then try again."
-
+        message(paste("ERROR (analysis run):", conditionMessage(e)))
+        log_message("ERROR: Analysis failed (see server log for details)")
         showNotification(
-          display_msg,
+          "Analysis failed. Please check your data and parameters.",
           type = "error",
-          duration = if (is_preflight) 15 else 10
+          duration = 10
         )
       })
     })
@@ -456,9 +523,8 @@ setup_run <- function(input, output, session, rv, log_message) {
   # ---- Run ID display (Step 3) ----
   output$run_id_display <- renderUI({
     if (is.null(rv$run_id)) return(NULL)
-    # NOTE: needs CSS class .run-id-label { font-size: 13px; padding: 4px 10px; }
-    div(class = "mt-10",
-      tags$span(class = "label label-info run-id-label",
+    div(style = "margin-top: 10px;",
+      tags$span(class = "label label-info", style = "font-size: 13px; padding: 4px 10px;",
                 icon("fingerprint"), paste(" Run ID:", rv$run_id))
     )
   })
@@ -466,8 +532,8 @@ setup_run <- function(input, output, session, rv, log_message) {
   # ---- Run ID display (Step 6) ----
   output$run_id_step6 <- renderUI({
     if (is.null(rv$run_id)) return(NULL)
-    div(class = "mb-10",
-      tags$span(class = "label label-info run-id-label",
+    div(style = "margin-bottom: 10px;",
+      tags$span(class = "label label-info", style = "font-size: 13px; padding: 4px 10px;",
                 icon("fingerprint"), paste(" Run ID:", rv$run_id))
     )
   })
@@ -483,63 +549,74 @@ setup_run <- function(input, output, session, rv, log_message) {
       run <- rv$run_history[[i]]
       cfg <- run$config
       ts <- format(run$timestamp, "%H:%M:%S %b %d")
-      baseline_lbl <- scenario_label(cfg$baseline_scenario)
-      # Handle multi-scenario config (target_scenario may be comma-separated)
-      target_codes <- if (!is.null(cfg$target_scenarios)) cfg$target_scenarios
-                      else strsplit(cfg$target_scenario, ",\\s*")[[1]]
-      if (length(target_codes) <= 2) {
-        target_lbl <- paste(sapply(target_codes, scenario_label), collapse = ", ")
+      # Handle both new (scenario_pairs) and old (baseline_scenario/target_scenario) config formats
+      if (!is.null(cfg$scenario_pairs) && length(cfg$scenario_pairs) > 0) {
+        n_pairs <- length(cfg$scenario_pairs)
+        first_pair <- cfg$scenario_pairs[[1]]
+        baseline_lbl <- scenario_label(first_pair$baseline)
+        target_lbl <- if (n_pairs <= 2) {
+          paste(sapply(cfg$scenario_pairs, function(p) scenario_label(p$target)), collapse = ", ")
+        } else {
+          paste0(scenario_label(first_pair$target), " + ", n_pairs - 1, " more")
+        }
       } else {
-        target_lbl <- paste0(scenario_label(target_codes[1]), " + ", length(target_codes) - 1, " more")
+        baseline_lbl <- scenario_label(cfg$baseline_scenario)
+        target_codes <- if (!is.null(cfg$target_scenarios)) cfg$target_scenarios
+                        else strsplit(cfg$target_scenario, ",\\s*")[[1]]
+        if (length(target_codes) <= 2) {
+          target_lbl <- paste(sapply(target_codes, scenario_label), collapse = ", ")
+        } else {
+          target_lbl <- paste0(scenario_label(target_codes[1]), " + ", length(target_codes) - 1, " more")
+        }
       }
 
       # Compute key metrics for compact display
-      avg_npv <- if ("crispy_perc_value_change" %in% names(run$results)) {
-        paste0(round(mean(run$results$crispy_perc_value_change, na.rm = TRUE) * 100, 2), "%")
-      } else "N/A"
       avg_pd <- if ("pd_shock" %in% names(run$results)) {
         paste0(round(mean(run$results$pd_shock, na.rm = TRUE) * 100, 4), "%")
       } else "N/A"
+      total_el <- if (all(c("expected_loss_baseline", "expected_loss_shock") %in% names(run$results))) {
+        format_number(sum(abs(run$results$expected_loss_shock) - abs(run$results$expected_loss_baseline), na.rm = TRUE))
+      } else "N/A"
 
       is_selected <- !is.null(rv$compare_run_idx) && rv$compare_run_idx == i
-      # NOTE: needs CSS classes:
-      # .history-row { padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; }
-      # .history-row--default { background: #FBF5F2; border-left: 3px solid #DDD0D4; }
-      # .history-row--selected { background: #FFFDE7; border-left: 3px solid #F53D3F; }
-      row_class <- if (is_selected) "history-row history-row--selected" else "history-row history-row--default"
+      row_style <- if (is_selected) {
+        "background: #FFFDE7; border-left: 3px solid #F53D3F; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px;"
+      } else {
+        "background: #FBF5F2; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; border-left: 3px solid #DDD0D4;"
+      }
 
-      tags$div(class = row_class,
+      tags$div(style = row_style,
         fluidRow(
-          # NOTE: needs CSS class .history-index { font-weight: 700; color: #666; font-size: 16px; }
-          column(1, tags$span(class = "history-index", paste0("#", i))),
+          column(1, tags$span(style = "font-weight: 700; color: #666; font-size: 16px;", paste0("#", i))),
           column(3,
-            tags$div(class = "history-meta", ts),
-            tags$div(class = "fs-12",
+            tags$div(style = "font-size: 12px; color: #666;", ts),
+            tags$div(style = "font-size: 12px;",
               tags$b(target_lbl), " vs ", baseline_lbl)
           ),
-          column(2, tags$div(class = "fs-12",
-            tags$span(class = "fg-secondary", "Geography: "), cfg$scenario_geography,
+          column(2, tags$div(style = "font-size: 12px;",
+            tags$span(style = "color: #666;", "Geography: "), cfg$scenario_geography,
             tags$br(),
-            tags$span(class = "fg-secondary", "Shock: "), cfg$shock_year
+            tags$span(style = "color: #666;", "Shock: "), cfg$shock_year
           )),
-          column(2, tags$div(class = "fs-12",
-            tags$span(class = "fg-secondary", "NPV: "), tags$b(avg_npv),
+          column(2, tags$div(style = "font-size: 12px;",
+            tags$span(style = "color: #666;", "PD: "), tags$b(avg_pd),
             tags$br(),
-            tags$span(class = "fg-secondary", "PD: "), tags$b(avg_pd)
+            tags$span(style = "color: #666;", "EL: "), tags$b(total_el)
           )),
-          column(2, tags$div(class = "fs-12",
-            tags$span(class = "fg-secondary", "Companies: "), run$n_companies,
+          column(2, tags$div(style = "font-size: 12px;",
+            tags$span(style = "color: #666;", "Companies: "), run$n_companies,
             tags$br(),
-            tags$span(class = "fg-secondary", "Run: "), run$run_id
+            tags$span(style = "color: #666;", "Run: "), run$run_id
           )),
           column(2,
-            # NOTE: needs CSS class .btn-history { width: 100%; margin-bottom: 4px; }
             actionButton(paste0("compare_run_", i), "Compare",
-                        class = if (is_selected) "btn-warning btn-sm btn-history" else "btn-default btn-sm btn-history",
-                        icon = icon(if (is_selected) "eye-slash" else "exchange-alt")),
+                        class = if (is_selected) "btn-warning btn-sm" else "btn-default btn-sm",
+                        icon = icon(if (is_selected) "eye-slash" else "exchange-alt"),
+                        style = "width: 100%; margin-bottom: 4px;"),
             actionButton(paste0("dup_run_", i), "Duplicate",
-                        class = "btn-info btn-sm w-100",
-                        icon = icon("copy"))
+                        class = "btn-info btn-sm",
+                        icon = icon("copy"),
+                        style = "width: 100%;")
           )
         )
       )
@@ -555,7 +632,7 @@ setup_run <- function(input, output, session, rv, log_message) {
                                  if (length(rv$run_history) != 1) "s" else "", ")")),
         status = "info",
         solidHeader = FALSE,
-        tags$div(class = "history-meta mb-8",
+        tags$div(style = "margin-bottom: 8px; font-size: 12px; color: #666;",
           icon("info-circle"),
           " Click ", tags$b("Compare"), " to see a side-by-side comparison with the current run.
             Internal PD/EL values are preserved across re-runs."
@@ -567,32 +644,39 @@ setup_run <- function(input, output, session, rv, log_message) {
     )
   })
 
-  # Handle compare button clicks for each history entry
+  # Handle compare button clicks for each history entry (with destroy pattern to prevent accumulation)
+  compare_observers <- reactiveVal(list())
   observe({
-    lapply(seq_along(rv$run_history), function(i) {
+    # Destroy previous observers before creating new ones
+    for (obs in compare_observers()) obs$destroy()
+    new_obs <- lapply(seq_along(rv$run_history), function(i) {
       btn_id <- paste0("compare_run_", i)
       observeEvent(input[[btn_id]], {
         if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
-          rv$compare_run_idx <- NULL  # Toggle off
+          rv$compare_run_idx <- NULL
         } else {
-          rv$compare_run_idx <- i  # Select for comparison
+          rv$compare_run_idx <- i
         }
       }, ignoreInit = TRUE)
     })
+    compare_observers(new_obs)
   })
 
-  # Handle duplicate button clicks for each history entry
+  # Handle duplicate button clicks for each history entry (with destroy pattern)
+  dup_observers <- reactiveVal(list())
   observe({
-    lapply(seq_along(rv$run_history), function(i) {
+    for (obs in dup_observers()) obs$destroy()
+    new_obs <- lapply(seq_along(rv$run_history), function(i) {
       btn_id <- paste0("dup_run_", i)
       observeEvent(input[[btn_id]], {
         if (i > length(rv$run_history)) return()
         cfg <- rv$run_history[[i]]$config
 
-        # Restore all config inputs from the history entry
-        updateSelectInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
-        if (!is.null(cfg$target_scenarios)) {
-          updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
+        if (!is.null(cfg$baseline_scenario)) {
+          updateSelectizeInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
+        }
+        if (!is.null(cfg$target_scenario)) {
+          updateSelectizeInput(session, "target_scenario", selected = cfg$target_scenario)
         }
         updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
         if (!is.null(cfg$shock_years)) {
@@ -618,12 +702,12 @@ setup_run <- function(input, output, session, rv, log_message) {
           updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)
         }
 
-        # Navigate to config tab
         updateTabItems(session, "tabs", selected = "config")
         showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
                          type = "message", duration = 3)
       }, ignoreInit = TRUE)
     })
+    dup_observers(new_obs)
   })
 
   # Render comparison panel when a history run is selected
@@ -637,9 +721,20 @@ setup_run <- function(input, output, session, rv, log_message) {
     if (is.null(curr)) return(NULL)
 
     prev_cfg <- prev$config
+    # Build label from all active scenario pairs
+    pair_labels <- sapply(rv$scenario_groups, function(key) {
+      if (key == "core") {
+        bl <- input$baseline_scenario; tgt <- input$target_scenario
+      } else {
+        bl <- input[[paste0("baseline_scenario_", key)]]
+        tgt <- input[[paste0("target_scenario_", key)]]
+      }
+      paste0(bl %||% "", " -> ", tgt %||% "")
+    })
+    curr_pairs_label <- paste(pair_labels, collapse = "; ")
     curr_cfg <- list(
-      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-      target_scenario = paste(input$target_scenarios, collapse = ", "),
+      baseline_scenario = input$baseline_scenario %||% "",
+      target_scenario = input$target_scenario %||% "",
       scenario_geography = input$scenario_geography,
       shock_year = paste(input$shock_years, collapse = ", "),
       discount_rate = input$discount_rate,
@@ -647,11 +742,6 @@ setup_run <- function(input, output, session, rv, log_message) {
     )
 
     # Compute deltas
-    curr_npv <- if ("crispy_perc_value_change" %in% names(curr))
-      mean(curr$crispy_perc_value_change, na.rm = TRUE) * 100 else NA
-    prev_npv <- if ("crispy_perc_value_change" %in% names(prev$results))
-      mean(prev$results$crispy_perc_value_change, na.rm = TRUE) * 100 else NA
-
     curr_pd <- if ("pd_shock" %in% names(curr))
       mean(curr$pd_shock, na.rm = TRUE) * 100 else NA
     prev_pd <- if ("pd_shock" %in% names(prev$results))
@@ -674,7 +764,7 @@ setup_run <- function(input, output, session, rv, log_message) {
         "round4" = paste0(round(d, 4), "%"),
         "number" = format_number(d)
       )
-      tags$span(class = "fw-600", style = paste0("color:", color, ";"), paste0(arrow, " ", val_str))
+      tags$span(style = paste0("color:", color, "; font-weight: 600;"), paste0(arrow, " ", val_str))
     }
 
     # Config diff
@@ -701,67 +791,58 @@ setup_run <- function(input, output, session, rv, log_message) {
         tags$b(curr_cfg$discount_rate))))
 
     tags$div(
-      class = "compare-panel",
-      # NOTE: needs CSS class .compare-heading { margin-top: 0; margin-bottom: 12px; font-weight: 600; }
+      style = "margin-top: 15px; padding: 15px; background: #F8F4F6; border: 1px solid #DDD0D4; border-radius: 6px;",
       h4(icon("code-compare"), " Comparison: Current Run vs Run #", idx,
-         class = "compare-heading"),
+         style = "margin-top: 0; margin-bottom: 12px; font-weight: 600;"),
 
       # Config changes
-      # NOTE: needs CSS class .compare-config-list { font-size: 13px; margin-top: 4px; }
       if (length(config_diffs) > 0) {
-        tags$div(class = "mb-12",
-          tags$span(class = "fw-600 fs-13", icon("sliders"), " Parameter Changes:"),
-          tags$ul(class = "compare-config-list", config_diffs)
+        tags$div(style = "margin-bottom: 12px;",
+          tags$span(style = "font-weight: 600; font-size: 13px;", icon("sliders"), " Parameter Changes:"),
+          tags$ul(style = "font-size: 13px; margin-top: 4px;", config_diffs)
         )
       } else {
-        tags$div(class = "mb-12 fs-13 fg-secondary",
+        tags$div(style = "margin-bottom: 12px; font-size: 13px; color: #666;",
                  icon("equals"), " Same parameters — re-run with identical configuration")
       },
 
-      # NOTE: needs CSS classes:
-      # .compare-table { font-size: 13px; margin-bottom: 0; background: white; }
-      # .compare-table-header { background: #F0E6EA; }
-      # .fg-info { color: #5A8EAE; }
+      # Metrics comparison table
       tags$table(
-        class = "table table-bordered compare-table",
+        class = "table table-bordered",
+        style = "font-size: 13px; margin-bottom: 0; background: white;",
         tags$thead(
-          tags$tr(class = "compare-table-header",
+          tags$tr(style = "background: #F0E6EA;",
             tags$th("Metric"),
-            tags$th(class = "th-right", paste0("Run #", idx, " (Previous)")),
-            tags$th(class = "th-right", "Current Run"),
-            tags$th(class = "th-center", "Delta")
+            tags$th(style = "text-align: right;", paste0("Run #", idx, " (Previous)")),
+            tags$th(style = "text-align: right;", "Current Run"),
+            tags$th(style = "text-align: center;", "Delta")
           )
         ),
         tags$tbody(
           tags$tr(
-            tags$td("Average NPV Change"),
-            tags$td(class = "td-right", if (!is.na(prev_npv)) paste0(round(prev_npv, 2), "%") else "N/A"),
-            tags$td(class = "td-right", if (!is.na(curr_npv)) paste0(round(curr_npv, 2), "%") else "N/A"),
-            tags$td(class = "td-center", delta_span(curr_npv, prev_npv, "round2", invert = TRUE))
-          ),
-          tags$tr(
             tags$td("Average PD Shock"),
-            tags$td(class = "td-right", if (!is.na(prev_pd)) paste0(round(prev_pd, 4), "%") else "N/A"),
-            tags$td(class = "td-right", if (!is.na(curr_pd)) paste0(round(curr_pd, 4), "%") else "N/A"),
-            tags$td(class = "td-center", delta_span(curr_pd, prev_pd, "round4"))
+            tags$td(style = "text-align: right;", if (!is.na(prev_pd)) paste0(round(prev_pd, 4), "%") else "N/A"),
+            tags$td(style = "text-align: right;", if (!is.na(curr_pd)) paste0(round(curr_pd, 4), "%") else "N/A"),
+            tags$td(style = "text-align: center;", delta_span(curr_pd, prev_pd, "round4"))
           ),
           tags$tr(
             tags$td("Total EL Shock"),
-            tags$td(class = "td-right", if (!is.na(prev_el)) format_number(prev_el) else "N/A"),
-            tags$td(class = "td-right", if (!is.na(curr_el)) format_number(curr_el) else "N/A"),
-            tags$td(class = "td-center", delta_span(curr_el, prev_el, "number", invert = TRUE))
+            tags$td(style = "text-align: right;", if (!is.na(prev_el)) format_number(prev_el) else "N/A"),
+            tags$td(style = "text-align: right;", if (!is.na(curr_el)) format_number(curr_el) else "N/A"),
+            tags$td(style = "text-align: center;", delta_span(curr_el, prev_el, "number", invert = TRUE))
           ),
           tags$tr(
             tags$td("Companies"),
-            tags$td(class = "td-right", prev$n_companies),
-            tags$td(class = "td-right", nrow(curr)),
-            tags$td(class = "td-center",
-                    if (nrow(curr) == prev$n_companies) tags$span(class = "fg-secondary", "=")
-                    else tags$span(class = "fg-info", paste0(nrow(curr) - prev$n_companies)))
+            tags$td(style = "text-align: right;", prev$n_companies),
+            tags$td(style = "text-align: right;", nrow(curr)),
+            tags$td(style = "text-align: center;",
+                    if (nrow(curr) == prev$n_companies) tags$span(style = "color: #666;", "=")
+                    else tags$span(style = "color: #5A8EAE;", paste0(nrow(curr) - prev$n_companies)))
           )
         )
       )
     )
   })
+
 
 }

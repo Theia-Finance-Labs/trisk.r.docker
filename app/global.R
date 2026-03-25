@@ -178,9 +178,8 @@ make_header_tooltips <- function(col_names) {
 # Configuration
 # ============================================
 
-# Cap upload size to 200 MB (Shiny default is 5 MB).
-# Scenario files can be 50-60 MB; allow headroom for larger datasets.
-options(shiny.maxRequestSize = 200 * 1024^2)  # 200 MB
+# Cap upload size to 100 MB (Shiny default is 5 MB).
+options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic
@@ -373,8 +372,16 @@ validate_internal_el_csv <- function(df) {
   NULL
 }
 
-generate_run_id <- function() {
-  paste0(format(Sys.time(), "%Y%m%d_%H%M%S"), "_", paste0(sample(c(0:9, letters[1:6]), 8, replace = TRUE), collapse = ""))
+generate_run_id <- function(config_list = NULL) {
+  ts <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  hash_hex <- if (!is.null(config_list)) substring(rlang::hash(config_list), 1, 8) else
+    paste0(sample(c(0:9, letters[1:6]), 8, replace = TRUE), collapse = "")
+  paste0(ts, "_", hash_hex)
+}
+
+compute_file_checksum <- function(filepath) {
+  if (is.null(filepath) || !file.exists(filepath)) return("unavailable")
+  tryCatch(digest::digest(file = filepath, algo = "sha256"), error = function(e) "unavailable")
 }
 
 #' Validate portfolio data structure
@@ -447,6 +454,16 @@ strip_columns <- function(df, type) {
     df[[col]] <- sub("^[=+@-]+", "", df[[col]])
   }
 
+  df
+}
+
+# Formula injection sanitizer (CWE-1236) — applied at export time as defense-in-depth
+# Prefixes leading =, +, -, @, tab, CR with a single quote to prevent formula execution
+sanitize_formula_injection <- function(df) {
+  char_cols <- names(df)[sapply(df, is.character)]
+  for (col in char_cols) {
+    df[[col]] <- gsub("^([=+\\-@\t\r])", "'\\1", df[[col]])
+  }
   df
 }
 

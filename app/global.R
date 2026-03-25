@@ -447,11 +447,12 @@ strip_columns <- function(df, type) {
   }
   df <- df[, keep, drop = FALSE]
 
-  # Formula injection protection: strip leading =, +, -, @ from string columns
-  # to prevent CSV injection when data is later exported to Excel
+  # Formula injection protection: prefix leading =, +, @, tab with single quote
+  # to prevent CSV injection (CWE-1236) when data is later exported
+  # Note: hyphen excluded — stripping it corrupts company names like "-Polimeri Europa"
   char_cols <- names(df)[sapply(df, is.character)]
   for (col in char_cols) {
-    df[[col]] <- sub("^[=+@-]+", "", df[[col]])
+    df[[col]] <- sub("^([=+@\t\r])", "'\\1", df[[col]])
   }
 
   df
@@ -462,7 +463,7 @@ strip_columns <- function(df, type) {
 sanitize_formula_injection <- function(df) {
   char_cols <- names(df)[sapply(df, is.character)]
   for (col in char_cols) {
-    df[[col]] <- gsub("^([=+\\-@\t\r])", "'\\1", df[[col]])
+    df[[col]] <- gsub("^([=+@\t\r])", "'\\1", df[[col]])
   }
   df
 }

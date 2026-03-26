@@ -1,0 +1,157 @@
+/* ==========================================================
+   TRISK Desktop Docs — 1in1000 Brand Theme
+   White background, black body text.
+   Coral red (#F53D3F) on header bar, sidebar accents, links.
+   Green (#3D8B5E) for success/tip admonitions.
+   ========================================================== */
+
+:root {
+  /* Override Material defaults */
+  --md-primary-fg-color: #1A1A1A;
+  --md-primary-fg-color--light: #333333;
+  --md-primary-fg-color--dark: #000000;
+  --md-primary-bg-color: #FFFFFF;
+  --md-primary-bg-color--light: #FAFAFA;
+
+  --md-accent-fg-color: #F53D3F;
+  --md-accent-fg-color--transparent: rgba(245, 61, 63, 0.1);
+
+  /* White page background */
+  --md-default-bg-color: #FFFFFF;
+  --md-default-bg-color--light: #FAFAFA;
+  --md-default-bg-color--lighter: #FFFFFF;
+  --md-default-bg-color--lightest: #FFFFFF;
+
+  /* Black body text */
+  --md-default-fg-color: #1A1A1A;
+  --md-default-fg-color--light: #333333;
+  --md-default-fg-color--lighter: #555555;
+  --md-default-fg-color--lightest: #888888;
+
+  /* Coral links */
+  --md-typeset-a-color: #C0393B;
+
+  /* Code blocks: dark background */
+  --md-code-bg-color: #1A1A1A;
+  --md-code-fg-color: #E8E6E3;
+
+  /* Footer: near-black */
+  --md-footer-bg-color: #1A1A1A;
+  --md-footer-bg-color--dark: #111111;
+  --md-footer-fg-color: #C5C1B9;
+  --md-footer-fg-color--light: #888888;
+  --md-footer-fg-color--lighter: #555555;
+}
+
+/* ---- Header bar: near-black ---- */
+.md-header {
+  background-color: #1A1A1A;
+}
+
+/* ---- Navigation tabs bar: near-black ---- */
+.md-tabs {
+  background-color: #1A1A1A;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: #F53D3F;
+}
+
+/* ---- Sidebar: white with coral active states ---- */
+.md-sidebar {
+  background-color: #FAFAFA;
+}
+
+.md-nav__link--active {
+  color: #F53D3F;
+  font-weight: 600;
+}
+
+.md-nav__item--active > .md-nav__link {
+  color: #F53D3F;
+}
+
+/* ---- Admonitions ---- */
+
+/* Note — coral */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-color: #E84B4D;
+}
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary {
+  background-color: rgba(232, 75, 77, 0.08);
+}
+.md-typeset .note > .admonition-title::before,
+.md-typeset .note > summary::before {
+  background-color: #E84B4D;
+}
+
+/* Tip — green */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: #3D8B5E;
+}
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(61, 139, 94, 0.08);
+}
+.md-typeset .tip > .admonition-title::before,
+.md-typeset .tip > summary::before {
+  background-color: #3D8B5E;
+}
+
+/* Warning — amber */
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-color: #C68A1A;
+}
+.md-typeset .warning > .admonition-title,
+.md-typeset .warning > summary {
+  background-color: rgba(198, 138, 26, 0.08);
+}
+
+/* Info — muted blue */
+.md-typeset .admonition.info,
+.md-typeset details.info {
+  border-color: #4A7FA5;
+}
+.md-typeset .info > .admonition-title,
+.md-typeset .info > summary {
+  background-color: rgba(74, 127, 165, 0.08);
+}
+
+/* ---- Tables: black header, clean borders ---- */
+.md-typeset table:not([class]) th {
+  background-color: #1A1A1A;
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) td {
+  border-color: #E5E0E2;
+}
+
+/* ---- Inline code: coral tint ---- */
+.md-typeset code {
+  background-color: rgba(232, 75, 77, 0.06);
+  color: #C0393B;
+  border-radius: 3px;
+}
+
+/* Code inside code blocks: reset to block colors */
+.md-typeset pre code {
+  background-color: transparent;
+  color: inherit;
+}
+
+/* ---- Search highlight ---- */
+.md-search-result .md-typeset mark {
+  background-color: rgba(245, 61, 63, 0.2);
+}
+
+/* ---- Hide dark mode toggle (light only) ---- */
+button[data-md-color-scheme] {
+  display: none;
+}

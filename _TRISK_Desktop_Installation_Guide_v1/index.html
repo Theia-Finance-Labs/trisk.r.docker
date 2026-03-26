@@ -1,0 +1,3189 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Climate Transition Risk Stress Testing for Financial Institutions">
+      
+      
+      
+        <link rel="canonical" href="https://theia-finance-labs.github.io/trisk.r.docker/_TRISK_Desktop_Installation_Guide_v1/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>TRISK Desktop — Enterprise Installation Guide - TRISK Desktop</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/css/custom.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#trisk-desktop-enterprise-installation-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TRISK Desktop" class="md-header__button md-logo" aria-label="TRISK Desktop" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TRISK Desktop
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              TRISK Desktop — Enterprise Installation Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Theia-Finance-Labs/trisk.r.docker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Theia-Finance-Labs/trisk.r.docker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../data-preparation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Data Preparation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../workflow/01-upload/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/data-dictionary/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../security/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Security
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../troubleshooting/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Troubleshooting
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TRISK Desktop" class="md-nav__button md-logo" aria-label="TRISK Desktop" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    TRISK Desktop
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Theia-Finance-Labs/trisk.r.docker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Theia-Finance-Labs/trisk.r.docker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-preparation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Preparation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/01-upload/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Upload Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/02-configure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Configure Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/03-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Run Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/04-results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Portfolio Results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/05-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5. Scenario Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/06-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6. Risk Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/07-download/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    7. Download & Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/data-dictionary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Dictionary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/model-parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Parameters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenario Library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-pre-installation-internal-approvals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Pre-Installation: Internal Approvals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Pre-Installation: Internal Approvals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-change-advisory-board-cab-change-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Change Advisory Board (CAB) / Change Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-information-security-ciso-office" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Information Security / CISO Office
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-architecture-review-board-arb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Architecture Review Board (ARB)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-software-procurement-vendor-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Software Procurement / Vendor Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-desktop-engineering-endpoint-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Desktop Engineering / Endpoint Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-system-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. System Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. System Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-hardware-minimum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Hardware (Minimum)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-operating-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Operating System
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-software-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Software Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-docker-resource-allocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Docker Resource Allocation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-network-and-firewall-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Network and Firewall Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Network and Firewall Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-installation-phase-one-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Installation Phase (One-Time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-runtime-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Runtime Phase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 DNS
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-security-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Security Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Security Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-container-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Container Hardening
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-network-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Network Isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-application-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Application Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-supply-chain-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 Supply Chain Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-security-headers-caddy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 Security Headers (Caddy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-pre-installation-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Pre-Installation Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Pre-Installation Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-governance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Governance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Infrastructure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.5 Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-installation-procedure-docker-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Installation Procedure — Docker (Recommended)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Installation Procedure — Docker (Recommended)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-standard-installation-internet-access-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Standard Installation (Internet Access Available)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-bank-artifactory-deployment-internal-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Bank Artifactory Deployment (Internal Registry)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-air-gapped-installation-no-internet-on-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 Air-Gapped Installation (No Internet on Target)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-development-mode-for-uat-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 Development Mode (For UAT / Testing)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-installation-procedure-bare-metal-r-alternative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Installation Procedure — Bare-Metal R (Alternative)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-tls-certificate-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. TLS Certificate Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. TLS Certificate Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-obtain-certificates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 Obtain Certificates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92-install-certificates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 Install Certificates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-self-signed-certificates-development-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 Self-Signed Certificates (Development Only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-authentication-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Authentication Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Authentication Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#101-http-basic-auth-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.1 HTTP Basic Auth (Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#102-sso-ldap-integration-institutional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.2 SSO / LDAP Integration (Institutional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#103-multi-user-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3 Multi-User Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-data-provisioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Data Provisioning
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. Data Provisioning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-scenario-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.1 Scenario Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#112-portfolio-data-user-supplied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.2 Portfolio Data (User-Supplied)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#113-directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.3 Directory Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-post-installation-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Post-Installation Verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. Post-Installation Verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-container-health-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 Container Health Check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#122-application-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.2 Application Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#123-functional-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.3 Functional Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#124-security-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.4 Security Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#125-sign-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.5 Sign-Off
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-siem-and-log-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. SIEM and Log Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="13. SIEM and Log Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#131-docker-log-driver" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.1 Docker Log Driver
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#132-audit-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.2 Audit Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#133-caddy-access-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.3 Caddy Access Logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-vulnerability-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Vulnerability Scanning
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Vulnerability Scanning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#141-image-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.1 Image Scanning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#142-ongoing-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.2 Ongoing Scanning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#143-sbom-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.3 SBOM Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-backup-and-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Backup and Recovery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="15. Backup and Recovery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#151-what-to-back-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.1 What to Back Up
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#152-what-does-not-need-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.2 What Does NOT Need Backup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#153-recovery-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.3 Recovery Procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-decommissioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Decommissioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="17. Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#171-container-fails-to-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17.1 Container Fails to Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#172-application-loads-but-shows-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17.2 Application Loads but Shows Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#173-tls-certificate-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17.3 TLS Certificate Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#174-performance-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17.4 Performance Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-a-licensing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix A: Licensing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-b-full-package-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix B: Full Package Inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Appendix B: Full Package Inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#r-packages-cran-locked-to-2025-02-01-snapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        R Packages (CRAN — locked to 2025-02-01 snapshot)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#r-packages-github-pinned-to-commit-sha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        R Packages (GitHub — pinned to commit SHA)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system-libraries-runtime-debian" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Libraries (Runtime — Debian)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-c-approval-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix C: Approval Templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Appendix C: Approval Templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#template-change-request-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template: Change Request Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#template-infosec-review-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template: InfoSec Review Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-d-environment-variable-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix D: Environment Variable Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="trisk-desktop-enterprise-installation-guide">TRISK Desktop — Enterprise Installation Guide<a class="headerlink" href="#trisk-desktop-enterprise-installation-guide" title="Permanent link">&para;</a></h1>
+<p><strong>Version:</strong> 1.0
+<strong>Classification:</strong> Internal — For IT / Information Security / Risk Technology Teams
+<strong>Vendor:</strong> 1in1000 (Theia Finance Labs)
+<strong>Application:</strong> TRISK Desktop — Climate Transition Risk Stress Testing Tool
+<strong>Deployment model:</strong> Self-hosted, containerized (Docker), air-gapped at runtime</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#1-executive-summary">Executive Summary</a></li>
+<li><a href="#2-pre-installation-internal-approvals">Pre-Installation: Internal Approvals</a></li>
+<li><a href="#3-system-requirements">System Requirements</a></li>
+<li><a href="#4-network-and-firewall-requirements">Network and Firewall Requirements</a></li>
+<li><a href="#5-security-architecture">Security Architecture</a></li>
+<li><a href="#6-pre-installation-checklist">Pre-Installation Checklist</a></li>
+<li><a href="#7-installation-procedure--docker-recommended">Installation Procedure — Docker (Recommended)</a></li>
+<li><a href="#8-installation-procedure--bare-metal-r-alternative">Installation Procedure — Bare-Metal R (Alternative)</a></li>
+<li><a href="#9-tls-certificate-configuration">TLS Certificate Configuration</a></li>
+<li><a href="#10-authentication-configuration">Authentication Configuration</a></li>
+<li><a href="#11-data-provisioning">Data Provisioning</a></li>
+<li><a href="#12-post-installation-verification">Post-Installation Verification</a></li>
+<li><a href="#13-siem-and-log-integration">SIEM and Log Integration</a></li>
+<li><a href="#14-vulnerability-scanning">Vulnerability Scanning</a></li>
+<li><a href="#15-backup-and-recovery">Backup and Recovery</a></li>
+<li><a href="#16-decommissioning">Decommissioning</a></li>
+<li><a href="#17-troubleshooting">Troubleshooting</a></li>
+<li><a href="#appendix-a-licensing">Appendix A: Licensing</a></li>
+<li><a href="#appendix-b-full-package-inventory">Appendix B: Full Package Inventory</a></li>
+<li><a href="#appendix-c-approval-templates">Appendix C: Approval Templates</a></li>
+<li><a href="#appendix-d-environment-variable-reference">Appendix D: Environment Variable Reference</a></li>
+</ol>
+<hr />
+<h2 id="1-executive-summary">1. Executive Summary<a class="headerlink" href="#1-executive-summary" title="Permanent link">&para;</a></h2>
+<p>TRISK Desktop is a self-hosted web application for climate transition risk stress testing, designed for ICAAP/ILAAP preparation, board reporting, and regulatory submissions. It runs as a containerized service on an analyst's workstation or a shared internal server.</p>
+<p><strong>Key architecture facts for IT review:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime network access</td>
+<td><strong>None</strong> — fully air-gapped after installation</td>
+</tr>
+<tr>
+<td>Data residency</td>
+<td><strong>100% on-premise</strong> — no cloud, no telemetry, no callbacks</td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>HTTP Basic Auth (Caddy proxy) or institution SSO/LDAP</td>
+</tr>
+<tr>
+<td>Encryption in transit</td>
+<td>TLS 1.2+ via Caddy reverse proxy</td>
+</tr>
+<tr>
+<td>Container privileges</td>
+<td>Non-root, all capabilities dropped, custom seccomp profile</td>
+</tr>
+<tr>
+<td>PII handling</td>
+<td>Column allowlisting on upload strips unauthorized fields</td>
+</tr>
+<tr>
+<td>External dependencies at runtime</td>
+<td>None — all fonts, assets, and data vendored locally</td>
+</tr>
+<tr>
+<td>Licensing</td>
+<td>Open-source model packages (GPL-3.0 / LGPL-3.0), proprietary UI</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-pre-installation-internal-approvals">2. Pre-Installation: Internal Approvals<a class="headerlink" href="#2-pre-installation-internal-approvals" title="Permanent link">&para;</a></h2>
+<p>The following approvals should be obtained before proceeding with installation. This section maps to typical bank IT governance frameworks (ITIL, COBIT, ISO 27001).</p>
+<h3 id="21-change-advisory-board-cab-change-management">2.1 Change Advisory Board (CAB) / Change Management<a class="headerlink" href="#21-change-advisory-board-cab-change-management" title="Permanent link">&para;</a></h3>
+<p><strong>Required artifacts:</strong></p>
+<ul>
+<li>[ ] Change Request (CR) — standard change for new software installation</li>
+<li>[ ] Risk assessment — classify as low risk (local-only, no network at runtime, no database)</li>
+<li>[ ] Rollback plan — see <a href="#16-decommissioning">Section 16: Decommissioning</a></li>
+<li>[ ] Testing evidence — UAT sign-off from requesting business unit (Risk team)</li>
+</ul>
+<p><strong>Classification recommendation:</strong> Standard change (pre-approved category) if Docker is already approved in your environment. Normal change if Docker requires first-time approval.</p>
+<h3 id="22-information-security-ciso-office">2.2 Information Security / CISO Office<a class="headerlink" href="#22-information-security-ciso-office" title="Permanent link">&para;</a></h3>
+<p><strong>Required artifacts:</strong></p>
+<ul>
+<li>[ ] Data classification assessment — the application processes portfolio exposure data (likely "Confidential" or "Internal"). No PII is required by the application</li>
+<li>[ ] Vendor security questionnaire — completed by 1in1000 / Theia Finance Labs</li>
+<li>[ ] Container security review — review of Dockerfile, seccomp profile, and hardening controls (see <a href="#5-security-architecture">Section 5</a>)</li>
+<li>[ ] Network security review — confirmation that the application makes zero outbound connections at runtime</li>
+<li>[ ] Penetration test results — if required by policy for internal tools</li>
+<li>[ ] DLP assessment — export controls via column allowlisting are documented</li>
+</ul>
+<h3 id="23-architecture-review-board-arb">2.3 Architecture Review Board (ARB)<a class="headerlink" href="#23-architecture-review-board-arb" title="Permanent link">&para;</a></h3>
+<p><strong>Required if deploying on shared infrastructure (e.g., internal VM, Kubernetes):</strong></p>
+<ul>
+<li>[ ] Architecture decision record (ADR) — single-container stateless application, Caddy reverse proxy, TLS termination</li>
+<li>[ ] Capacity planning — 4 GB RAM, 2 CPU cores, 2 GB disk per instance</li>
+<li>[ ] Integration assessment — standalone tool, no integration with core banking systems</li>
+</ul>
+<h3 id="24-software-procurement-vendor-management">2.4 Software Procurement / Vendor Management<a class="headerlink" href="#24-software-procurement-vendor-management" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] License review — open-source dependencies under GPL-3.0 and LGPL-3.0 (see <a href="#appendix-a-licensing">Appendix A</a>)</li>
+<li>[ ] Vendor due diligence on Theia Finance Labs / 1in1000</li>
+<li>[ ] Support agreement — if applicable (SLA, escalation contacts)</li>
+<li>[ ] Data processing agreement (DPA) — not required for self-hosted deployment (no data leaves the institution)</li>
+</ul>
+<h3 id="25-desktop-engineering-endpoint-management">2.5 Desktop Engineering / Endpoint Management<a class="headerlink" href="#25-desktop-engineering-endpoint-management" title="Permanent link">&para;</a></h3>
+<p><strong>If deploying on analyst workstations:</strong></p>
+<ul>
+<li>[ ] Docker Desktop approval — confirm Docker is in the approved software catalog (or request addition)</li>
+<li>[ ] Local admin rights — may be needed for Docker Desktop installation (one-time)</li>
+<li>[ ] Disk space allocation — minimum 5 GB free</li>
+<li>[ ] Port reservation — TCP 443 (production) or TCP 3838 (development)</li>
+</ul>
+<hr />
+<h2 id="3-system-requirements">3. System Requirements<a class="headerlink" href="#3-system-requirements" title="Permanent link">&para;</a></h2>
+<h3 id="31-hardware-minimum">3.1 Hardware (Minimum)<a class="headerlink" href="#31-hardware-minimum" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Minimum</th>
+<th>Recommended</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU</td>
+<td>2 cores</td>
+<td>4 cores</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>8 GB total (4 GB for Docker)</td>
+<td>16 GB total</td>
+</tr>
+<tr>
+<td>Disk</td>
+<td>5 GB free</td>
+<td>10 GB free</td>
+</tr>
+<tr>
+<td>Display</td>
+<td>1280 x 800</td>
+<td>1920 x 1080</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-operating-system">3.2 Operating System<a class="headerlink" href="#32-operating-system" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>OS</th>
+<th>Supported Versions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Windows</td>
+<td>10 Pro/Enterprise (21H2+), 11 Pro/Enterprise, Server 2019+</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td>12 Monterey or later</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>Ubuntu 22.04+, RHEL 8+, Debian 11+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-software-prerequisites">3.3 Software Prerequisites<a class="headerlink" href="#33-software-prerequisites" title="Permanent link">&para;</a></h3>
+<p><strong>Docker deployment (recommended):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Software</th>
+<th>Version</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Docker Desktop</td>
+<td>24.0+</td>
+<td>Or Docker Engine on Linux</td>
+</tr>
+<tr>
+<td>docker compose</td>
+<td>v2</td>
+<td>Bundled with Docker Desktop</td>
+</tr>
+<tr>
+<td>Web browser</td>
+<td>Chrome 90+, Firefox 90+, Edge 90+</td>
+<td>For accessing the application</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bare-metal deployment (alternative):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Software</th>
+<th>Version</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R</td>
+<td>4.4.1 (exact)</td>
+<td>Must match tested version</td>
+</tr>
+<tr>
+<td>Web browser</td>
+<td>Chrome 90+, Firefox 90+, Edge 90+</td>
+<td>For accessing the application</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34-docker-resource-allocation">3.4 Docker Resource Allocation<a class="headerlink" href="#34-docker-resource-allocation" title="Permanent link">&para;</a></h3>
+<p>Configure Docker Desktop with at least:</p>
+<ul>
+<li><strong>Memory:</strong> 4 GB (Settings &gt; Resources &gt; Memory)</li>
+<li><strong>CPU:</strong> 2 cores</li>
+<li><strong>Disk image size:</strong> 20 GB</li>
+</ul>
+<hr />
+<h2 id="4-network-and-firewall-requirements">4. Network and Firewall Requirements<a class="headerlink" href="#4-network-and-firewall-requirements" title="Permanent link">&para;</a></h2>
+<h3 id="41-installation-phase-one-time">4.1 Installation Phase (One-Time)<a class="headerlink" href="#41-installation-phase-one-time" title="Permanent link">&para;</a></h3>
+<p>The following outbound HTTPS (port 443) connections are required <strong>only during initial build</strong>. After the image is built, these are never needed again.</p>
+<table>
+<thead>
+<tr>
+<th>Destination</th>
+<th>Purpose</th>
+<th>Can Be Bypassed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packagemanager.posit.co</code></td>
+<td>R package downloads (CRAN mirror)</td>
+<td>Yes — use internal R mirror or pre-built image</td>
+</tr>
+<tr>
+<td><code>github.com</code></td>
+<td>TRISK model packages (source)</td>
+<td>Yes — vendor packages or use pre-built image</td>
+</tr>
+<tr>
+<td><code>storage.googleapis.com</code></td>
+<td>Scenario data download (CSV)</td>
+<td>Yes — transfer file manually via secure channel</td>
+</tr>
+<tr>
+<td><code>ghcr.io</code></td>
+<td>Pre-built Docker image pull (optional)</td>
+<td>Yes — build locally instead</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-runtime-phase">4.2 Runtime Phase<a class="headerlink" href="#42-runtime-phase" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Direction</th>
+<th>Ports</th>
+<th>Connections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Inbound</td>
+<td>TCP 443 (prod) or TCP 3838 (dev) on <code>127.0.0.1</code> only</td>
+<td>Local browser only</td>
+</tr>
+<tr>
+<td>Outbound</td>
+<td><strong>None</strong></td>
+<td><strong>Zero external connections</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>For air-gapped environments:</strong> The Docker image can be built on a staging machine with internet access, exported via <code>docker save</code>, transferred on approved media, and loaded via <code>docker load</code> on the target workstation. See Section 7.3.</p>
+<h3 id="43-dns">4.3 DNS<a class="headerlink" href="#43-dns" title="Permanent link">&para;</a></h3>
+<p>No DNS resolution required at runtime. The application binds to <code>127.0.0.1</code> (localhost).</p>
+<hr />
+<h2 id="5-security-architecture">5. Security Architecture<a class="headerlink" href="#5-security-architecture" title="Permanent link">&para;</a></h2>
+<h3 id="51-container-hardening">5.1 Container Hardening<a class="headerlink" href="#51-container-hardening" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Non-root execution</td>
+<td>Container runs as user <code>trisk</code> (nologin shell)</td>
+</tr>
+<tr>
+<td>Capability drop</td>
+<td><code>cap_drop: ALL</code> — no Linux capabilities granted</td>
+</tr>
+<tr>
+<td>Privilege escalation</td>
+<td><code>no-new-privileges: true</code></td>
+</tr>
+<tr>
+<td>Filesystem</td>
+<td>Read-only root filesystem</td>
+</tr>
+<tr>
+<td>Writable paths</td>
+<td><code>/tmp</code> (tmpfs, noexec, nosuid, 2 GB cap) and <code>/data/output</code> (noexec, nosuid)</td>
+</tr>
+<tr>
+<td>Syscall filtering</td>
+<td>Custom seccomp profile blocking ptrace, perf_event_open, keyctl, add_key, request_key, personality, userfaultfd, process_vm_readv/writev</td>
+</tr>
+<tr>
+<td>Process limits</td>
+<td>PID limit: 256</td>
+</tr>
+<tr>
+<td>File descriptor limits</td>
+<td>1024 soft, 4096 hard</td>
+</tr>
+<tr>
+<td>Memory limits</td>
+<td>4 GB hard cap, 4 GB swap cap (prevents OOM-swap spiral)</td>
+</tr>
+<tr>
+<td>CPU limits</td>
+<td>2.0 cores</td>
+</tr>
+<tr>
+<td>Log rotation</td>
+<td>10 MB max, 3 files (prevents disk exhaustion)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-network-isolation">5.2 Network Isolation<a class="headerlink" href="#52-network-isolation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[Analyst Browser] ──HTTPS (443)──&gt; [Caddy Proxy] ──HTTP (3838)──&gt; [TRISK App]
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>      │                                  │                              │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>   localhost                        trisk-host                    trisk-internal
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>   only                            network                       network (no internet)
+</code></pre></div>
+<ul>
+<li>The TRISK application container is on an <code>internal: true</code> Docker network — <strong>it cannot reach the internet</strong></li>
+<li>Only the Caddy reverse proxy is exposed to the host, on <code>127.0.0.1:443</code></li>
+<li>Caddy terminates TLS and forwards to TRISK on the internal network</li>
+</ul>
+<h3 id="53-application-security">5.3 Application Security<a class="headerlink" href="#53-application-security" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Input validation</td>
+<td>Column allowlisting on CSV upload — unauthorized columns stripped</td>
+</tr>
+<tr>
+<td>Output control</td>
+<td>Column allowlisting on export — DLP-compatible</td>
+</tr>
+<tr>
+<td>File type validation</td>
+<td>Server-side MIME type checking</td>
+</tr>
+<tr>
+<td>Formula injection</td>
+<td>Sanitization on Excel export</td>
+</tr>
+<tr>
+<td>XSS protection</td>
+<td><code>htmlEscape()</code> on all user-supplied data</td>
+</tr>
+<tr>
+<td>CSP</td>
+<td>Content-Security-Policy header blocking external scripts</td>
+</tr>
+<tr>
+<td>Error handling</td>
+<td>Sanitized error messages — no stack traces exposed</td>
+</tr>
+<tr>
+<td>Session management</td>
+<td>30-minute idle timeout</td>
+</tr>
+<tr>
+<td>Upload size</td>
+<td>50 MB maximum</td>
+</tr>
+<tr>
+<td>Audit logging</td>
+<td>Structured JSON logging of user actions</td>
+</tr>
+</tbody>
+</table>
+<h3 id="54-supply-chain-security">5.4 Supply Chain Security<a class="headerlink" href="#54-supply-chain-security" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Base image</td>
+<td>Pinned by SHA256 digest (not floating tag)</td>
+</tr>
+<tr>
+<td>CRAN packages</td>
+<td>Locked to Posit PPM snapshot <code>2025-02-01</code></td>
+</tr>
+<tr>
+<td>GitHub packages</td>
+<td>Pinned to exact Git commit SHAs</td>
+</tr>
+<tr>
+<td>Scenario data</td>
+<td>SHA256 checksum verification at build time</td>
+</tr>
+<tr>
+<td>Fonts</td>
+<td>Vendored locally (no CDN at runtime)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="55-security-headers-caddy">5.5 Security Headers (Caddy)<a class="headerlink" href="#55-security-headers-caddy" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>X-Frame-Options: DENY
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>X-Content-Type-Options: nosniff
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Referrer-Policy: no-referrer
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>Strict-Transport-Security: max-age=63072000; includeSubDomains
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>Server: (removed)
+</code></pre></div>
+<hr />
+<h2 id="6-pre-installation-checklist">6. Pre-Installation Checklist<a class="headerlink" href="#6-pre-installation-checklist" title="Permanent link">&para;</a></h2>
+<p>Complete all items before beginning the installation procedure.</p>
+<h3 id="61-governance">6.1 Governance<a class="headerlink" href="#61-governance" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Change request approved (Section 2.1)</li>
+<li>[ ] Information Security review complete (Section 2.2)</li>
+<li>[ ] Architecture review complete if shared deployment (Section 2.3)</li>
+<li>[ ] License review complete (Section 2.4)</li>
+<li>[ ] Docker Desktop approved and in software catalog (Section 2.5)</li>
+</ul>
+<h3 id="62-infrastructure">6.2 Infrastructure<a class="headerlink" href="#62-infrastructure" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Target machine meets hardware requirements (Section 3.1)</li>
+<li>[ ] Operating system is on supported list (Section 3.2)</li>
+<li>[ ] Docker Desktop installed and running (Section 3.3)</li>
+<li>[ ] Docker memory allocation set to 4 GB minimum (Section 3.4)</li>
+<li>[ ] Sufficient disk space (5 GB+)</li>
+</ul>
+<h3 id="63-network">6.3 Network<a class="headerlink" href="#63-network" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Outbound HTTPS to build-time dependencies confirmed (Section 4.1) <strong>OR</strong> air-gap transfer plan agreed</li>
+<li>[ ] Firewall rule for localhost TCP 443 or 3838 confirmed (Section 4.2)</li>
+</ul>
+<h3 id="64-security">6.4 Security<a class="headerlink" href="#64-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] TLS certificates obtained from institution PKI (Section 9)</li>
+<li>[ ] Authentication credentials prepared (Section 10)</li>
+<li>[ ] SIEM log forwarding configuration agreed (Section 13)</li>
+<li>[ ] Vulnerability scan plan agreed (Section 14)</li>
+</ul>
+<h3 id="65-data">6.5 Data<a class="headerlink" href="#65-data" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Scenario data file obtained (Section 11.1)</li>
+<li>[ ] Sample portfolio CSV prepared for UAT (Section 11.2)</li>
+<li>[ ] Output directory location agreed with analyst</li>
+</ul>
+<hr />
+<h2 id="7-installation-procedure-docker-recommended">7. Installation Procedure — Docker (Recommended)<a class="headerlink" href="#7-installation-procedure-docker-recommended" title="Permanent link">&para;</a></h2>
+<h3 id="71-standard-installation-internet-access-available">7.1 Standard Installation (Internet Access Available)<a class="headerlink" href="#71-standard-installation-internet-access-available" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Step 1: Obtain application source</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Theia-Finance-Labs/trisk.r.docker.git
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">cd</span><span class="w"> </span>trisk.r.docker
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># Step 2: Download scenario data</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>bash<span class="w"> </span>scripts/download_scenarios.sh
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Step 3: Create environment file</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Step 4: Generate authentication password hash</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>caddy:2-alpine<span class="w"> </span>caddy<span class="w"> </span>hash-password<span class="w"> </span>--plaintext<span class="w"> </span><span class="s1">&#39;YOUR_SECURE_PASSWORD&#39;</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Copy the output hash into .env as TRISK_PASS_HASH</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Step 5: Place TLS certificates (see Section 9)</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>cp<span class="w"> </span>/path/to/institution-cert.pem<span class="w"> </span>tls/cert.pem
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>cp<span class="w"> </span>/path/to/institution-key.pem<span class="w">  </span>tls/key.pem
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Step 6: Build and start</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># Step 7: Verify</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>docker<span class="w"> </span>compose<span class="w"> </span>ps<span class="w">          </span><span class="c1"># All services should show &quot;Up (healthy)&quot;</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>curl<span class="w"> </span>-k<span class="w"> </span>https://localhost<span class="w">   </span><span class="c1"># Should return HTTP 401 (auth required)</span>
+</code></pre></div>
+<h3 id="72-bank-artifactory-deployment-internal-registry">7.2 Bank Artifactory Deployment (Internal Registry)<a class="headerlink" href="#72-bank-artifactory-deployment-internal-registry" title="Permanent link">&para;</a></h3>
+<p>If your institution uses JFrog Artifactory, Sonatype Nexus, or similar:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Option A: Override base image at build time</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;BASE_IMAGE=artifactory.bank.com/approved/r-ver:4.4.1&quot;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>.env
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Option B: Pull pre-scanned image from internal registry</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>docker<span class="w"> </span>pull<span class="w"> </span>artifactory.bank.com/approved/trisk:1.0.0
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>docker<span class="w"> </span>tag<span class="w"> </span>artifactory.bank.com/approved/trisk:1.0.0<span class="w"> </span>theia-finance-labs/trisk:latest
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div>
+<h3 id="73-air-gapped-installation-no-internet-on-target">7.3 Air-Gapped Installation (No Internet on Target)<a class="headerlink" href="#73-air-gapped-installation-no-internet-on-target" title="Permanent link">&para;</a></h3>
+<p><strong>On the staging machine (with internet):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Build the image</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Theia-Finance-Labs/trisk.r.docker.git
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">cd</span><span class="w"> </span>trisk.r.docker
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>bash<span class="w"> </span>scripts/download_scenarios.sh
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>build
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Export the images</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>docker<span class="w"> </span>save<span class="w"> </span>theia-finance-labs/trisk:latest<span class="w"> </span><span class="p">|</span><span class="w"> </span>gzip<span class="w"> </span>&gt;<span class="w"> </span>trisk-app.tar.gz
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>docker<span class="w"> </span>save<span class="w"> </span>caddy:2-alpine<span class="w"> </span><span class="p">|</span><span class="w"> </span>gzip<span class="w"> </span>&gt;<span class="w"> </span>caddy-proxy.tar.gz
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Transfer trisk-app.tar.gz, caddy-proxy.tar.gz, and the full project</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># directory to the target machine via approved media (USB, SFTP, etc.)</span>
+</code></pre></div>
+<p><strong>On the target machine (air-gapped):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Load the images</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>docker<span class="w"> </span>load<span class="w"> </span>&lt;<span class="w"> </span>trisk-app.tar.gz
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>docker<span class="w"> </span>load<span class="w"> </span>&lt;<span class="w"> </span>caddy-proxy.tar.gz
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Configure environment</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nb">cd</span><span class="w"> </span>trisk.r.docker
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Edit .env with authentication hash and settings</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Place TLS certificates</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>cp<span class="w"> </span>/path/to/cert.pem<span class="w"> </span>tls/cert.pem
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>cp<span class="w"> </span>/path/to/key.pem<span class="w">  </span>tls/key.pem
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># Start (no --build needed, images are pre-loaded)</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div>
+<h3 id="74-development-mode-for-uat-testing">7.4 Development Mode (For UAT / Testing)<a class="headerlink" href="#74-development-mode-for-uat-testing" title="Permanent link">&para;</a></h3>
+<p>For testing without TLS/auth (localhost only):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Access at http://localhost:3838 (no TLS, no auth)</span>
+</code></pre></div>
+<p><strong>Do not use development mode in production.</strong></p>
+<hr />
+<h2 id="8-installation-procedure-bare-metal-r-alternative">8. Installation Procedure — Bare-Metal R (Alternative)<a class="headerlink" href="#8-installation-procedure-bare-metal-r-alternative" title="Permanent link">&para;</a></h2>
+<p>Use this if Docker is not approved in your environment. See <code>INSTALL.md</code> in the repository root for the full step-by-step procedure, including:</p>
+<ol>
+<li>R 4.4.1 installation</li>
+<li>Package installation from Posit PPM snapshot</li>
+<li>GitHub package installation (trisk.model, trisk.analysis)</li>
+<li>Scenario data download</li>
+<li>Path configuration in <code>global.R</code></li>
+<li>Launch command</li>
+</ol>
+<p><strong>Note:</strong> Bare-metal installations do not include the container hardening controls described in Section 5. Additional endpoint security measures should be applied per institutional policy.</p>
+<hr />
+<h2 id="9-tls-certificate-configuration">9. TLS Certificate Configuration<a class="headerlink" href="#9-tls-certificate-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="91-obtain-certificates">9.1 Obtain Certificates<a class="headerlink" href="#91-obtain-certificates" title="Permanent link">&para;</a></h3>
+<p>Request certificates from your institution's PKI team:</p>
+<ul>
+<li><strong>Certificate:</strong> PEM-encoded X.509 certificate (<code>.pem</code> or <code>.crt</code>)</li>
+<li><strong>Private key:</strong> PEM-encoded private key (<code>.pem</code> or <code>.key</code>)</li>
+<li><strong>Subject:</strong> <code>CN=localhost</code> or the hostname where TRISK will be accessed</li>
+<li><strong>SAN:</strong> Include <code>localhost</code> and <code>127.0.0.1</code> in Subject Alternative Names</li>
+</ul>
+<h3 id="92-install-certificates">9.2 Install Certificates<a class="headerlink" href="#92-install-certificates" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Place files in the tls/ directory (gitignored)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>cp<span class="w"> </span>institution-cert.pem<span class="w"> </span>tls/cert.pem
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>cp<span class="w"> </span>institution-key.pem<span class="w">  </span>tls/key.pem
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Verify permissions (key must be readable by Caddy container)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>chmod<span class="w"> </span><span class="m">644</span><span class="w"> </span>tls/cert.pem
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>tls/key.pem
+</code></pre></div>
+<h3 id="93-self-signed-certificates-development-only">9.3 Self-Signed Certificates (Development Only)<a class="headerlink" href="#93-self-signed-certificates-development-only" title="Permanent link">&para;</a></h3>
+<p>For testing environments where institution certificates are not yet available:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>openssl<span class="w"> </span>req<span class="w"> </span>-x509<span class="w"> </span>-newkey<span class="w"> </span>rsa:4096<span class="w"> </span>-keyout<span class="w"> </span>tls/key.pem<span class="w"> </span>-out<span class="w"> </span>tls/cert.pem<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>-sha256<span class="w"> </span>-days<span class="w"> </span><span class="m">365</span><span class="w"> </span>-nodes<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>-subj<span class="w"> </span><span class="s2">&quot;/CN=localhost&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>-addext<span class="w"> </span><span class="s2">&quot;subjectAltName=DNS:localhost,IP:127.0.0.1&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="10-authentication-configuration">10. Authentication Configuration<a class="headerlink" href="#10-authentication-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="101-http-basic-auth-default">10.1 HTTP Basic Auth (Default)<a class="headerlink" href="#101-http-basic-auth-default" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Generate bcrypt password hash</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>caddy:2-alpine<span class="w"> </span>caddy<span class="w"> </span>hash-password<span class="w"> </span>--plaintext<span class="w"> </span><span class="s1">&#39;SecurePassword123!&#39;</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Add to .env</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nv">TRISK_USER</span><span class="o">=</span>analyst
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nv">TRISK_PASS_HASH</span><span class="o">=</span><span class="nv">$2</span>a<span class="nv">$14$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</span>
+</code></pre></div>
+<h3 id="102-sso-ldap-integration-institutional">10.2 SSO / LDAP Integration (Institutional)<a class="headerlink" href="#102-sso-ldap-integration-institutional" title="Permanent link">&para;</a></h3>
+<p>For enterprise SSO, replace the Caddy basic auth block in <code>Caddyfile</code> with your institution's authentication proxy (e.g., Keycloak, Azure AD, Okta). The Caddy reverse proxy layer supports any header-based or forward-auth mechanism.</p>
+<p>Contact 1in1000 for SSO integration guidance specific to your IdP.</p>
+<h3 id="103-multi-user-access">10.3 Multi-User Access<a class="headerlink" href="#103-multi-user-access" title="Permanent link">&para;</a></h3>
+<p>For shared server deployments, configure separate credentials per user or integrate with institutional LDAP. The application is stateless — multiple users can access simultaneously with independent sessions.</p>
+<hr />
+<h2 id="11-data-provisioning">11. Data Provisioning<a class="headerlink" href="#11-data-provisioning" title="Permanent link">&para;</a></h2>
+<h3 id="111-scenario-data">11.1 Scenario Data<a class="headerlink" href="#111-scenario-data" title="Permanent link">&para;</a></h3>
+<p>The TRISK model requires a scenario dataset containing NGFS, GECO, IPR, and Mission Possible pathways.</p>
+<p><strong>Source:</strong> <code>https://storage.googleapis.com/crispy-public-data/trisk_inputs/scenarios.csv</code>
+<strong>SHA256:</strong> <code>b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29b4b56</code>
+<strong>Size:</strong> ~200 MB</p>
+<p>For air-gapped environments, download on a connected machine and transfer via approved media.</p>
+<p><strong>Verification:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>shasum<span class="w"> </span>-a<span class="w"> </span><span class="m">256</span><span class="w"> </span>data/scenarios/scenarios.csv
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Must match: b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29b4b56</span>
+</code></pre></div>
+<h3 id="112-portfolio-data-user-supplied">11.2 Portfolio Data (User-Supplied)<a class="headerlink" href="#112-portfolio-data-user-supplied" title="Permanent link">&para;</a></h3>
+<p>Analysts upload their portfolio via the application UI. The CSV must contain:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>company_id</code></td>
+<td>String</td>
+<td>Unique company identifier</td>
+</tr>
+<tr>
+<td><code>sector</code></td>
+<td>String</td>
+<td>TRISK sector classification</td>
+</tr>
+<tr>
+<td><code>technology</code></td>
+<td>String</td>
+<td>TRISK technology classification</td>
+</tr>
+<tr>
+<td><code>country_iso2</code></td>
+<td>String</td>
+<td>ISO 3166-1 alpha-2 country code</td>
+</tr>
+<tr>
+<td><code>exposure_value_usd</code></td>
+<td>Numeric</td>
+<td>Loan exposure in USD</td>
+</tr>
+<tr>
+<td><code>term</code></td>
+<td>Numeric</td>
+<td>Loan maturity (years)</td>
+</tr>
+<tr>
+<td><code>loss_given_default</code></td>
+<td>Numeric</td>
+<td>LGD estimate (0-1)</td>
+</tr>
+</tbody>
+</table>
+<p>A demo dataset is available in the application ("Load Demo Data" button) for UAT.</p>
+<h3 id="113-directory-structure">11.3 Directory Structure<a class="headerlink" href="#113-directory-structure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>data/
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>├── scenarios/
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>│   └── scenarios.csv        # Pre-downloaded (Section 11.1)
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>├── input/                   # Analyst CSV uploads (read-only mount)
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>└── output/                  # Results export directory (writable)
+</code></pre></div>
+<hr />
+<h2 id="12-post-installation-verification">12. Post-Installation Verification<a class="headerlink" href="#12-post-installation-verification" title="Permanent link">&para;</a></h2>
+<h3 id="121-container-health-check">12.1 Container Health Check<a class="headerlink" href="#121-container-health-check" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># All services should show &quot;Up (healthy)&quot;</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>ps
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Expected output:</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># trisk-proxy   caddy:2-alpine   Up      127.0.0.1:443-&gt;443/tcp</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># trisk-app     trisk:latest     Up (healthy)    3838/tcp</span>
+</code></pre></div>
+<h3 id="122-application-access">12.2 Application Access<a class="headerlink" href="#122-application-access" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Open <code>https://localhost</code> in the browser (or <code>http://localhost:3838</code> in dev mode)</li>
+<li>Enter credentials when prompted</li>
+<li>The TRISK Desktop dashboard should load with the sidebar navigation</li>
+</ol>
+<h3 id="123-functional-verification">12.3 Functional Verification<a class="headerlink" href="#123-functional-verification" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Click <strong>"Load Demo Data"</strong> on the Upload Data tab</li>
+<li>Navigate to <strong>Configure Scenario</strong> — verify scenario options appear</li>
+<li>Click <strong>Run Analysis</strong> — verify the model executes (30-60 seconds)</li>
+<li>Review <strong>Portfolio Results</strong> — verify charts and KPI cards render</li>
+<li>Test <strong>Export</strong> — download results as Excel/CSV and verify file contents</li>
+</ol>
+<h3 id="124-security-verification">12.4 Security Verification<a class="headerlink" href="#124-security-verification" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verify no outbound connections</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>trisk-app<span class="w"> </span>wget<span class="w"> </span>-q<span class="w"> </span>--spider<span class="w"> </span>https://google.com<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Should fail (no internet access from internal network)</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Verify non-root execution</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>trisk-app<span class="w"> </span>whoami
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Should return: trisk</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1"># Verify read-only filesystem</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>trisk-app<span class="w"> </span>touch<span class="w"> </span>/test<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Should fail: Read-only file system</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Verify seccomp profile</span>
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>trisk-app<span class="w"> </span>cat<span class="w"> </span>/proc/self/status<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Seccomp
+<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="c1"># Should return: Seccomp:  2 (filter mode)</span>
+</code></pre></div>
+<h3 id="125-sign-off">12.5 Sign-Off<a class="headerlink" href="#125-sign-off" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Pass/Fail</th>
+<th>Tester</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container health check</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Application access</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Demo data load</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Model execution</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Results rendering</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Export functionality</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>No outbound network</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Non-root execution</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Read-only filesystem</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>Seccomp active</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="13-siem-and-log-integration">13. SIEM and Log Integration<a class="headerlink" href="#13-siem-and-log-integration" title="Permanent link">&para;</a></h2>
+<h3 id="131-docker-log-driver">13.1 Docker Log Driver<a class="headerlink" href="#131-docker-log-driver" title="Permanent link">&para;</a></h3>
+<p>By default, logs use the <code>json-file</code> driver with rotation. For SIEM integration, switch to syslog:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># In docker-compose.yml, replace the logging block:</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">logging</span><span class="p">:</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">driver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">syslog</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">syslog-address</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tcp://siem.bank.com:514&quot;</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;trisk-app&quot;</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">syslog-facility</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;local0&quot;</span>
+</code></pre></div>
+<h3 id="132-audit-events">13.2 Audit Events<a class="headerlink" href="#132-audit-events" title="Permanent link">&para;</a></h3>
+<p>The application logs the following events in structured JSON format:</p>
+<ul>
+<li>Portfolio upload (file name, row count, columns detected)</li>
+<li>Analysis execution (scenario, parameters, duration)</li>
+<li>Results export (format, row count)</li>
+<li>Session start/end</li>
+<li>Errors (sanitized, no stack traces)</li>
+</ul>
+<h3 id="133-caddy-access-logs">13.3 Caddy Access Logs<a class="headerlink" href="#133-caddy-access-logs" title="Permanent link">&para;</a></h3>
+<p>Caddy logs all HTTP requests including:</p>
+<ul>
+<li>Client IP (always <code>127.0.0.1</code> for localhost deployments)</li>
+<li>Request path and method</li>
+<li>Response status code</li>
+<li>Authentication username</li>
+<li>Timestamp</li>
+</ul>
+<hr />
+<h2 id="14-vulnerability-scanning">14. Vulnerability Scanning<a class="headerlink" href="#14-vulnerability-scanning" title="Permanent link">&para;</a></h2>
+<h3 id="141-image-scanning">14.1 Image Scanning<a class="headerlink" href="#141-image-scanning" title="Permanent link">&para;</a></h3>
+<p>Scan the built image before deployment:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Using Trivy (recommended)</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>trivy<span class="w"> </span>image<span class="w"> </span>theia-finance-labs/trisk:latest
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Using Grype</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>grype<span class="w"> </span>theia-finance-labs/trisk:latest
+</code></pre></div>
+<p><strong>Policy:</strong> Remediate all HIGH and CRITICAL findings before production deployment. MEDIUM findings should be documented with risk acceptance.</p>
+<h3 id="142-ongoing-scanning">14.2 Ongoing Scanning<a class="headerlink" href="#142-ongoing-scanning" title="Permanent link">&para;</a></h3>
+<p>Schedule periodic scans (monthly recommended) to detect newly disclosed CVEs in base image packages:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Rebuild with latest base image patches</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>build<span class="w"> </span>--no-cache
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>trivy<span class="w"> </span>image<span class="w"> </span>theia-finance-labs/trisk:latest
+</code></pre></div>
+<h3 id="143-sbom-generation">14.3 SBOM Generation<a class="headerlink" href="#143-sbom-generation" title="Permanent link">&para;</a></h3>
+<p>Generate a Software Bill of Materials for compliance:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Using Syft</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>syft<span class="w"> </span>theia-finance-labs/trisk:latest<span class="w"> </span>-o<span class="w"> </span>spdx-json<span class="w"> </span>&gt;<span class="w"> </span>trisk-sbom.spdx.json
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Using Trivy</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>trivy<span class="w"> </span>image<span class="w"> </span>--format<span class="w"> </span>spdx-json<span class="w"> </span>theia-finance-labs/trisk:latest<span class="w"> </span>&gt;<span class="w"> </span>trisk-sbom.spdx.json
+</code></pre></div>
+<hr />
+<h2 id="15-backup-and-recovery">15. Backup and Recovery<a class="headerlink" href="#15-backup-and-recovery" title="Permanent link">&para;</a></h2>
+<h3 id="151-what-to-back-up">15.1 What to Back Up<a class="headerlink" href="#151-what-to-back-up" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Location</th>
+<th>Frequency</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Configuration</td>
+<td><code>.env</code>, <code>Caddyfile</code>, <code>tls/</code></td>
+<td>After any change</td>
+</tr>
+<tr>
+<td>Analysis results</td>
+<td><code>data/output/</code></td>
+<td>After each analysis run</td>
+</tr>
+<tr>
+<td>Portfolio data</td>
+<td><code>data/input/</code></td>
+<td>Per analyst policy</td>
+</tr>
+</tbody>
+</table>
+<h3 id="152-what-does-not-need-backup">15.2 What Does NOT Need Backup<a class="headerlink" href="#152-what-does-not-need-backup" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Docker images (rebuildable from source)</li>
+<li>Scenario data (re-downloadable, checksummed)</li>
+<li>Application state (stateless — no database)</li>
+</ul>
+<h3 id="153-recovery-procedure">15.3 Recovery Procedure<a class="headerlink" href="#153-recovery-procedure" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Restore configuration files (<code>.env</code>, <code>Caddyfile</code>, <code>tls/</code>)</li>
+<li>Rebuild Docker images: <code>docker compose up --build -d</code></li>
+<li>Restore <code>data/output/</code> from backup if needed</li>
+</ol>
+<hr />
+<h2 id="16-decommissioning">16. Decommissioning<a class="headerlink" href="#16-decommissioning" title="Permanent link">&para;</a></h2>
+<p>To completely remove TRISK Desktop from a workstation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Stop and remove containers</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>down<span class="w"> </span>-v
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Remove Docker images</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>docker<span class="w"> </span>rmi<span class="w"> </span>theia-finance-labs/trisk:latest
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>docker<span class="w"> </span>rmi<span class="w"> </span>caddy:2-alpine
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># Remove application directory</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>rm<span class="w"> </span>-rf<span class="w"> </span>trisk.r.docker/
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="c1"># Remove Docker volumes (if any remain)</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>docker<span class="w"> </span>volume<span class="w"> </span>prune
+</code></pre></div>
+<p><strong>Data retention:</strong> Ensure analysis results in <code>data/output/</code> are archived per institutional data retention policy before deletion.</p>
+<hr />
+<h2 id="17-troubleshooting">17. Troubleshooting<a class="headerlink" href="#17-troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="171-container-fails-to-start">17.1 Container Fails to Start<a class="headerlink" href="#171-container-fails-to-start" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Check container logs</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>trisk
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Common issues:</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># - &quot;port 443 already in use&quot; → another service on port 443, change port in docker-compose.yml</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># - &quot;TRISK_PASS_HASH not set&quot; → generate and add to .env (Section 10.1)</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># - OOM killed → increase Docker memory allocation to 4 GB+</span>
+</code></pre></div>
+<h3 id="172-application-loads-but-shows-errors">17.2 Application Loads but Shows Errors<a class="headerlink" href="#172-application-loads-but-shows-errors" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Check Shiny application logs</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>docker<span class="w"> </span>logs<span class="w"> </span>trisk-app<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-50
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Enable debug logging</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;TRISK_DEBUG_LOG=true&quot;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>.env
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div>
+<h3 id="173-tls-certificate-errors">17.3 TLS Certificate Errors<a class="headerlink" href="#173-tls-certificate-errors" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Verify certificate files exist in <code>tls/</code> directory</li>
+<li>Verify certificate has <code>localhost</code> or <code>127.0.0.1</code> in SAN</li>
+<li>For self-signed certs, browser will show warning — add exception or use institution CA</li>
+</ul>
+<h3 id="174-performance-issues">17.4 Performance Issues<a class="headerlink" href="#174-performance-issues" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Ensure Docker has 4 GB RAM allocated</li>
+<li>Large portfolios (&gt;10,000 loans) may require 8 GB RAM</li>
+<li>Check <code>docker stats</code> for resource utilization</li>
+</ul>
+<hr />
+<h2 id="appendix-a-licensing">Appendix A: Licensing<a class="headerlink" href="#appendix-a-licensing" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>License</th>
+<th>Implications</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>trisk.model</td>
+<td>GPL-3.0</td>
+<td>Open source. Modifications must be shared under GPL-3.0. Using as a library does not trigger copyleft for the calling application.</td>
+</tr>
+<tr>
+<td>trisk.analysis</td>
+<td>LGPL-3.0</td>
+<td>Open source. Can be used as a library without copyleft obligations.</td>
+</tr>
+<tr>
+<td>R language</td>
+<td>GPL-2.0</td>
+<td>Open source runtime</td>
+</tr>
+<tr>
+<td>Shiny framework</td>
+<td>GPL-3.0</td>
+<td>Open source</td>
+</tr>
+<tr>
+<td>Caddy</td>
+<td>Apache-2.0</td>
+<td>Permissive open source</td>
+</tr>
+<tr>
+<td>TRISK Desktop UI</td>
+<td>Proprietary</td>
+<td>Licensed by Theia Finance Labs / 1in1000</td>
+</tr>
+</tbody>
+</table>
+<p>All open-source components are permissible for internal institutional use without redistribution obligations (the institution is not distributing the software externally).</p>
+<hr />
+<h2 id="appendix-b-full-package-inventory">Appendix B: Full Package Inventory<a class="headerlink" href="#appendix-b-full-package-inventory" title="Permanent link">&para;</a></h2>
+<h3 id="r-packages-cran-locked-to-2025-02-01-snapshot">R Packages (CRAN — locked to 2025-02-01 snapshot)<a class="headerlink" href="#r-packages-cran-locked-to-2025-02-01-snapshot" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>shiny</td>
+<td>latest-at-snapshot</td>
+<td>Web application framework</td>
+</tr>
+<tr>
+<td>shinydashboard</td>
+<td>latest-at-snapshot</td>
+<td>Dashboard layout</td>
+</tr>
+<tr>
+<td>shinyWidgets</td>
+<td>latest-at-snapshot</td>
+<td>Enhanced UI widgets</td>
+</tr>
+<tr>
+<td>shinyjs</td>
+<td>latest-at-snapshot</td>
+<td>JavaScript interop</td>
+</tr>
+<tr>
+<td>httpuv</td>
+<td>latest-at-snapshot</td>
+<td>HTTP server backend</td>
+</tr>
+<tr>
+<td>htmltools</td>
+<td>latest-at-snapshot</td>
+<td>HTML generation</td>
+</tr>
+<tr>
+<td>DT</td>
+<td>latest-at-snapshot</td>
+<td>Interactive data tables</td>
+</tr>
+<tr>
+<td>ggplot2</td>
+<td>latest-at-snapshot</td>
+<td>Static charts</td>
+</tr>
+<tr>
+<td>plotly</td>
+<td>latest-at-snapshot</td>
+<td>Interactive charts</td>
+</tr>
+<tr>
+<td>readr</td>
+<td>latest-at-snapshot</td>
+<td>CSV parsing</td>
+</tr>
+<tr>
+<td>writexl</td>
+<td>latest-at-snapshot</td>
+<td>Excel export</td>
+</tr>
+<tr>
+<td>jsonlite</td>
+<td>latest-at-snapshot</td>
+<td>JSON serialization</td>
+</tr>
+<tr>
+<td>dplyr</td>
+<td>latest-at-snapshot</td>
+<td>Data manipulation</td>
+</tr>
+<tr>
+<td>tidyr</td>
+<td>latest-at-snapshot</td>
+<td>Data reshaping</td>
+</tr>
+</tbody>
+</table>
+<h3 id="r-packages-github-pinned-to-commit-sha">R Packages (GitHub — pinned to commit SHA)<a class="headerlink" href="#r-packages-github-pinned-to-commit-sha" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Commit SHA</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>trisk.model</td>
+<td><code>b716c9d3573bee2a730973995b9da6fc9b9703c5</code></td>
+<td>Theia-Finance-Labs/trisk.model</td>
+</tr>
+<tr>
+<td>trisk.analysis</td>
+<td><code>307e52aa035b3ebe8bb0ddb967268e38600a1763</code></td>
+<td>Theia-Finance-Labs/trisk.analysis</td>
+</tr>
+</tbody>
+</table>
+<h3 id="system-libraries-runtime-debian">System Libraries (Runtime — Debian)<a class="headerlink" href="#system-libraries-runtime-debian" title="Permanent link">&para;</a></h3>
+<p>libcurl4, libssl3, libxml2, libfontconfig1, libfreetype6, libpng16-16, libtiff5, libjpeg8, libharfbuzz0b, libfribidi0, libpq5</p>
+<hr />
+<h2 id="appendix-c-approval-templates">Appendix C: Approval Templates<a class="headerlink" href="#appendix-c-approval-templates" title="Permanent link">&para;</a></h2>
+<h3 id="template-change-request-summary">Template: Change Request Summary<a class="headerlink" href="#template-change-request-summary" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Title: Install TRISK Desktop — Climate Transition Risk Stress Testing Tool
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Requester: [Risk team / Credit Risk / ICAAP team]
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>Category: Standard Change — New Software Installation
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>Risk Level: Low
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>Impact: Single workstation / No integration with core systems
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>Description: Self-hosted, containerized application for climate transition
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>  risk stress testing. Runs locally with zero outbound network access.
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>  Used for ICAAP preparation, regulatory submissions, and board reporting.
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>Rollback: docker compose down -v &amp;&amp; rm -rf trisk.r.docker/
+<a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>Testing: UAT with demo data, functional verification checklist (Section 12)
+</code></pre></div>
+<h3 id="template-infosec-review-summary">Template: InfoSec Review Summary<a class="headerlink" href="#template-infosec-review-summary" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Application: TRISK Desktop v1.0
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>Vendor: 1in1000 (Theia Finance Labs)
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>Data classification: Confidential (portfolio exposure data)
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>Network: Air-gapped at runtime — zero outbound connections
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>Authentication: HTTP Basic Auth (Caddy) / SSO-compatible
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>Encryption: TLS 1.2+ via Caddy reverse proxy
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>Container: Non-root, all caps dropped, seccomp filtered, read-only fs
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>PII: Not required. Column allowlisting strips unauthorized fields on upload.
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>Audit: Structured JSON logging, SIEM-compatible
+</code></pre></div>
+<hr />
+<h2 id="appendix-d-environment-variable-reference">Appendix D: Environment Variable Reference<a class="headerlink" href="#appendix-d-environment-variable-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TRISK_USER</code></td>
+<td>Yes (prod)</td>
+<td><code>analyst</code></td>
+<td>HTTP Basic Auth username</td>
+</tr>
+<tr>
+<td><code>TRISK_PASS_HASH</code></td>
+<td>Yes (prod)</td>
+<td>—</td>
+<td>Bcrypt hash for HTTP Basic Auth</td>
+</tr>
+<tr>
+<td><code>BASE_IMAGE</code></td>
+<td>No</td>
+<td><code>rocker/r-ver:4.4.1@sha256:...</code></td>
+<td>Override for bank artifactory</td>
+</tr>
+<tr>
+<td><code>SHINY_LOG_LEVEL</code></td>
+<td>No</td>
+<td><code>WARN</code></td>
+<td>Log verbosity: <code>WARN</code> or <code>TRACE</code></td>
+</tr>
+<tr>
+<td><code>TRISK_DEBUG_LOG</code></td>
+<td>No</td>
+<td><code>false</code></td>
+<td>Enable debug logging: <code>true</code> or <code>false</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Document prepared by 1in1000 Consulting for institutional deployment of TRISK Desktop.</em>
+<em>For support: contact your 1in1000 engagement lead.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "navigation.indexes", "search.highlight", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

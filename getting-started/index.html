@@ -482,10 +482,54 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-and-launch" class="md-nav__link">
+  <a href="#step-1-install-docker-desktop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install and launch
+        Step 1: Install Docker Desktop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-get-the-trisk-desktop-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Get the TRISK Desktop files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-build-and-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Build and start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-4-verify-the-container-is-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Verify the container is running
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-5-open-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Open the application
       
     </span>
   </a>
@@ -515,10 +559,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#stopping-and-restarting" class="md-nav__link">
+  <a href="#starting-and-stopping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stopping and restarting
+        Starting and stopping
       
     </span>
   </a>
@@ -1089,10 +1133,54 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-and-launch" class="md-nav__link">
+  <a href="#step-1-install-docker-desktop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install and launch
+        Step 1: Install Docker Desktop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-get-the-trisk-desktop-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Get the TRISK Desktop files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-build-and-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Build and start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-4-verify-the-container-is-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Verify the container is running
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-5-open-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5: Open the application
       
     </span>
   </a>
@@ -1122,10 +1210,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#stopping-and-restarting" class="md-nav__link">
+  <a href="#starting-and-stopping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stopping and restarting
+        Starting and stopping
       
     </span>
   </a>
@@ -1196,55 +1284,99 @@
 <p class="admonition-title">No R or programming knowledge required</p>
 <p>Everything runs inside the Docker container. You only need Docker and a web browser.</p>
 </div>
-<h2 id="install-and-launch">Install and launch<a class="headerlink" href="#install-and-launch" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 1. Get the code</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Theia-Finance-Labs/trisk.r.docker.git
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">cd</span><span class="w"> </span>trisk.r.docker
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># 2. Build and start (first time takes ~10 minutes)</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># 3. Check it&#39;s running</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>logs<span class="w"> </span>-f
+<h2 id="step-1-install-docker-desktop">Step 1: Install Docker Desktop<a class="headerlink" href="#step-1-install-docker-desktop" title="Permanent link">&para;</a></h2>
+<p>Download and install from <a href="https://www.docker.com/products/docker-desktop/">docker.com/products/docker-desktop</a>.</p>
+<p>After installation, open Docker Desktop and wait for the whale icon in your system tray (Windows) or menu bar (Mac) to show <strong>Docker Desktop is running</strong>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Windows users</p>
+<p>You may need to enable WSL 2 during installation. Docker Desktop will prompt you if needed.</p>
+</div>
+<h2 id="step-2-get-the-trisk-desktop-files">Step 2: Get the TRISK Desktop files<a class="headerlink" href="#step-2-get-the-trisk-desktop-files" title="Permanent link">&para;</a></h2>
+<p><strong>Option A — Download ZIP</strong> (no Git required):</p>
+<ol>
+<li>Go to <a href="https://github.com/Theia-Finance-Labs/trisk.r.docker">github.com/Theia-Finance-Labs/trisk.r.docker</a></li>
+<li>Click the green <strong>Code</strong> button → <strong>Download ZIP</strong></li>
+<li>Extract the ZIP to a folder (e.g., <code>C:\trisk</code> on Windows or <code>~/trisk</code> on Mac)</li>
+</ol>
+<p><strong>Option B — Clone with Git</strong> (if Git is installed):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Theia-Finance-Labs/trisk.r.docker.git
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>trisk.r.docker
 </code></pre></div>
-<p>Wait until you see:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Listening on http://0.0.0.0:3838
+<h2 id="step-3-build-and-start">Step 3: Build and start<a class="headerlink" href="#step-3-build-and-start" title="Permanent link">&para;</a></h2>
+<p>Open a terminal and navigate to the TRISK folder:</p>
+<ul>
+<li><strong>Windows:</strong> press <code>Win + R</code>, type <code>cmd</code>, press Enter, then <code>cd C:\trisk\trisk.r.docker</code></li>
+<li><strong>Mac:</strong> open Terminal (Applications &gt; Utilities), then <code>cd ~/trisk/trisk.r.docker</code></li>
+</ul>
+<p>Run this single command:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
 </code></pre></div>
-<p>Then open your browser to <strong>http://localhost:3838</strong></p>
+<p>The first build takes ~10 minutes (downloads R and installs packages). After that, starts take seconds.</p>
+<h2 id="step-4-verify-the-container-is-running">Step 4: Verify the container is running<a class="headerlink" href="#step-4-verify-the-container-is-running" title="Permanent link">&para;</a></h2>
+<p><strong>Using Docker Desktop</strong> (easiest):</p>
+<ol>
+<li>Open Docker Desktop → go to the <strong>Containers</strong> tab</li>
+<li>You should see <code>trisk.r.docker</code> or <code>trisk-app-dev</code> with a <strong>green</strong> running status</li>
+<li>Click the container name to see logs — wait until you see <code>Listening on http://0.0.0.0:3838</code></li>
+</ol>
+<p><strong>Or from the terminal:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>logs<span class="w"> </span>-f
+</code></pre></div>
+<h2 id="step-5-open-the-application">Step 5: Open the application<a class="headerlink" href="#step-5-open-the-application" title="Permanent link">&para;</a></h2>
+<p>Open your browser and go to:</p>
+<blockquote>
+<p><strong><a href="http://localhost:3838">http://localhost:3838</a></strong></p>
+</blockquote>
+<p>You should see the TRISK Desktop welcome screen.</p>
+<div class="admonition tip">
+<p class="admonition-title">Not loading?</p>
+<ul>
+<li>Make sure Docker Desktop shows the container as <strong>Running</strong> (green icon)</li>
+<li>Try refreshing the page after 30 seconds — the app takes a moment to initialize on first start</li>
+<li>Check <a href="../troubleshooting/">Troubleshooting</a> if issues persist</li>
+</ul>
+</div>
 <h2 id="run-the-demo">Run the demo<a class="headerlink" href="#run-the-demo" title="Permanent link">&para;</a></h2>
 <p>Once the app loads:</p>
 <ol>
 <li>Click <strong>1. Upload Data</strong> in the sidebar</li>
 <li>Click the green <strong>Load Demo Data from trisk.model</strong> button</li>
-<li>Click <strong>2. Configure Analysis</strong> - default scenarios are already selected</li>
+<li>Click <strong>2. Configure Analysis</strong> — default scenarios are already selected</li>
 <li>Click <strong>3. Run Analysis</strong>, then click the <strong>Run TRISK Analysis</strong> button</li>
 <li>Wait ~30 seconds for the model to complete</li>
 <li>Explore your results in <strong>4. Portfolio Results</strong></li>
 </ol>
-<p>The demo loads a synthetic 4-company portfolio across Oil&amp;Gas, Coal, and Power sectors with matching asset-level production data.</p>
+<p>The demo loads a synthetic portfolio across Oil&amp;Gas, Coal, and Power sectors with matching asset-level production data.</p>
 <h2 id="using-your-own-data">Using your own data<a class="headerlink" href="#using-your-own-data" title="Permanent link">&para;</a></h2>
 <p>To analyze your own portfolio:</p>
 <ol>
 <li>Prepare your CSV files following the <a href="../data-preparation/">Data Preparation</a> guide</li>
 <li>Either upload through the browser interface, or place files in <code>data/input/</code> before starting the container</li>
-<li>Follow the same workflow: Upload, Configure, Run, Review</li>
+<li>Follow the same workflow: Upload → Configure → Run → Review</li>
 </ol>
-<h2 id="stopping-and-restarting">Stopping and restarting<a class="headerlink" href="#stopping-and-restarting" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Stop</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>down
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Restart (no rebuild needed)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>-d
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Rebuild after updating the code</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
+<h2 id="starting-and-stopping">Starting and stopping<a class="headerlink" href="#starting-and-stopping" title="Permanent link">&para;</a></h2>
+<p><strong>Using Docker Desktop</strong> (recommended):</p>
+<ol>
+<li>Open Docker Desktop → <strong>Containers</strong> tab</li>
+<li>Click <strong>▶ Play</strong> to start, <strong>⏹ Stop</strong> to shut down</li>
+<li>No rebuild needed for restarts — your data and results are preserved</li>
+</ol>
+<p><strong>Using the terminal:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Stop</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>down
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Restart (no rebuild needed)</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>-d
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Rebuild after updating the code</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.dev.yml<span class="w"> </span>up<span class="w"> </span>--build<span class="w"> </span>-d
 </code></pre></div>
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../data-preparation/">Data Preparation</a> - format your portfolio files</li>
-<li><a href="../workflow/01-upload/">Step 1: Upload Data</a> - detailed upload walkthrough</li>
-<li><a href="../security/">Security Architecture</a> - what your IT team needs to know</li>
-<li><a href="../troubleshooting/">Troubleshooting</a> - if something doesn't work</li>
+<li><a href="../data-preparation/">Data Preparation</a> — format your portfolio files</li>
+<li><a href="../workflow/01-upload/">Step 1: Upload Data</a> — detailed upload walkthrough</li>
+<li><a href="../security/">Security Architecture</a> — what your IT team needs to know</li>
+<li><a href="../troubleshooting/">Troubleshooting</a> — if something doesn't work</li>
 </ul>
 
 

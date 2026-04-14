@@ -3,10 +3,9 @@
   "configurations": [
     {
       "name": "trisk-shiny",
-      "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "up", "--build"],
-      "port": 3838,
-      "autoPort": false
+      "runtimeExecutable": "echo",
+      "runtimeArgs": ["Server already running on port 3838"],
+      "port": 3838
     }
   ]
 }

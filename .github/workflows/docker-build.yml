@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@988b5a0280414f521d01fdd567a7c47e0dfca88 # v3
+        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'

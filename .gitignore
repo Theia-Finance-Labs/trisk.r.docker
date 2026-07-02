@@ -51,3 +51,6 @@ data/scenarios/scenarios.csv
 tls/*.pem
 tls/*.key
 tls/*.crt
+
+# HF Space assembly scratch dir
+deploy/hf/.space-build/

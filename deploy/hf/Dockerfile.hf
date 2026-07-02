@@ -1,0 +1,142 @@
+# TRISK — Hugging Face Spaces demo image
+# ------------------------------------------------------------------
+# A PUBLIC SHOWCASE variant of the production Dockerfile. Differences:
+#   - Binds Shiny directly on HF's port (7860); no Caddy/TLS/basic-auth
+#   - Writable dirs are mode 0777 so writes succeed under HF's runtime UID
+#   - Runs on synthetic portfolio data bundled in trisk.analysis (no upload needed)
+#
+# This is NOT the hardened bank image. Do not use for real deployments —
+# use the root Dockerfile + docker-compose.yml for that.
+#
+# Build args mirror the production Dockerfile so the demo pins the exact
+# same package versions / scenario data.
+# ============================================================
+
+ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
+ARG PAK_VERSION=0.8.0
+ARG CRAN_SNAPSHOT=2025-02-01
+ARG TRISK_MODEL_SHA=b716c9d3573bee2a730973995b9da6fc9b9703c5
+ARG TRISK_ANALYSIS_SHA=307e52aa035b3ebe8bb0ddb967268e38600a1763
+ARG SCENARIOS_SHA256=b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29b4b56
+
+# ============================================================
+# Stage 1: builder — compile R packages
+# ============================================================
+FROM ${BASE_IMAGE} AS builder
+
+ARG PAK_VERSION
+ARG CRAN_SNAPSHOT
+ARG TRISK_MODEL_SHA
+ARG TRISK_ANALYSIS_SHA
+
+ENV CRAN_REPO=https://packagemanager.posit.co/cran/__linux__/jammy/${CRAN_SNAPSHOT}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
+    libfontconfig1-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN R -e "install.packages('pak', repos = '${CRAN_REPO}', version = '${PAK_VERSION}')"
+
+# Install trisk.analysis (pinned) and let pak resolve its matching trisk.model
+# from the package's own Remotes. We do NOT separately pin trisk.model here:
+# imposing a second pin makes pak's solver reject the build when analysis's
+# Remotes references a different model commit ("Conflicts with trisk.model@...").
+# Installing analysis alone removes the competing constraint, so pak resolves
+# one coherent (model, analysis) pair.
+#
+# `stopifnot(requireNamespace(...))` fails the build immediately if either
+# package is missing — pak errors loudly on a failed install (unlike
+# install.packages/remotes, which only warn and would let the build continue
+# until a much later library() call fails).
+RUN R -e "\
+  options(repos = c(CRAN = Sys.getenv('CRAN_REPO'))); \
+  pak::pak('Theia-Finance-Labs/trisk.analysis@${TRISK_ANALYSIS_SHA}', ask = FALSE, upgrade = FALSE); \
+  stopifnot(requireNamespace('trisk.model', quietly = TRUE), requireNamespace('trisk.analysis', quietly = TRUE))"
+
+RUN R -e "\
+  options(repos = c(CRAN = Sys.getenv('CRAN_REPO'))); \
+  pak::pak(c( \
+    'httpuv', 'htmltools', 'shiny', 'shinydashboard', 'shinyWidgets', \
+    'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'data.table', 'writexl', \
+    'jsonlite', 'dplyr', 'tidyr', \
+    'rmarkdown', 'knitr' \
+  ), ask = FALSE, upgrade = FALSE)"
+
+RUN R -e "\
+  suppressPackageStartupMessages({ \
+    library(trisk.model); library(trisk.analysis); library(shiny) \
+  }); \
+  message('trisk.model  ', packageVersion('trisk.model')); \
+  message('trisk.analysis ', packageVersion('trisk.analysis'))"
+
+# ============================================================
+# Stage 2: runtime — lean image for the public demo
+# ============================================================
+FROM ${BASE_IMAGE} AS runtime
+
+ARG SCENARIOS_SHA256
+
+LABEL org.opencontainers.image.title="TRISK Desktop (HF demo)"
+LABEL org.opencontainers.image.description="Public showcase build — synthetic data, no auth"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4 \
+    libssl3 \
+    libxml2 \
+    libfontconfig1 \
+    libfreetype6 \
+    libpng16-16 \
+    libtiff5 \
+    libjpeg8 \
+    libharfbuzz0b \
+    libfribidi0 \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Compiled R library tree from builder
+COPY --from=builder /usr/local/lib/R /usr/local/lib/R
+
+# Scenario data (SHA-verified, same pin as production)
+COPY data/scenarios/scenarios.csv /opt/trisk/data/scenarios/scenarios.csv
+RUN echo "${SCENARIOS_SHA256}  /opt/trisk/data/scenarios/scenarios.csv" | sha256sum -c -
+
+# Shiny application
+RUN mkdir -p /opt/trisk/app
+COPY app/ /opt/trisk/app/
+
+# Startup script
+COPY scripts/run-shiny.sh /usr/local/bin/run-shiny.sh
+RUN chmod +x /usr/local/bin/run-shiny.sh
+
+# Non-root user for runtime
+RUN groupadd -r trisk && useradd -r -g trisk -d /home/trisk -s /sbin/nologin trisk
+
+# Writable data dirs — mode 0777 so writes work under HF's arbitrary runtime UID.
+# (HF Spaces may launch the container as a UID that is neither root nor `trisk`.)
+RUN mkdir -p /data/input /data/output/audit && \
+    chmod -R 0777 /data/input /data/output
+
+WORKDIR /opt/trisk/app
+
+# Bind to Hugging Face's expected port; write temp to /tmp
+ENV TMPDIR=/tmp \
+    SHINY_HOST=0.0.0.0 \
+    SHINY_PORT=7860
+
+USER trisk
+
+EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+    CMD Rscript -e "tryCatch(readLines(url('http://localhost:7860/', open='r'), n=1), error=function(e) quit(status=1))" || exit 1
+
+CMD ["/usr/local/bin/run-shiny.sh"]

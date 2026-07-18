@@ -1,5 +1,7 @@
 # CLAUDE.md - TRISK Desktop
 
+> **CLIENT REPO (Theia Finance Labs).** No autonomous, headless, or scheduled agents. Interactive sessions with Jakub only; never push, tag, release, or modify CI/deployment without Jakub in the loop.
+
 ## Why
 
 TRISK Desktop is APL's climate transition risk stress testing tool for bank deployment. It enables financial institutions to assess portfolio-level impacts of climate transition scenarios on NPV, PD, and Expected Loss. The goal is enterprise-grade software that satisfies bank infosec, model governance, and regulatory audit requirements (ECB, PRA, Basel).

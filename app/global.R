@@ -495,7 +495,9 @@ audit_dataset <- function(df, type) {
     "portfolio" = c("company_id", "technology", "term"),
     "company_id"
   ), names(df))
-  dup_flags <- if (length(dup_keys) > 0) duplicated(df[, dup_keys, drop = FALSE]) else rep(FALSE, nrow(df))
+  # pasted key: duplicated() on a data.frame slice is slow and memory-hungry on large files
+  dup_key <- if (length(dup_keys) > 0) do.call(paste, c(lapply(dup_keys, function(k) as.character(df[[k]])), sep = "\r"))
+  dup_flags <- if (length(dup_keys) > 0) duplicated(dup_key) else rep(FALSE, nrow(df))
   n_duplicate_id <- if (length(dup_keys) > 0) sum(dup_flags) else NA
 
   # Null rates per column
@@ -903,6 +905,8 @@ EXPORT_COLUMNS <- c(
   # Scenario / run context
   "target_scenario", "baseline_scenario", "shock_year",
   "scenario_geography",
+  # Row keys: results have one row per loan x technology x asset
+  "term", "asset_id", "asset_name",
   # Exposure
   "exposure_value_usd", "loss_given_default", "exposure_at_default", "weight",
   # PD metrics

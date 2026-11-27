@@ -758,6 +758,16 @@ server <- function(input, output, session) {
   observeEvent(input$run_analysis, {
     req(rv$portfolio, rv$assets, rv$financial, rv$scenarios)
 
+    # Data that fails validation (e.g. LGD in percent, negative exposure) must
+    # not produce results that look valid
+    problems <- c(Portfolio = validate_portfolio(rv$portfolio), Assets = validate_assets(rv$assets),
+                  Financial = validate_financial(rv$financial))
+    if (length(problems) > 0) {
+      showNotification(paste0("Fix the uploaded data before running. ", names(problems)[1], ": ", problems[[1]]),
+                       type = "error", duration = 10)
+      return()
+    }
+
     # Validate at least one shock year selected
     if (is.null(input$shock_years) || length(input$shock_years) == 0) {
       showNotification("Please select at least one shock year on the Configure tab.", type = "error")
@@ -1073,14 +1083,19 @@ server <- function(input, output, session) {
 
         # Rows without a PD (loan term outside 1-5 years, no matching assets) are
         # excluded from PD/EL aggregates; say so instead of reporting silent success
-        covered <- !is.na(rv$results$pd_shock)
-        exp_all <- sum(rv$results$exposure_value_usd, na.rm = TRUE)
-        covered_share <- if (exp_all > 0) sum(rv$results$exposure_value_usd[covered], na.rm = TRUE) / exp_all else 0
-        if (covered_share < 0.999) {
-          msg <- paste0(round((1 - covered_share) * 100, 1), "% of exposure has no TRISK PD ",
-                        "(loan term outside 1-5 years or no matching assets) and is excluded from PD/EL figures.")
+        uncovered <- character()
+        for (scen in names(all_scenario_results)) for (yr in names(all_scenario_results[[scen]])) {
+          res <- all_scenario_results[[scen]][[yr]]
+          exp_all <- sum(res$exposure_value_usd, na.rm = TRUE)
+          share <- if (exp_all > 0) sum(res$exposure_value_usd[is.na(res$pd_shock)], na.rm = TRUE) / exp_all else 1
+          if (share > 0.001) uncovered <- c(uncovered, paste0(scen, " ", yr, ": ", round(share * 100, 1), "%"))
+        }
+        if (length(uncovered) > 0) {
+          msg <- paste0("Exposure without a TRISK PD (loan term outside 1-5 years, no matching assets, or a ",
+                        "scenario that does not cover the sector) is excluded from PD/EL figures — ",
+                        paste(uncovered, collapse = "; "), ".")
           log_message(paste("  WARNING:", msg))
-          showNotification(msg, type = "warning", duration = 12)
+          showNotification(msg, type = "warning", duration = 15)
         }
 
         log_message("--- Results (Primary) ---")
@@ -4415,6 +4430,7 @@ server <- function(input, output, session) {
   # PD input table (editable Internal_PD column)
   output$pd_integration_table <- renderDT({
     req(rv$results)
+    rv$pd_table_redraw  # a rejected cell edit redraws the table with the stored value
     df <- rv$results
 
     # Build display with key identifiers + PD columns
@@ -4473,6 +4489,7 @@ server <- function(input, output, session) {
     if (is.na(new_val) || new_val < 0 || new_val > 1) {
       showNotification("Internal PD must be a probability between 0 and 1 (e.g. 0.02 for 2%).",
                        type = "error", duration = 6)
+      rv$pd_table_redraw <- (if (is.null(rv$pd_table_redraw)) 0 else rv$pd_table_redraw) + 1
       return()
     }
     if (row_idx >= 1 && row_idx <= length(rv$internal_pd)) {
@@ -5400,12 +5417,21 @@ server <- function(input, output, session) {
 
   output$download_config <- downloadHandler(
     filename = function() {
-      paste0("trisk_config_", rv$run_id, ".json")
+      paste0("trisk_config_", if (is.null(rv$run_id)) "not_run" else rv$run_id, ".json")
     },
     content = function(file) {
-      req(rv$run_config)
       audit_log("export", list(format = "config_json", run_id = rv$run_id))
+      # Before the first run there is no snapshot: export the current settings
       cfg <- rv$run_config
+      if (is.null(cfg)) cfg <- list(
+        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
+        target_scenario = paste(input$target_scenarios, collapse = ", "),
+        scenario_geography = input$scenario_geography,
+        shock_year = paste(input$shock_years, collapse = ", "),
+        risk_free_rate = input$risk_free_rate, discount_rate = input$discount_rate,
+        growth_rate = input$growth_rate, market_passthrough = input$market_passthrough,
+        carbon_price_model = input$carbon_price_model,
+        timestamp = paste(Sys.time(), "(settings only, no analysis run yet)"))
       config <- list(
         run_id = rv$run_id,
         timestamp = as.character(cfg$timestamp),

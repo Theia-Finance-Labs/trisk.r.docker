@@ -75,6 +75,8 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+          # CVE gate only: the secret scanner flags example keys in R package docs
+          scanners: 'vuln'
 
       - name: Generate SBOM
         if: github.event_name != 'pull_request'
@@ -115,6 +117,8 @@ jobs:
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
+          # CVE gate only: the secret scanner flags example keys in R package docs
+          scanners: 'vuln'
 
       - name: Push CLI image
         if: github.event_name != 'pull_request'

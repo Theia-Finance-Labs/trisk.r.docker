@@ -178,13 +178,7 @@ setup_config <- function(input, output, session, rv) {
   # --- Per-pair geography fallback ---
   # When a scenario pair doesn't support the selected geography (e.g. IPR only has
   # "Global" while user selected "OecdAndEu"), fall back to "Global".
-  get_geography_for_pair <- function(scenario_code, selected_geography) {
-    available_geos <- unique(rv$scenarios$scenario_geography[rv$scenarios$scenario == scenario_code])
-    if (selected_geography %in% available_geos) {
-      return(list(geography = selected_geography, fallback = FALSE))
-    }
-    return(list(geography = "Global", fallback = TRUE))
-  }
+  # get_geography_for_pair() moved to global.R for cross-module access
   #
   # observeEvent(input$add_pair, {
   #   req(rv$baseline_choices)

@@ -28,7 +28,7 @@ run:
 	docker-compose up -d
 	@echo ""
 	@echo "TRISK is starting..."
-	@echo "Open http://localhost:3838/trisk/ in your browser"
+	@echo "Open http://localhost:3838 in your browser"
 	@echo ""
 
 # Stop container

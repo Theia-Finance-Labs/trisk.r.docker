@@ -337,8 +337,8 @@ server <- function(input, output, session) {
     if (!is.na(audit$n_distinct_id)) {
       stats_rows <- tagList(stats_rows,
         tags$tr(tags$td("Distinct company_id"), tags$td(tags$b(format(audit$n_distinct_id, big.mark = ",")))),
-        tags$tr(tags$td("Duplicate company_id"), tags$td(tags$b(
-          if (audit$n_duplicate_id > 0) tags$span(style = "color: #C44245;", audit$n_duplicate_id) else "0"
+        tags$tr(tags$td("Duplicate rows (dataset key)"), tags$td(tags$b(
+          if (isTRUE(audit$n_duplicate_id > 0)) tags$span(style = "color: #C44245;", audit$n_duplicate_id) else "0"
         )))
       )
     }

@@ -238,12 +238,26 @@ validate_portfolio <- function(df) {
   if (length(missing) > 0) {
     return(paste("Missing required columns:", paste(missing, collapse = ", ")))
   }
+  # Types and ranges: a "1,000,000" exposure is read as text, an LGD of 45
+  # (percent) makes every EL 100x too large
+  for (col in c("exposure_value_usd", "term", "loss_given_default")) {
+    if (!is.numeric(df[[col]])) return(paste0("Column '", col, "' must be numeric (no thousands separators or % signs)"))
+  }
+  if (any(df$exposure_value_usd < 0, na.rm = TRUE)) return("Column 'exposure_value_usd' must not be negative")
+  if (any(df$loss_given_default < 0 | df$loss_given_default > 1, na.rm = TRUE))
+    return("Column 'loss_given_default' must be a ratio in [0, 1] (e.g. 0.45, not 45)")
+  if (any(df$term < 1 | df$term != round(df$term), na.rm = TRUE))
+    return("Column 'term' must be a whole number of years (1 or more)")
   return(NULL)
 }
 
 #' Validate assets data structure
 validate_assets <- function(df) {
-  required_cols <- c("company_id", "sector", "technology", "production_year", "capacity", "capacity_factor")
+  # Every column trisk.model reads (read_production_data); a missing one only
+  # failed later, inside the run, with a generic error
+  required_cols <- c("asset_id", "asset_name", "company_id", "company_name", "country_iso2",
+                     "sector", "technology", "production_year", "capacity", "capacity_factor",
+                     "emission_factor")
   missing <- setdiff(required_cols, names(df))
   if (length(missing) > 0) {
     return(paste("Missing required columns:", paste(missing, collapse = ", ")))
@@ -307,6 +321,12 @@ read_upload_csv <- function(filepath, original_name, type = NULL) {
     stop(user_error(sprintf(
       "File has more than %s rows. Please split it into smaller files.",
       format(MAX_UPLOAD_ROWS, big.mark = ",", scientific = FALSE))))
+  }
+  # fread reads the text "NA" as missing, which loses Namibia's ISO code
+  if ("country_iso2" %in% names(df) && anyNA(df$country_iso2)) {
+    iso <- data.table::fread(filepath, select = "country_iso2", colClasses = list(character = "country_iso2"),
+                             na.strings = "", nrows = nrow(df))
+    df$country_iso2 <- iso$country_iso2
   }
   df <- repair_encoding(tibble::as_tibble(df))
   if (!is.null(type)) df <- strip_columns(df, type)
@@ -440,7 +460,15 @@ audit_dataset <- function(df, type) {
   n_rows <- nrow(df)
   n_cols <- ncol(df)
   n_distinct_id <- if ("company_id" %in% names(df)) length(unique(df$company_id)) else NA
-  n_duplicate_id <- if ("company_id" %in% names(df)) sum(duplicated(df$company_id)) else NA
+  # What makes a row unique differs per dataset: assets have one row per asset,
+  # technology and year; a portfolio may hold several loans (terms) per company
+  dup_keys <- intersect(switch(type,
+    "assets"    = c("asset_id", "technology", "production_year"),
+    "portfolio" = c("company_id", "technology", "term"),
+    "company_id"
+  ), names(df))
+  dup_flags <- if (length(dup_keys) > 0) duplicated(df[, dup_keys, drop = FALSE]) else rep(FALSE, nrow(df))
+  n_duplicate_id <- if (length(dup_keys) > 0) sum(dup_flags) else NA
 
   # Null rates per column
   null_rates <- sapply(df, function(col) round(sum(is.na(col)) / length(col) * 100, 1))
@@ -464,18 +492,16 @@ audit_dataset <- function(df, type) {
     }
   }
 
-  # Check for duplicate company_id
-  if ("company_id" %in% names(df)) {
-    dup_ids <- df$company_id[duplicated(df$company_id)]
-    if (length(dup_ids) > 0) {
-      dup_rows <- which(df$company_id %in% unique(dup_ids))
-      issues <- rbind(issues, data.frame(
-        row = dup_rows, column = "company_id",
-        issue_type = "duplicate_id",
-        detail = paste0("Duplicate company_id: ", df$company_id[dup_rows]),
-        stringsAsFactors = FALSE
-      ))
-    }
+  # Check for duplicate rows on the dataset's key
+  if (any(dup_flags)) {
+    key_str <- do.call(paste, c(lapply(dup_keys, function(k) as.character(df[[k]])), sep = " / "))
+    dup_rows <- which(key_str %in% key_str[dup_flags])
+    issues <- rbind(issues, data.frame(
+      row = dup_rows, column = paste(dup_keys, collapse = "+"),
+      issue_type = "duplicate_id",
+      detail = paste0("Duplicate ", paste(dup_keys, collapse = "/"), ": ", key_str[dup_rows]),
+      stringsAsFactors = FALSE
+    ))
   }
 
   # Portfolio-specific: check ISO-2 codes
@@ -519,12 +545,17 @@ dataset_template <- function(type) {
       stringsAsFactors = FALSE
     ),
     "assets" = data.frame(
+      asset_id = "ASSET001",
+      asset_name = "Example Power Plant",
       company_id = "COMP001",
+      company_name = "Example Corp",
+      country_iso2 = "US",
       sector = "Power",
       technology = "CoalCap",
       production_year = 2025,
       capacity = 500,
       capacity_factor = 0.85,
+      emission_factor = 0.95,
       stringsAsFactors = FALSE
     ),
     "financial" = data.frame(

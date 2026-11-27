@@ -97,6 +97,7 @@ Company-level production data. Required columns:
 | `company_id` | integer | Must match portfolio |
 | `company_name` | string | Company name |
 | `asset_id` | integer | Unique asset identifier |
+| `asset_name` | string | Asset name |
 | `country_iso2` | string | Asset location |
 | `sector` | string | Production sector |
 | `technology` | string | Technology type |
@@ -104,7 +105,7 @@ Company-level production data. Required columns:
 | `capacity` | numeric | Asset capacity |
 | `capacity_factor` | numeric | Utilization (0-1) |
 | `emission_factor` | numeric | Emissions per unit produced |
-| `production_unit` | string | Unit of production (e.g., GJ, MWh) |
+| `production_unit` | string | Optional: unit of production (e.g., GJ, MWh) |
 
 ### Financial Features CSV
 

@@ -1,0 +1,61 @@
+site_name: TRISK Desktop
+site_url: https://theia-finance-labs.github.io/trisk.r.docker/
+site_description: Climate Transition Risk Stress Testing for Financial Institutions
+repo_url: https://github.com/Theia-Finance-Labs/trisk.r.docker
+repo_name: Theia-Finance-Labs/trisk.r.docker
+
+theme:
+  name: material
+  palette:
+    scheme: default
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - assets/css/custom.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - def_list
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Data Preparation: data-preparation.md
+  - User Guide:
+      - 1. Upload Data: workflow/01-upload.md
+      - 2. Configure Analysis: workflow/02-configure.md
+      - 3. Run Analysis: workflow/03-run.md
+      - 4. Portfolio Results: workflow/04-results.md
+      - 5. Scenario Analysis: workflow/05-scenarios.md
+      - 6. Risk Integration: workflow/06-integration.md
+      - 7. Download & Export: workflow/07-download.md
+  - Reference:
+      - Data Dictionary: reference/data-dictionary.md
+      - Model Parameters: reference/model-parameters.md
+      - Scenario Library: reference/scenarios.md
+  - Security: security.md
+  - Troubleshooting: troubleshooting.md

@@ -51,3 +51,6 @@ data/scenarios/scenarios.csv
 tls/*.pem
 tls/*.key
 tls/*.crt
+
+# MkDocs build output
+site/

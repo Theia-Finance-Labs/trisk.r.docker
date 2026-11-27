@@ -1162,6 +1162,18 @@ ui <- dashboardPage(
               funding from the European Union's Life programme under Grant No. LIFE21-GIC-DE-Stress."),
 
             hr(),
+            h4("Documentation", class = "font-heading"),
+            p("Full user guide, data preparation instructions, and security architecture:"),
+            tags$ul(
+              tags$li(tags$a(href = "https://theia-finance-labs.github.io/trisk.r.docker/",
+                             "TRISK Desktop User Guide", target = "_blank")),
+              tags$li(tags$a(href = "https://theia-finance-labs.github.io/trisk.model/",
+                             "TRISK Model Documentation", target = "_blank")),
+              tags$li(tags$a(href = "https://theia-finance-labs.github.io/trisk.analysis/",
+                             "TRISK Analysis Documentation", target = "_blank"))
+            ),
+
+            hr(),
             h4("License & Version", class = "font-heading"),
             p("trisk.model: GPL-3.0 | trisk.analysis: LGPL-3.0"),
             verbatimTextOutput("version_info"),

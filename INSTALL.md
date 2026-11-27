@@ -30,7 +30,7 @@ docker run --rm caddy:2.10.2-alpine caddy hash-password --plaintext 'choose-a-pa
 #    Paste the output into .env inside SINGLE quotes: TRISK_PASS_HASH='$2a$14$...'
 
 # 3. TLS certificate (self-signed for a single workstation; use your bank-issued cert/key otherwise)
-openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
+MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
   -keyout tls/key.pem -out tls/cert.pem
 chmod 644 tls/key.pem   # Caddy runs with all capabilities dropped; it cannot read a 0600 key
 
@@ -83,7 +83,7 @@ The bank's infosec team can also pull the pre-built image from `ghcr.io`, scan i
 
 ### 3. R Packages
 
-#### 3a. Package Manager — pak 0.8.0
+#### 3a. Package Manager — pak 0.8.0.1
 
 ```r
 install.packages("pak", repos = "https://packagemanager.posit.co/cran/2025-02-01")
@@ -206,18 +206,15 @@ trisk.r.docker/                     ← project root
 
 ---
 
-### 6. Configuration (global.R paths)
+### 6. Configuration (scenarios path)
 
-Three paths in `app/global.R` are hardcoded for Docker. For bare-metal, edit them to match the local layout:
+The app looks for the scenarios at `/opt/trisk/data/scenarios/scenarios.csv` (the Docker location). For bare-metal, point `TRISK_SCENARIOS_PATH` at the downloaded file — use an absolute path, because `shiny::runApp('app')` runs with `app/` as the working directory. Without it the app silently falls back to the small `trisk.model` test scenarios.
 
-```r
-# global.R lines 72-74 — change to:
-SCENARIOS_PATH <- "data/scenarios/scenarios.csv"   # was /opt/trisk/data/scenarios/scenarios.csv
-INPUT_DIR      <- "data/input"                      # was /data/input
-OUTPUT_DIR     <- "data/output"                     # was /data/output
+```bash
+export TRISK_SCENARIOS_PATH="$PWD/data/scenarios/scenarios.csv"   # PowerShell: $env:TRISK_SCENARIOS_PATH = "$PWD\data\scenarios\scenarios.csv"
 ```
 
-No environment variables are strictly required. Optional:
+Other optional variables:
 - `SHINY_LOG_LEVEL=WARN` — controls Shiny log verbosity
 - `TMPDIR` — R temp directory (defaults to system temp)
 

@@ -1,10 +1,8 @@
 # download_scenarios.R
 # Pre-downloads public scenario data so banks don't need internet access after deployment.
-# This script is run during Docker build.
-#
-# When invoked from the Dockerfile, integrity is verified via sha256sum in a
-# separate RUN step.  This script is kept for standalone / dev use and performs
-# its own optional checksum check when SCENARIOS_SHA256 is set.
+# Standalone / dev alternative to scripts/download_scenarios.sh (which the docs use);
+# the Docker build verifies the same SHA256 again when it copies the file in.
+# Override the expected checksum with SCENARIOS_SHA256 if you supply other data.
 
 args <- commandArgs(trailingOnly = TRUE)
 output_dir <- if (length(args) > 0) args[1] else "/opt/trisk/data/scenarios"
@@ -23,6 +21,8 @@ scenarios_file <- file.path(output_dir, "scenarios.csv")
 
 message(paste("\nDownloading from:", scenarios_url))
 
+# The file is ~60 MB; R's default 60 s timeout aborts it on slower links
+options(timeout = max(600, getOption("timeout")))
 download.file(
   url      = scenarios_url,
   destfile = scenarios_file,
@@ -43,22 +43,21 @@ test_read <- read.csv(scenarios_file, nrows = 5)
 message(paste("Columns found:", ncol(test_read)))
 message(paste("Column names:", paste(names(test_read), collapse = ", ")))
 
-# ── Optional checksum verification ──
-expected_sha <- Sys.getenv("SCENARIOS_SHA256", unset = "")
-if (nzchar(expected_sha)) {
-  message("\nVerifying SHA256 checksum...")
-  actual_sha <- tools::md5sum(scenarios_file)  # R lacks native sha256; use system
-  result <- system2("sha256sum", scenarios_file, stdout = TRUE)
-  actual_sha <- sub("\\s+.*$", "", result)
-  if (!identical(actual_sha, expected_sha)) {
-    stop(paste0(
-      "Checksum mismatch!\n",
-      "  Expected: ", expected_sha, "\n",
-      "  Actual:   ", actual_sha
-    ))
-  }
-  message("Checksum OK.")
+# ── Checksum verification (same hash as download_scenarios.sh and the Dockerfiles) ──
+expected_sha <- Sys.getenv("SCENARIOS_SHA256",
+                           unset = "b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29b4b56")
+message("\nVerifying SHA256 checksum...")
+result <- system2("sha256sum", shQuote(scenarios_file), stdout = TRUE)
+actual_sha <- sub("\\s+.*$", "", result)
+if (!identical(actual_sha, expected_sha)) {
+  unlink(scenarios_file)
+  stop(paste0(
+    "Checksum mismatch!\n",
+    "  Expected: ", expected_sha, "\n",
+    "  Actual:   ", actual_sha
+  ))
 }
+message("Checksum OK.")
 
 message("\n========================================")
 message("Scenario download complete")

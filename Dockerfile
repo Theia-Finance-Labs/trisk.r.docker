@@ -18,8 +18,9 @@
 # ARGs — single place to bump versions
 # ============================================================
 # Base image — override for bank artifactory (e.g. artifactory.bank.com/approved/r-ver:4.4.1)
-ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
-ARG PAK_VERSION=0.8.0
+ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:78cb94ce2db23aaaf7b546450fcf70b5a3f2ace5a9b5fa1f87217da329211312
+# pak version contained in CRAN_SNAPSHOT (the build fails on a mismatch)
+ARG PAK_VERSION=0.8.0.1
 # Posit Public Package Manager snapshot (YYYY-MM-DD) — ensures CRAN is immutable
 ARG CRAN_SNAPSHOT=2025-02-01
 ARG TRISK_MODEL_SHA=b716c9d3573bee2a730973995b9da6fc9b9703c5
@@ -78,7 +79,7 @@ RUN R -e "\
   pak::pak(c( \
     'httpuv', 'htmltools', 'shiny', 'shinydashboard', 'shinyWidgets', \
     'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'data.table', 'writexl', \
-    'jsonlite', 'dplyr', 'tidyr' \
+    'jsonlite', 'dplyr', 'tidyr', 'optparse' \
   ), ask = FALSE, upgrade = FALSE)"
 
 # Verify core packages load
@@ -104,14 +105,11 @@ LABEL org.opencontainers.image.title="TRISK Desktop"
 LABEL org.opencontainers.image.description="Climate Transition Risk Stress Testing Tool"
 LABEL org.opencontainers.image.vendor="Theia Finance Labs"
 LABEL org.opencontainers.image.licenses="MIT"
+# created/revision labels are added by CI (docker/metadata-action)
 
-ARG BUILD_DATE
-ARG VCS_REF
-LABEL org.opencontainers.image.created="${BUILD_DATE}"
-LABEL org.opencontainers.image.revision="${VCS_REF}"
-
-# Runtime-only shared libraries (no -dev, no compilers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Runtime-only shared libraries (no -dev); upgrade picks up security fixes
+# released since the base image digest was built (the CI scan gates on them)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libcurl4 \
     libssl3 \
     libxml2 \
@@ -151,7 +149,9 @@ COPY scripts/run-shiny.sh /usr/local/bin/run-shiny.sh
 RUN chmod +x /usr/local/bin/run-shiny.sh
 
 # Create non-root user for runtime
-RUN groupadd -r trisk && useradd -r -g trisk -d /home/trisk -s /sbin/nologin trisk
+# uid/gid 1000 matches the usual first user on Linux hosts, so the
+# ./data/output bind mount is writable without chmod 777
+RUN groupadd -r -g 1000 trisk && useradd -r -u 1000 -g trisk -d /home/trisk -s /sbin/nologin trisk
 
 # Data mount points
 RUN mkdir -p /data/input /data/output && \

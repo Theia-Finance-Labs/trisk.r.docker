@@ -77,9 +77,8 @@ options(shiny.sanitize.errors = TRUE)
 
 MAX_UPLOAD_ROWS <- 5000000L  # Row count limit for uploaded CSVs (enforced in read_upload_csv)
 
-SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
-INPUT_DIR <- "/data/input"
-OUTPUT_DIR <- "/data/output"
+# Override for bare-metal installs (see INSTALL.md); runApp() runs with app/ as working dir
+SCENARIOS_PATH <- Sys.getenv("TRISK_SCENARIOS_PATH", "/opt/trisk/data/scenarios/scenarios.csv")
 
 #' Default model parameter values (single source of truth)
 #' Used by UI for initial values and by Reset button

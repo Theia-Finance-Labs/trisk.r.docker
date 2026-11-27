@@ -36,7 +36,7 @@ docker run --rm caddy:2.10.2-alpine caddy hash-password --plaintext 'choose-a-pa
 #    Paste the output into .env inside SINGLE quotes: TRISK_PASS_HASH='$2a$14$...'
 
 # 3. TLS certificate (self-signed for a single workstation; use your bank-issued cert/key otherwise)
-openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
+MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
   -keyout tls/key.pem -out tls/cert.pem
 chmod 644 tls/key.pem   # Caddy runs with all capabilities dropped; it cannot read a 0600 key
 
@@ -160,20 +160,18 @@ docker run --rm trisk-cli:latest --help
 
 ### Resource Limits
 
-Adjust memory limits in `docker-compose.yml` based on portfolio size:
+Adjust memory limits in `docker-compose.yml` (service `trisk`) based on portfolio size. Raise `mem_limit` and `memswap_limit` together — Docker rejects a swap limit below the memory limit:
 
 ```yaml
-deploy:
-  resources:
-    limits:
-      memory: 8G  # Increase for large portfolios
+mem_limit: 8g        # Increase for large portfolios
+memswap_limit: 8g
 ```
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SHINY_LOG_LEVEL` | Logging verbosity | TRACE |
+| `SHINY_LOG_LEVEL` | Logging verbosity | WARN |
 
 ## Security
 
@@ -202,8 +200,10 @@ lsof -i :443
 
 ### Permission denied on data folder
 
+The container runs as uid/gid 1000. On Linux, make `./data/output` writable for that user:
+
 ```bash
-chmod -R 755 ./data
+sudo chown -R 1000:1000 ./data/output
 ```
 
 ### Shiny app shows error

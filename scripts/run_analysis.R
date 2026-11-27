@@ -42,6 +42,8 @@ option_list <- list(
               help = "Terminal growth rate [default: 0.03]"),
   make_option(c("--market-passthrough"), type = "double", default = 0,
               help = "Market passthrough [default: 0]"),
+  make_option(c("--carbon-price-model"), type = "character", default = "no_carbon_tax",
+              help = "Carbon price scenario from the carbon price data, e.g. increasing_carbon_tax_50 [default: no_carbon_tax]"),
   make_option(c("--format"), type = "character", default = "csv",
               help = "Output format: csv or json [default: csv]"),
   make_option(c("-v", "--verbose"), action = "store_true", default = FALSE,
@@ -67,8 +69,18 @@ if (is.null(args$portfolio) || is.null(args$assets) || is.null(args$financial)) 
   cat("    --output=/data/output \\\n")
   cat("    --baseline=NGFS2023GCAM_CP \\\n")
   cat("    --target=NGFS2023GCAM_NZ2050\n\n")
-  quit(status = 0)
+  cat("Error: --portfolio, --assets and --financial are required.\n")
+  quit(status = 2)
 }
+
+usage_error <- function(msg) {
+  cat(paste0("Error: ", msg, "\n"))
+  quit(status = 2)
+}
+if (!args$format %in% c("csv", "json")) usage_error("--format must be 'csv' or 'json'")
+if (!is.null(args[["carbon"]]) && !file.exists(args[["carbon"]])) usage_error(paste("carbon price file not found:", args[["carbon"]]))
+# Terminal value is profit * (1 + g) / (r - g): r <= g gives infinite or sign-flipped NPVs
+if (args$`discount-rate` <= args$`growth-rate`) usage_error("--discount-rate must be greater than --growth-rate")
 
 # Logging function
 log_msg <- function(msg) {
@@ -96,9 +108,9 @@ tryCatch({
   scenarios_data <- read_csv(args$scenarios, show_col_types = FALSE)
   
   # Load carbon price data
-  if (!is.null(args$carbon) && file.exists(args$carbon)) {
-    log_msg(paste("Loading carbon prices from:", args$carbon))
-    carbon_data <- read_csv(args$carbon, show_col_types = FALSE)
+  if (!is.null(args[["carbon"]])) {
+    log_msg(paste("Loading carbon prices from:", args[["carbon"]]))
+    carbon_data <- read_csv(args[["carbon"]], show_col_types = FALSE)
   } else {
     log_msg("Using internal carbon price test data")
     carbon_data <- read.csv(
@@ -107,6 +119,24 @@ tryCatch({
     )
   }
   
+  if (!args$`carbon-price-model` %in% carbon_data$scenario) {
+    stop(paste0("carbon price model '", args$`carbon-price-model`, "' not in carbon price data; available: ",
+                paste(sort(unique(carbon_data$scenario)), collapse = ", ")))
+  }
+
+  # trisk.model requires asset production years inside the scenario year range
+  # (same trimming as the Shiny app)
+  scenario_years <- scenarios_data$scenario_year[
+    scenarios_data$scenario %in% c(args$baseline, args$target) &
+      scenarios_data$scenario_geography %in% args$geography]
+  if (length(scenario_years) == 0) {
+    stop(paste0("no scenario rows for baseline '", args$baseline, "' / target '", args$target,
+                "' in geography '", args$geography, "'"))
+  }
+  assets_data <- assets_data[assets_data$production_year >= min(scenario_years) &
+                               assets_data$production_year <= max(scenario_years), ]
+  if (nrow(assets_data) == 0) stop("no asset production years fall inside the scenario year range")
+
   log_msg("Running TRISK model...")
   
   # Run analysis
@@ -123,7 +153,8 @@ tryCatch({
     risk_free_rate = args$`risk-free-rate`,
     discount_rate = args$`discount-rate`,
     growth_rate = args$`growth-rate`,
-    market_passthrough = args$`market-passthrough`
+    market_passthrough = args$`market-passthrough`,
+    carbon_price_model = args$`carbon-price-model`
   )
   
   # Create output directory if needed

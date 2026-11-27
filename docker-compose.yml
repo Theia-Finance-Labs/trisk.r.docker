@@ -11,7 +11,7 @@ networks:
 services:
   # TLS reverse proxy — the only service exposed to the host
   caddy:
-    image: caddy:2-alpine@sha256:a6a76a559514be24ace7ed42caaa2bea3e1b26d05c7656303475614b6010be01
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
     container_name: trisk-proxy
     ports:
       - "127.0.0.1:443:443"
@@ -22,7 +22,8 @@ services:
       - caddy_config:/config
     environment:
       - TRISK_USER=${TRISK_USER:-analyst}
-      - TRISK_PASS_HASH=${TRISK_PASS_HASH:?Set TRISK_PASS_HASH in .env — generate with: docker run caddy caddy hash-password}
+      # Required. Caddy refuses to start while this is empty (see .env.example).
+      - TRISK_PASS_HASH=${TRISK_PASS_HASH:-}
     restart: "no"
     networks:
       - trisk-internal
@@ -51,16 +52,17 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
+        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:78cb94ce2db23aaaf7b546450fcf70b5a3f2ace5a9b5fa1f87217da329211312}
     image: theia-finance-labs/trisk:latest
     container_name: trisk-app
+    # R ignores SIGTERM as PID 1; an init forwards it so `docker stop` exits promptly
+    init: true
     # No host ports — only reachable via caddy on internal network
     expose:
       - "3838"
     volumes:
       - ./data/input:/data/input:ro
-      # Output is writable but noexec to limit RCE impact
-      - ./data/output:/data/output:rw,noexec,nosuid
+      - ./data/output:/data/output:rw
     environment:
       - SHINY_LOG_LEVEL=${SHINY_LOG_LEVEL:-WARN}
       - TMPDIR=/tmp
@@ -85,9 +87,9 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    # Docker's default seccomp profile (deny-by-default allowlist) stays in effect.
     security_opt:
       - no-new-privileges:true
-      - seccomp:security/trisk-seccomp.json
     # ── Log rotation (prevent disk fill on long-running workstations) ──
     logging:
       driver: json-file
@@ -107,12 +109,14 @@ services:
       context: .
       dockerfile: Dockerfile.cli
       args:
-        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804}
+        BASE_IMAGE: ${BASE_IMAGE:-rocker/r-ver:4.4.1@sha256:78cb94ce2db23aaaf7b546450fcf70b5a3f2ace5a9b5fa1f87217da329211312}
     image: theia-finance-labs/trisk-cli:latest
     container_name: trisk-cli
+    # R ignores SIGTERM as PID 1; an init forwards it so `docker stop` exits promptly
+    init: true
     volumes:
       - ./data/input:/data/input:ro
-      - ./data/output:/data/output:rw,noexec,nosuid
+      - ./data/output:/data/output:rw
     restart: "no"
     stop_grace_period: 30s
     networks:
@@ -132,9 +136,9 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    # Docker's default seccomp profile (deny-by-default allowlist) stays in effect.
     security_opt:
       - no-new-privileges:true
-      - seccomp:security/trisk-seccomp.json
     # ── Log rotation ──
     logging:
       driver: json-file

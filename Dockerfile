@@ -18,8 +18,9 @@
 # ARGs — single place to bump versions
 # ============================================================
 # Base image — override for bank artifactory (e.g. artifactory.bank.com/approved/r-ver:4.4.1)
-ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:f3ef082e63ca36547fcf0c05a0d74255ddda6ca7bd88f1dae5a44ce117fc3804
-ARG PAK_VERSION=0.8.0
+ARG BASE_IMAGE=rocker/r-ver:4.4.1@sha256:78cb94ce2db23aaaf7b546450fcf70b5a3f2ace5a9b5fa1f87217da329211312
+# pak version contained in CRAN_SNAPSHOT (the build fails on a mismatch)
+ARG PAK_VERSION=0.8.0.1
 # Posit Public Package Manager snapshot (YYYY-MM-DD) — ensures CRAN is immutable
 ARG CRAN_SNAPSHOT=2025-02-01
 ARG TRISK_MODEL_SHA=b716c9d3573bee2a730973995b9da6fc9b9703c5
@@ -59,15 +60,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pinned pak version
-RUN R -e "install.packages('pak', repos = '${CRAN_REPO}', version = '${PAK_VERSION}')"
+# install.packages() only warns on failure and has no version argument, so check both
+RUN R -e "install.packages('pak', repos = '${CRAN_REPO}'); \
+  if (!requireNamespace('pak', quietly = TRUE)) stop('pak could not be installed from ${CRAN_REPO}'); \
+  if (packageVersion('pak') != '${PAK_VERSION}') stop('expected pak ${PAK_VERSION}, got ', packageVersion('pak'))"
 
-# Install TRISK core packages — pinned to exact commit SHAs, no upgrades
+# Install TRISK core packages — pinned to exact commit SHAs, no upgrades.
+# trisk.analysis declares `Remotes: Theia-Finance-Labs/trisk.model` without a ref, which
+# pak resolves to trisk.model's default branch and rejects as conflicting with the
+# pinned SHA. So: trisk.model@SHA with its dependencies, then trisk.analysis's other
+# CRAN imports, then trisk.analysis@SHA without dependency resolution.
 RUN R -e "\
   options(repos = c(CRAN = Sys.getenv('CRAN_REPO'))); \
-  pak::pak(c( \
-    'Theia-Finance-Labs/trisk.model@${TRISK_MODEL_SHA}', \
-    'Theia-Finance-Labs/trisk.analysis@${TRISK_ANALYSIS_SHA}' \
-  ), ask = FALSE, upgrade = FALSE)"
+  pak::pak('Theia-Finance-Labs/trisk.model@${TRISK_MODEL_SHA}', ask = FALSE, upgrade = FALSE); \
+  pak::pak(c('dplyr', 'magrittr', 'rlang', 'tibble', 'uuid', 'ggplot2', 'scales', \
+             'stringdist', 'tidyr', 'DBI', 'RPostgres'), ask = FALSE, upgrade = FALSE); \
+  pak::pkg_install('Theia-Finance-Labs/trisk.analysis@${TRISK_ANALYSIS_SHA}', \
+                   dependencies = FALSE, ask = FALSE, upgrade = FALSE)"
 
 # Install Shiny UI dependencies — from the frozen CRAN snapshot
 RUN R -e "\
@@ -75,14 +84,17 @@ RUN R -e "\
   pak::pak(c( \
     'httpuv', 'htmltools', 'shiny', 'shinydashboard', 'shinyWidgets', \
     'shinyjs', 'DT', 'ggplot2', 'plotly', 'readr', 'data.table', 'writexl', \
-    'jsonlite', 'dplyr', 'tidyr' \
+    'jsonlite', 'dplyr', 'tidyr', 'optparse' \
   ), ask = FALSE, upgrade = FALSE)"
 
-# Verify core packages load
+# Verify core packages load and are the pinned commits
 RUN R -e "\
   suppressPackageStartupMessages({ \
     library(trisk.model); library(trisk.analysis); library(shiny) \
   }); \
+  pinned <- c(trisk.model = '${TRISK_MODEL_SHA}', trisk.analysis = '${TRISK_ANALYSIS_SHA}'); \
+  for (p in names(pinned)) if (!identical(packageDescription(p)[['RemoteSha']], pinned[[p]])) \
+    stop(p, ' is not the pinned commit ', pinned[[p]]); \
   message('trisk.model  ', packageVersion('trisk.model')); \
   message('trisk.analysis ', packageVersion('trisk.analysis'))"
 
@@ -101,14 +113,11 @@ LABEL org.opencontainers.image.title="TRISK Desktop"
 LABEL org.opencontainers.image.description="Climate Transition Risk Stress Testing Tool"
 LABEL org.opencontainers.image.vendor="Theia Finance Labs"
 LABEL org.opencontainers.image.licenses="MIT"
+# created/revision labels are added by CI (docker/metadata-action)
 
-ARG BUILD_DATE
-ARG VCS_REF
-LABEL org.opencontainers.image.created="${BUILD_DATE}"
-LABEL org.opencontainers.image.revision="${VCS_REF}"
-
-# Runtime-only shared libraries (no -dev, no compilers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Runtime-only shared libraries (no -dev); upgrade picks up security fixes
+# released since the base image digest was built (the CI scan gates on them)
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libcurl4 \
     libssl3 \
     libxml2 \
@@ -148,7 +157,9 @@ COPY scripts/run-shiny.sh /usr/local/bin/run-shiny.sh
 RUN chmod +x /usr/local/bin/run-shiny.sh
 
 # Create non-root user for runtime
-RUN groupadd -r trisk && useradd -r -g trisk -d /home/trisk -s /sbin/nologin trisk
+# uid/gid 1000 matches the usual first user on Linux hosts, so the
+# ./data/output bind mount is writable without chmod 777
+RUN groupadd -r -g 1000 trisk && useradd -r -u 1000 -g trisk -d /home/trisk -s /sbin/nologin trisk
 
 # Data mount points
 RUN mkdir -p /data/input /data/output && \

@@ -33,8 +33,7 @@ result <- tryCatch({
     scenario_geography = "Global"
   )
 }, error = function(e) {
-  cat("FAILED:", e$message, "\n")
-  quit(status = 1)
+  stop("run_trisk_model() failed: ", conditionMessage(e), call. = FALSE)
 })
 
 cat("\nSUCCESS!\n")
@@ -48,7 +47,8 @@ cat("Trajectories:", nrow(result$company_trajectories), "rows\n")
 # Basic sanity checks
 stopifnot(nrow(result$npv_results) > 0)
 stopifnot(nrow(result$pd_results) > 0)
-stopifnot("crispy_perc_value_change" %in% names(result$npv_results))
+# crispy_perc_value_change is derived later (app / trisk.analysis::compute_analysis_metrics)
+stopifnot(all(c("net_present_value_baseline", "net_present_value_shock") %in% names(result$npv_results)))
 stopifnot("pd_baseline" %in% names(result$pd_results))
 stopifnot("pd_shock" %in% names(result$pd_results))
 

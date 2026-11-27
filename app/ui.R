@@ -51,8 +51,18 @@ ui <- dashboardPage(
     # No runtime network dependency on fonts.googleapis.com.
     tags$head(
       # CSP, X-Frame-Options, and other security headers are set by the
-      # Caddy reverse proxy (see Caddyfile). Do not add a <meta> CSP here —
-      # HTTP headers are more secure and support frame-ancestors.
+      # Caddy reverse proxy (see Caddyfile). This <meta> CSP is a fallback for
+      # direct `docker run -p 3838` and bare-metal runs without the proxy; keep
+      # it in sync with the Caddyfile (frame-ancestors only works as a header).
+      tags$meta(`http-equiv` = "Content-Security-Policy",
+        content = paste0(
+          "default-src 'self'; ",
+          "script-src 'self' 'unsafe-eval' 'unsafe-inline'; ",
+          "style-src 'self' 'unsafe-inline'; ",
+          "img-src 'self' data: blob:; ",
+          "font-src 'self'; ",
+          "connect-src 'self' ws: wss:"
+        )),
       tags$link(rel = "stylesheet", href = "fonts.css"),
       tags$link(rel = "stylesheet", href = "trisk.css"),
       tags$script(src = "trisk.js")
@@ -138,7 +148,7 @@ ui <- dashboardPage(
                   or upload your own CSV files below."),
                 tags$ul(
                   tags$li(strong("Portfolio:"), " Your loan book with company_id, company_name, country_iso2, exposure_value_usd, term, and loss_given_default."),
-                  tags$li(strong("Assets:"), " Company-level production data: company_id, sector, technology, production_year, capacity, capacity_factor, emission_factor."),
+                  tags$li(strong("Assets:"), " Asset-level production data: asset_id, asset_name, company_id, company_name, country_iso2, sector, technology, production_year, capacity, capacity_factor, emission_factor."),
                   tags$li(strong("Financial Features:"), " Company financial metrics: company_id, pd (probability of default), net_profit_margin, debt_equity_ratio, volatility."),
                   tags$li(strong("Scenarios:"), " Climate transition pathways with scenario_geography, scenario, sector, technology, scenario_year, scenario_price.")
                 )
@@ -393,13 +403,11 @@ ui <- dashboardPage(
               helpText("Firm's ability to pass carbon tax costs onto the consumer (0 = none, 1 = full)."),
               hr(),
               h5("Carbon Price Model", class = "font-heading fw-600"),
-              radioButtons("carbon_price_model", NULL,
-                           choices = c("No Carbon Tax" = "no_carbon_tax",
-                                     "Apply Carbon Tax" = "carbon_tax"),
-                           selected = config_defaults()$carbon_price_model,
-                           inline = TRUE),
-              helpText("Select whether to include carbon pricing effects in the analysis.
-                       When enabled, the model applies scenario-specific carbon prices to company emissions."),
+              selectInput("carbon_price_model", NULL,
+                          choices = carbon_price_choices(carbon_data_internal),
+                          selected = config_defaults()$carbon_price_model),
+              helpText("Carbon price path applied to company emissions ('no_carbon_tax' disables it).
+                       Market passthrough only has an effect when a carbon price applies."),
               hr(),
               actionButton("reset_defaults", "Reset All to Defaults",
                            icon = icon("undo"),
@@ -876,7 +884,7 @@ ui <- dashboardPage(
               tags$tr(tags$td("discount_rate"), tags$td("Discount rate of dividends per year in the DCF model.")),
               tags$tr(tags$td("growth_rate"), tags$td("Terminal growth rate of profits beyond the final year in the DCF.")),
               tags$tr(tags$td("market_passthrough"), tags$td("Firm's ability to pass carbon tax costs to consumers (0 = none, 1 = full).")),
-              tags$tr(tags$td("carbon_price_model"), tags$td("Whether to apply scenario-based carbon tax ('carbon_tax' or 'no_carbon_tax').")),
+              tags$tr(tags$td("carbon_price_model"), tags$td("Carbon price path from the carbon price data (e.g. 'increasing_carbon_tax_50'), or 'no_carbon_tax'.")),
               tags$tr(tags$td("div_netprofit_prop_coef"), tags$td("Coefficient determining how strongly future dividends propagate to company value."))
             ),
 

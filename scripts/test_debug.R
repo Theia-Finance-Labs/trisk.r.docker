@@ -68,7 +68,9 @@ if (file.exists(gcs_path)) {
     cat("NPV rows:", nrow(result$npv_results), "\n")
     cat("PD rows:", nrow(result$pd_results), "\n")
   }, error = function(e) {
-    cat("FAILED:", e$message, "\n")
+    # Diagnostic only: raw run_trisk_model() fails when asset years start before
+    # the scenarios do; the app trims assets to the scenario range first.
+    cat("FAILED (diagnostic, not counted):", e$message, "\n")
   })
 } else {
   cat("\n=== No GCS scenarios found, using test scenarios ===\n")
@@ -90,7 +92,7 @@ tryCatch({
   cat("NPV columns:", paste(names(result1$npv_results), collapse = ", "), "\n")
   cat("PD columns:", paste(names(result1$pd_results), collapse = ", "), "\n")
 }, error = function(e) {
-  cat("FAILED:", e$message, "\n")
+  stop("run_trisk_model() with test data failed: ", conditionMessage(e), call. = FALSE)
 })
 
 # Test 2: run_trisk_on_portfolio with test data
@@ -135,12 +137,10 @@ if (!is.null(portfolio)) {
     cat("SUCCESS! Result rows:", nrow(result2), "\n")
     cat("Result columns:", paste(names(result2), collapse = ", "), "\n")
   }, error = function(e) {
-    cat("FAILED:", e$message, "\n")
-    cat("Full error:\n")
-    traceback()
+    stop("run_trisk_on_portfolio() with test data failed: ", conditionMessage(e), call. = FALSE)
   })
 } else {
-  cat("No portfolio test data found\n")
+  stop("No portfolio test data found in trisk.analysis", call. = FALSE)
 }
 
 cat("\n=== Debug complete ===\n")

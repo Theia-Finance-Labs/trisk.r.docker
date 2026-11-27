@@ -15,6 +15,7 @@ server <- function(input, output, session) {
     carbon = carbon_data_internal,
     results = NULL,
     run_id = NULL,
+    run_config = NULL,  # settings snapshot of the run that produced `results`
     analysis_log = character(),
     # Integration: internal PD/EL values entered by user
     internal_pd = NULL,
@@ -151,66 +152,43 @@ server <- function(input, output, session) {
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
-      file_check <- validate_file_type(input$portfolio_file$datapath, input$portfolio_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$portfolio <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
+      rv$portfolio <- read_upload_csv(input$portfolio_file$datapath, input$portfolio_file$name, "portfolio")
       audit_log("upload", list(type = "portfolio", rows = nrow(rv$portfolio)))
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (portfolio upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
-      file_check <- validate_file_type(input$assets_file$datapath, input$assets_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$assets <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
+      rv$assets <- read_upload_csv(input$assets_file$datapath, input$assets_file$name, "assets")
       audit_log("upload", list(type = "assets", rows = nrow(rv$assets)))
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (assets upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
-      file_check <- validate_file_type(input$financial_file$datapath, input$financial_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$financial <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
+      rv$financial <- read_upload_csv(input$financial_file$datapath, input$financial_file$name, "financial")
       audit_log("upload", list(type = "financial", rows = nrow(rv$financial)))
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (financial upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      file_check <- validate_file_type(input$scenarios_file$datapath, input$scenarios_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$scenarios <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
+      rv$scenarios <- read_upload_csv(input$scenarios_file$datapath, input$scenarios_file$name)
       audit_log("upload", list(type = "scenarios", rows = nrow(rv$scenarios)))
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
@@ -218,7 +196,7 @@ server <- function(input, output, session) {
       )
     }, error = function(e) {
       message(paste("ERROR (scenarios upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
@@ -359,8 +337,8 @@ server <- function(input, output, session) {
     if (!is.na(audit$n_distinct_id)) {
       stats_rows <- tagList(stats_rows,
         tags$tr(tags$td("Distinct company_id"), tags$td(tags$b(format(audit$n_distinct_id, big.mark = ",")))),
-        tags$tr(tags$td("Duplicate company_id"), tags$td(tags$b(
-          if (audit$n_duplicate_id > 0) tags$span(style = "color: #C44245;", audit$n_duplicate_id) else "0"
+        tags$tr(tags$td("Duplicate rows (dataset key)"), tags$td(tags$b(
+          if (isTRUE(audit$n_duplicate_id > 0)) tags$span(style = "color: #C44245;", audit$n_duplicate_id) else "0"
         )))
       )
     }
@@ -460,7 +438,7 @@ server <- function(input, output, session) {
           }
         }
       }
-      write.csv(all_issues, file, row.names = FALSE)
+      write.csv(neutralize_formulas(all_issues), file, row.names = FALSE)
     }
   )
 
@@ -541,24 +519,21 @@ server <- function(input, output, session) {
   })
 
   # ---- Quick-select buttons for target scenarios ----
-  observeEvent(input$sel_orderly, {
+  # An empty category leaves the selection alone (e.g. Current Policies
+  # scenarios are baselines, so "Hot House" usually has no targets)
+  select_target_category <- function(pattern) {
     req(rv$target_scenario_categories)
     cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Orderly", cats)])
+    selected <- names(cats[grepl(pattern, cats)])
+    if (length(selected) == 0) {
+      showNotification(paste0("No '", pattern, "' target scenarios in the loaded data."), type = "warning")
+      return()
+    }
     updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
-  observeEvent(input$sel_disorderly, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Disorderly", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
-  observeEvent(input$sel_hotthouse, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Hot House", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
+  }
+  observeEvent(input$sel_orderly, select_target_category("Orderly"))
+  observeEvent(input$sel_disorderly, select_target_category("Disorderly"))
+  observeEvent(input$sel_hotthouse, select_target_category("Hot House"))
   observeEvent(input$sel_all_targets, {
     req(rv$target_scenarios_all)
     updateSelectizeInput(session, "target_scenarios", selected = rv$target_scenarios_all)
@@ -568,61 +543,31 @@ server <- function(input, output, session) {
   })
 
   # ---- Slider <-> Numeric input sync (Advanced Assumptions) ----
-  observeEvent(input$risk_free_rate, {
-    if (!isTRUE(all.equal(input$risk_free_rate, input$risk_free_rate_num))) {
-      updateNumericInput(session, "risk_free_rate_num", value = input$risk_free_rate)
-    }
-  })
-  observeEvent(input$risk_free_rate_num, {
-    val <- input$risk_free_rate_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 0.1) {
-      if (!isTRUE(all.equal(val, input$risk_free_rate))) {
-        updateSliderInput(session, "risk_free_rate", value = val)
+  # The model uses the slider value; an exact value outside the slider range
+  # is rejected visibly instead of being shown while silently ignored.
+  sync_exact_value <- function(slider_id, num_id, min_val, max_val) {
+    observeEvent(input[[slider_id]], {
+      if (!isTRUE(all.equal(input[[slider_id]], input[[num_id]]))) {
+        updateNumericInput(session, num_id, value = input[[slider_id]])
       }
-    }
-  })
-
-  observeEvent(input$discount_rate, {
-    if (!isTRUE(all.equal(input$discount_rate, input$discount_rate_num))) {
-      updateNumericInput(session, "discount_rate_num", value = input$discount_rate)
-    }
-  })
-  observeEvent(input$discount_rate_num, {
-    val <- input$discount_rate_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 0.2) {
-      if (!isTRUE(all.equal(val, input$discount_rate))) {
-        updateSliderInput(session, "discount_rate", value = val)
+    })
+    observeEvent(input[[num_id]], {
+      val <- input[[num_id]]
+      if (is.null(val) || is.na(val)) return()
+      if (val >= min_val && val <= max_val) {
+        if (!isTRUE(all.equal(val, input[[slider_id]]))) {
+          updateSliderInput(session, slider_id, value = val)
+        }
+      } else {
+        showNotification(sprintf("Value must be between %s and %s.", min_val, max_val), type = "warning")
+        updateNumericInput(session, num_id, value = input[[slider_id]])
       }
-    }
-  })
-
-  observeEvent(input$growth_rate, {
-    if (!isTRUE(all.equal(input$growth_rate, input$growth_rate_num))) {
-      updateNumericInput(session, "growth_rate_num", value = input$growth_rate)
-    }
-  })
-  observeEvent(input$growth_rate_num, {
-    val <- input$growth_rate_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 0.1) {
-      if (!isTRUE(all.equal(val, input$growth_rate))) {
-        updateSliderInput(session, "growth_rate", value = val)
-      }
-    }
-  })
-
-  observeEvent(input$market_passthrough, {
-    if (!isTRUE(all.equal(input$market_passthrough, input$market_passthrough_num))) {
-      updateNumericInput(session, "market_passthrough_num", value = input$market_passthrough)
-    }
-  })
-  observeEvent(input$market_passthrough_num, {
-    val <- input$market_passthrough_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 1) {
-      if (!isTRUE(all.equal(val, input$market_passthrough))) {
-        updateSliderInput(session, "market_passthrough", value = val)
-      }
-    }
-  })
+    })
+  }
+  sync_exact_value("risk_free_rate", "risk_free_rate_num", 0, 0.1)
+  sync_exact_value("discount_rate", "discount_rate_num", 0, 0.2)
+  sync_exact_value("growth_rate", "growth_rate_num", 0, 0.1)
+  sync_exact_value("market_passthrough", "market_passthrough_num", 0, 1)
 
   # ---- Reset to defaults button ----
   observeEvent(input$reset_defaults, {
@@ -635,7 +580,7 @@ server <- function(input, output, session) {
     updateNumericInput(session, "growth_rate_num", value = defs$growth_rate)
     updateSliderInput(session, "market_passthrough", value = defs$market_passthrough)
     updateNumericInput(session, "market_passthrough_num", value = defs$market_passthrough)
-    updateRadioButtons(session, "carbon_price_model", selected = defs$carbon_price_model)
+    updateSelectInput(session, "carbon_price_model", selected = defs$carbon_price_model)
     updateSelectizeInput(session, "shock_years", selected = defs$shock_years)
     showNotification("All parameters reset to defaults.", type = "message", duration = 3)
   })
@@ -813,6 +758,16 @@ server <- function(input, output, session) {
   observeEvent(input$run_analysis, {
     req(rv$portfolio, rv$assets, rv$financial, rv$scenarios)
 
+    # Data that fails validation (e.g. LGD in percent, negative exposure) must
+    # not produce results that look valid
+    problems <- c(Portfolio = validate_portfolio(rv$portfolio), Assets = validate_assets(rv$assets),
+                  Financial = validate_financial(rv$financial))
+    if (length(problems) > 0) {
+      showNotification(paste0("Fix the uploaded data before running. ", names(problems)[1], ": ", problems[[1]]),
+                       type = "error", duration = 10)
+      return()
+    }
+
     # Validate at least one shock year selected
     if (is.null(input$shock_years) || length(input$shock_years) == 0) {
       showNotification("Please select at least one shock year on the Configure tab.", type = "error")
@@ -821,6 +776,11 @@ server <- function(input, output, session) {
     # Validate at least one target scenario selected
     if (is.null(input$target_scenarios) || length(input$target_scenarios) == 0) {
       showNotification("Please select at least one target scenario on the Configure tab.", type = "error")
+      return()
+    }
+    # Terminal value is profit * (1 + g) / (r - g): r <= g gives infinite or sign-flipped NPVs
+    if (input$discount_rate <= input$growth_rate) {
+      showNotification("Discount rate must be greater than the growth rate (Configure tab).", type = "error")
       return()
     }
 
@@ -863,42 +823,23 @@ server <- function(input, output, session) {
   execute_trisk_analysis <- function() {
     req(rv$portfolio, rv$assets, rv$financial, rv$scenarios)
 
-    # --- SAVE CURRENT RUN TO HISTORY (before overwriting) ---
-    if (!is.null(rv$results)) {
-      current_config <- list(
-        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-        baseline_scenarios = input$baseline_scenario,
-        target_scenario = paste(input$target_scenarios, collapse = ", "),
-        target_scenarios = input$target_scenarios,
-        scenario_geography = input$scenario_geography,
-        shock_year = paste(input$shock_years, collapse = ", "),
-        shock_years = input$shock_years,
-        risk_free_rate = input$risk_free_rate,
-        discount_rate = input$discount_rate,
-        growth_rate = input$growth_rate,
-        carbon_price_model = input$carbon_price_model,
-        market_passthrough = input$market_passthrough
-      )
-
-      history_entry <- list(
-        results = rv$results,
-        config = current_config,
-        run_id = rv$run_id,
-        timestamp = Sys.time(),
-        n_companies = nrow(rv$results),
-        pd_integration = rv$pd_integration_result,
-        el_integration = rv$el_integration_result
-      )
-
-      # Prepend to history (most recent first), cap at 5
-      rv$run_history <- c(list(history_entry), rv$run_history)
-      if (length(rv$run_history) > 5) {
-        rv$run_history <- rv$run_history[1:5]
-      }
-      rv$compare_run_idx <- NULL
-
-      log_message(paste("Saved previous run to history. History size:", length(rv$run_history)))
-    }
+    # Snapshot the settings now: history, comparison and exports must describe
+    # the run they belong to, not whatever the inputs say later
+    run_config <- list(
+      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
+      baseline_scenarios = input$baseline_scenario,
+      target_scenario = paste(input$target_scenarios, collapse = ", "),
+      target_scenarios = input$target_scenarios,
+      scenario_geography = input$scenario_geography,
+      shock_year = paste(input$shock_years, collapse = ", "),
+      shock_years = input$shock_years,
+      risk_free_rate = input$risk_free_rate,
+      discount_rate = input$discount_rate,
+      growth_rate = input$growth_rate,
+      carbon_price_model = input$carbon_price_model,
+      market_passthrough = input$market_passthrough,
+      timestamp = Sys.time()
+    )
 
     rv$analysis_log <- character()
     log_message("Starting TRISK analysis...")
@@ -958,15 +899,28 @@ server <- function(input, output, session) {
         # to the portfolio by (company_id, country_iso2, sector, technology, term).
         # User-uploaded portfolios are often company-level (no technology column).
         # Expand each company to one row per technology from the assets data.
-        if (!"technology" %in% names(rv$portfolio)) {
+        # Works on a copy: rv$portfolio keeps the user's upload. .portfolio_row
+        # tags each input row so allocate_exposure() can split its exposure
+        # across the technology/asset rows it expands to (instead of repeating it).
+        portfolio_for_run <- rv$portfolio %>%
+          dplyr::mutate(company_id = as.character(.data$company_id),
+                        .portfolio_row = dplyr::row_number())
+        if (!"technology" %in% names(portfolio_for_run)) {
           company_techs <- rv$assets %>%
+            dplyr::mutate(company_id = as.character(.data$company_id)) %>%
             dplyr::distinct(.data$company_id, .data$sector, .data$technology)
-          portfolio_enriched <- rv$portfolio %>%
+          portfolio_enriched <- portfolio_for_run %>%
             dplyr::select(-any_of("sector")) %>%        # drop portfolio-level sector to avoid conflict
-            dplyr::inner_join(company_techs, by = "company_id")
+            dplyr::inner_join(company_techs, by = "company_id", relationship = "many-to-many")
           log_message(paste("  Portfolio enriched: added technology column from assets data.",
-                           nrow(rv$portfolio), "->", nrow(portfolio_enriched), "rows"))
-          rv$portfolio <- portfolio_enriched
+                           nrow(portfolio_for_run), "->", nrow(portfolio_enriched), "rows"))
+          n_unmatched <- nrow(portfolio_for_run) - dplyr::n_distinct(portfolio_enriched$.portfolio_row)
+          if (n_unmatched > 0) {
+            log_message(paste("  WARNING:", n_unmatched, "portfolio rows have no assets and are excluded"))
+            showNotification(paste(n_unmatched, "portfolio rows have no matching assets and were excluded."),
+                             type = "warning", duration = 8)
+          }
+          portfolio_for_run <- portfolio_enriched
         }
 
         # Validate year range compatibility between assets and scenarios
@@ -980,6 +934,16 @@ server <- function(input, output, session) {
             .data$scenario %in% c(all_baselines_used, target_scenarios_run),
             .data$scenario_geography %in% input$scenario_geography
           )
+        no_data <- setdiff(c(all_baselines_used, target_scenarios_run), unique(selected_scenarios$scenario))
+        if (length(no_data) > 0) {
+          stop(user_error(paste0("No scenario data in geography '", input$scenario_geography, "' for: ",
+                                 paste(no_data, collapse = ", "),
+                                 ". Choose another geography or scenario.")))
+        }
+        if (!is.null(rv$carbon) && !input$carbon_price_model %in% rv$carbon$scenario) {
+          stop(user_error(paste0("Carbon price model '", input$carbon_price_model,
+                                 "' is not in the carbon price data.")))
+        }
         scen_min_year <- min(selected_scenarios$scenario_year)
         scen_max_year <- max(selected_scenarios$scenario_year)
 
@@ -1049,7 +1013,7 @@ server <- function(input, output, session) {
               scenarios_data = rv$scenarios,
               financial_data = rv$financial,
               carbon_data = rv$carbon,
-              portfolio_data = rv$portfolio,
+              portfolio_data = portfolio_for_run,
               baseline_scenario = matched_baseline,
               target_scenario = target_scen,
               scenario_geography = input$scenario_geography,
@@ -1057,10 +1021,12 @@ server <- function(input, output, session) {
               risk_free_rate = input$risk_free_rate,
               discount_rate = input$discount_rate,
               growth_rate = input$growth_rate,
-              market_passthrough = input$market_passthrough
+              market_passthrough = input$market_passthrough,
+              carbon_price_model = input$carbon_price_model
             )
 
             result_df <- extract_result_df(raw_results)
+            result_df <- allocate_exposure(result_df)
             result_df <- compute_el_columns(result_df)
             result_df$shock_year <- yr
             result_df$target_scenario <- target_scen
@@ -1072,6 +1038,41 @@ server <- function(input, output, session) {
           all_scenario_results[[target_scen]] <- all_year_results
         }
 
+        # --- SAVE PREVIOUS RUN TO HISTORY (only now that this run succeeded) ---
+        if (!is.null(rv$results)) {
+          history_entry <- list(
+            results = rv$results,
+            config = rv$run_config,
+            run_id = rv$run_id,
+            timestamp = if (!is.null(rv$run_config$timestamp)) rv$run_config$timestamp else Sys.time(),
+            n_companies = n_companies(rv$results),
+            pd_integration = rv$pd_integration_result,
+            el_integration = rv$el_integration_result
+          )
+
+          # Prepend to history (most recent first), cap at 5
+          rv$run_history <- c(list(history_entry), rv$run_history)
+          if (length(rv$run_history) > 5) {
+            rv$run_history <- rv$run_history[1:5]
+          }
+          rv$compare_run_idx <- NULL
+
+          log_message(paste("Saved previous run to history. History size:", length(rv$run_history)))
+        }
+        rv$run_config <- run_config
+
+        # Internal PD/EL values are kept across runs, re-matched to the new rows
+        # by company/sector/technology/asset/term rather than by row position
+        new_primary <- all_scenario_results[[target_scenarios_run[1]]][[as.character(shock_years[1])]]
+        if (!is.null(rv$internal_pd)) {
+          rv$internal_pd <- remap_by_key(rv$internal_pd, rv$results, new_primary, new_primary$pd_baseline,
+                                         old_default = rv$results$pd_baseline)
+        }
+        if (!is.null(rv$internal_el)) {
+          rv$internal_el <- remap_by_key(rv$internal_el, rv$results, new_primary, new_primary$expected_loss_baseline,
+                                         old_default = rv$results$expected_loss_baseline)
+        }
+
         # Primary results = first scenario, first year (backward compatibility)
         primary_scenario <- target_scenarios_run[1]
         primary_year <- as.character(shock_years[1])
@@ -1079,6 +1080,23 @@ server <- function(input, output, session) {
         rv$results_by_year <- all_scenario_results[[primary_scenario]]
         rv$results_by_scenario <- all_scenario_results
         log_message("Computed EL and derived columns for all scenarios × shock years")
+
+        # Rows without a PD (loan term outside 1-5 years, no matching assets) are
+        # excluded from PD/EL aggregates; say so instead of reporting silent success
+        uncovered <- character()
+        for (scen in names(all_scenario_results)) for (yr in names(all_scenario_results[[scen]])) {
+          res <- all_scenario_results[[scen]][[yr]]
+          exp_all <- sum(res$exposure_value_usd, na.rm = TRUE)
+          share <- if (exp_all > 0) sum(res$exposure_value_usd[is.na(res$pd_shock)], na.rm = TRUE) / exp_all else 1
+          if (share > 0.001) uncovered <- c(uncovered, paste0(scen, " ", yr, ": ", round(share * 100, 1), "%"))
+        }
+        if (length(uncovered) > 0) {
+          msg <- paste0("Exposure without a TRISK PD (loan term outside 1-5 years, no matching assets, or a ",
+                        "scenario that does not cover the sector) is excluded from PD/EL figures — ",
+                        paste(uncovered, collapse = "; "), ".")
+          log_message(paste("  WARNING:", msg))
+          showNotification(msg, type = "warning", duration = 15)
+        }
 
         log_message("--- Results (Primary) ---")
         log_message(paste("  Primary scenario:", primary_scenario))
@@ -1134,12 +1152,17 @@ server <- function(input, output, session) {
 
       }, error = function(e) {
         message(paste("ERROR (analysis run):", conditionMessage(e)))
-        log_message("ERROR: Analysis failed (see server log for details)")
-        showNotification(
-          "Analysis failed. Please check your data and parameters.",
-          type = "error",
-          duration = 10
-        )
+        if (inherits(e, "user_error")) {
+          log_message(paste("ERROR:", conditionMessage(e)))
+          showNotification(conditionMessage(e), type = "error", duration = 10)
+        } else {
+          log_message("ERROR: Analysis failed (see server log for details)")
+          showNotification(
+            "Analysis failed. Please check your data and parameters.",
+            type = "error",
+            duration = 10
+          )
+        }
       })
     })
   }
@@ -1243,7 +1266,9 @@ server <- function(input, output, session) {
       box(
         width = 12,
         collapsible = TRUE,
-        collapsed = TRUE,
+        # stays open once a Compare button was used, so re-rendering the
+        # selection highlight does not collapse the box under the user
+        collapsed = !isTRUE(rv$history_open),
         title = tags$span(icon("clock-rotate-left"),
                           paste0(" Run History (", length(rv$run_history), " previous run",
                                  if (length(rv$run_history) != 1) "s" else "", ")")),
@@ -1261,63 +1286,61 @@ server <- function(input, output, session) {
     )
   })
 
-  # Handle compare button clicks for each history entry
-  observe({
-    lapply(seq_along(rv$run_history), function(i) {
-      btn_id <- paste0("compare_run_", i)
-      observeEvent(input[[btn_id]], {
-        if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
-          rv$compare_run_idx <- NULL  # Toggle off
-        } else {
-          rv$compare_run_idx <- i  # Select for comparison
-        }
-      }, ignoreInit = TRUE)
-    })
-  })
+  # History buttons: create each observer once (history is capped at 5 runs).
+  # Creating them inside observe() added a new set on every history change,
+  # so a click fired several handlers and Compare toggled itself back off.
+  for (i in 1:5) local({
+    i <- i
+    observeEvent(input[[paste0("compare_run_", i)]], {
+      if (i > length(rv$run_history)) return()
+      rv$history_open <- TRUE
+      if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
+        rv$compare_run_idx <- NULL  # Toggle off
+      } else {
+        rv$compare_run_idx <- i  # Select for comparison
+      }
+    }, ignoreInit = TRUE)
 
-  # Handle duplicate button clicks for each history entry
-  observe({
-    lapply(seq_along(rv$run_history), function(i) {
-      btn_id <- paste0("dup_run_", i)
-      observeEvent(input[[btn_id]], {
-        if (i > length(rv$run_history)) return()
-        cfg <- rv$run_history[[i]]$config
+    observeEvent(input[[paste0("dup_run_", i)]], {
+      if (i > length(rv$run_history)) return()
+      cfg <- rv$run_history[[i]]$config
 
-        # Restore all config inputs from the history entry
-        updateSelectInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
-        if (!is.null(cfg$target_scenarios)) {
-          updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
-        }
-        updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
-        if (!is.null(cfg$shock_years)) {
-          updateSelectizeInput(session, "shock_years", selected = cfg$shock_years)
-        }
-        if (!is.null(cfg$risk_free_rate)) {
-          updateSliderInput(session, "risk_free_rate", value = cfg$risk_free_rate)
-          updateNumericInput(session, "risk_free_rate_num", value = cfg$risk_free_rate)
-        }
-        if (!is.null(cfg$discount_rate)) {
-          updateSliderInput(session, "discount_rate", value = cfg$discount_rate)
-          updateNumericInput(session, "discount_rate_num", value = cfg$discount_rate)
-        }
-        if (!is.null(cfg$growth_rate)) {
-          updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
-          updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
-        }
-        if (!is.null(cfg$market_passthrough)) {
-          updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
-          updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
-        }
-        if (!is.null(cfg$carbon_price_model)) {
-          updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)
-        }
+      # Restore all config inputs from the history entry
+      baselines <- if (!is.null(cfg$baseline_scenarios)) cfg$baseline_scenarios
+                   else strsplit(cfg$baseline_scenario, ",\\s*")[[1]]
+      updateSelectizeInput(session, "baseline_scenario", selected = baselines)
+      if (!is.null(cfg$target_scenarios)) {
+        updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
+      }
+      updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
+      if (!is.null(cfg$shock_years)) {
+        updateSelectizeInput(session, "shock_years", selected = cfg$shock_years)
+      }
+      if (!is.null(cfg$risk_free_rate)) {
+        updateSliderInput(session, "risk_free_rate", value = cfg$risk_free_rate)
+        updateNumericInput(session, "risk_free_rate_num", value = cfg$risk_free_rate)
+      }
+      if (!is.null(cfg$discount_rate)) {
+        updateSliderInput(session, "discount_rate", value = cfg$discount_rate)
+        updateNumericInput(session, "discount_rate_num", value = cfg$discount_rate)
+      }
+      if (!is.null(cfg$growth_rate)) {
+        updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
+        updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
+      }
+      if (!is.null(cfg$market_passthrough)) {
+        updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
+        updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
+      }
+      if (!is.null(cfg$carbon_price_model)) {
+        updateSelectInput(session, "carbon_price_model", selected = cfg$carbon_price_model)
+      }
 
-        # Navigate to config tab
-        updateTabItems(session, "tabs", selected = "config")
-        showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
-                         type = "message", duration = 3)
-      }, ignoreInit = TRUE)
-    })
+      # Navigate to config tab
+      updateTabItems(session, "tabs", selected = "config")
+      showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
+                       type = "message", duration = 3)
+    }, ignoreInit = TRUE)
   })
 
   # Render comparison panel when a history run is selected
@@ -1331,14 +1354,8 @@ server <- function(input, output, session) {
     if (is.null(curr)) return(NULL)
 
     prev_cfg <- prev$config
-    curr_cfg <- list(
-      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-      target_scenario = paste(input$target_scenarios, collapse = ", "),
-      scenario_geography = input$scenario_geography,
-      shock_year = paste(input$shock_years, collapse = ", "),
-      discount_rate = input$discount_rate,
-      growth_rate = input$growth_rate
-    )
+    curr_cfg <- rv$run_config  # settings of the displayed results, not the live inputs
+    req(prev_cfg, curr_cfg)
 
     # Compute deltas
     curr_npv <- if ("crispy_perc_value_change" %in% names(curr))
@@ -1371,28 +1388,25 @@ server <- function(input, output, session) {
       tags$span(style = paste0("color:", color, "; font-weight: 600;"), paste0(arrow, " ", val_str))
     }
 
-    # Config diff
+    # Config diff: every setting that reaches the model
+    diff_fields <- list(
+      baseline_scenario = "Baseline", target_scenario = "Target", scenario_geography = "Geography",
+      shock_year = "Shock Year", risk_free_rate = "Risk-Free Rate", discount_rate = "Discount Rate",
+      growth_rate = "Growth Rate", market_passthrough = "Market Passthrough",
+      carbon_price_model = "Carbon Price Model")
     config_diffs <- list()
-    if (prev_cfg$baseline_scenario != curr_cfg$baseline_scenario)
-      config_diffs <- c(config_diffs, list(tags$li("Baseline: ",
-        tags$s(scenario_label(prev_cfg$baseline_scenario)), " \u2192 ",
-        tags$b(scenario_label(curr_cfg$baseline_scenario)))))
-    if (prev_cfg$target_scenario != curr_cfg$target_scenario)
-      config_diffs <- c(config_diffs, list(tags$li("Target: ",
-        tags$s(scenario_label(prev_cfg$target_scenario)), " \u2192 ",
-        tags$b(scenario_label(curr_cfg$target_scenario)))))
-    if (prev_cfg$scenario_geography != curr_cfg$scenario_geography)
-      config_diffs <- c(config_diffs, list(tags$li("Geography: ",
-        tags$s(prev_cfg$scenario_geography), " \u2192 ",
-        tags$b(curr_cfg$scenario_geography))))
-    if (prev_cfg$shock_year != curr_cfg$shock_year)
-      config_diffs <- c(config_diffs, list(tags$li("Shock Year: ",
-        tags$s(prev_cfg$shock_year), " \u2192 ",
-        tags$b(curr_cfg$shock_year))))
-    if (prev_cfg$discount_rate != curr_cfg$discount_rate)
-      config_diffs <- c(config_diffs, list(tags$li("Discount Rate: ",
-        tags$s(prev_cfg$discount_rate), " \u2192 ",
-        tags$b(curr_cfg$discount_rate))))
+    for (field in names(diff_fields)) {
+      old_val <- prev_cfg[[field]]; new_val <- curr_cfg[[field]]
+      if (identical(as.character(old_val), as.character(new_val))) next
+      show <- function(v) {
+        if (is.null(v)) return("(not recorded)")
+        if (field %in% c("baseline_scenario", "target_scenario"))
+          paste(vapply(strsplit(as.character(v), ",\\s*")[[1]], scenario_label, character(1)), collapse = ", ")
+        else as.character(v)
+      }
+      config_diffs <- c(config_diffs, list(tags$li(paste0(diff_fields[[field]], ": "),
+        tags$s(show(old_val)), " \u2192 ", tags$b(show(new_val)))))
+    }
 
     tags$div(
       style = "margin-top: 15px; padding: 15px; background: #F8F4F6; border: 1px solid #DDD0D4; border-radius: 6px;",
@@ -1444,10 +1458,10 @@ server <- function(input, output, session) {
           tags$tr(
             tags$td("Companies"),
             tags$td(style = "text-align: right;", prev$n_companies),
-            tags$td(style = "text-align: right;", nrow(curr)),
+            tags$td(style = "text-align: right;", n_companies(curr)),
             tags$td(style = "text-align: center;",
-                    if (nrow(curr) == prev$n_companies) tags$span(style = "color: #666;", "=")
-                    else tags$span(style = "color: #5A8EAE;", paste0(nrow(curr) - prev$n_companies)))
+                    if (n_companies(curr) == prev$n_companies) tags$span(style = "color: #666;", "=")
+                    else tags$span(style = "color: #5A8EAE;", paste0(n_companies(curr) - prev$n_companies)))
           )
         )
       )
@@ -1494,7 +1508,10 @@ server <- function(input, output, session) {
     }
     val <- {
       col <- safe_col(rv$results, "crispy_perc_value_change", "net_present_value_change", "npv_change")
-      if (!is.null(col)) mean(col, na.rm = TRUE) * 100 else 0
+      if (!is.null(col)) mean(col, na.rm = TRUE) * 100 else NA_real_
+    }
+    if (!is.finite(val)) {
+      return(valueBox("N/A", "Average NPV Change (%)", icon = icon("chart-line"), color = "blue"))
     }
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
@@ -1510,7 +1527,10 @@ server <- function(input, output, session) {
     }
     val <- {
       col <- safe_col(rv$results, "pd_shock", "crispy_pd_shock")
-      if (!is.null(col)) max(col, na.rm = TRUE) * 100 else 0
+      if (!is.null(col) && any(!is.na(col))) max(col, na.rm = TRUE) * 100 else NA_real_
+    }
+    if (!is.finite(val)) {
+      return(valueBox("N/A", "Maximum PD Shock (%)", icon = icon("chart-bar"), color = "blue"))
     }
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
@@ -1525,14 +1545,14 @@ server <- function(input, output, session) {
     if (is.null(rv$results)) {
       return(valueBox("---", "PD Change, Exposure-Weighted (percentage points)", icon = icon("balance-scale"), color = "blue"))
     }
-    val <- 0
+    val <- NA_real_
     df <- rv$results
     if (all(c("pd_baseline", "pd_shock") %in% names(df))) {
       exp_col <- if ("exposure_value_usd" %in% names(df)) df$exposure_value_usd else rep(1, nrow(df))
-      total_exp <- sum(exp_col, na.rm = TRUE)
-      if (total_exp > 0) {
-        val <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp * 100
-      }
+      val <- weighted_mean_covered(df$pd_shock - df$pd_baseline, exp_col) * 100
+    }
+    if (!is.finite(val)) {
+      return(valueBox("N/A", "PD Change, Exposure-Weighted (percentage points)", icon = icon("balance-scale"), color = "blue"))
     }
     valueBox(tags$span(paste0(display_round(val), " pp"),
                        title = paste0("Full precision: ", smart_round(val), " pp"),
@@ -1642,20 +1662,18 @@ server <- function(input, output, session) {
 
     display_df <- df[, base_cols, drop = FALSE]
 
-    # Round pd_baseline and pd_shock for display
-    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
-    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
-
-    # Compute PD Change columns
+    # Compute PD Change columns from full-precision PDs, then round for display
     has_pd <- all(c("pd_baseline", "pd_shock") %in% names(display_df))
     if (has_pd) {
-      display_df$PD_Change <- smart_round(display_df$pd_shock - display_df$pd_baseline)
+      display_df$PD_Change <- smart_round(df$pd_shock - df$pd_baseline)
       display_df$PD_Change_Pct <- smart_round(
-        ifelse(display_df$pd_baseline != 0,
-               (display_df$pd_shock - display_df$pd_baseline) / display_df$pd_baseline * 100,
+        ifelse(df$pd_baseline != 0,
+               (df$pd_shock - df$pd_baseline) / df$pd_baseline * 100,
                NA_real_)
       )
     }
+    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
+    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
 
     # Compute EL columns from the full results (which have expected_loss_* computed)
     has_el <- all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))
@@ -1663,10 +1681,11 @@ server <- function(input, output, session) {
       display_df$EL_Baseline <- smart_round(df$expected_loss_baseline)
       display_df$EL_Shock <- smart_round(df$expected_loss_shock)
       display_df$EL_Change <- smart_round(df$expected_loss_shock - df$expected_loss_baseline)
+      # EL is negative (a loss): divide by |baseline| so a bigger loss is a negative %
       display_df$EL_Change_Pct <- smart_round(
         ifelse(df$expected_loss_baseline != 0,
                (df$expected_loss_shock - df$expected_loss_baseline) /
-                 df$expected_loss_baseline * 100,
+                 abs(df$expected_loss_baseline) * 100,
                NA_real_)
       )
     }
@@ -1754,9 +1773,10 @@ server <- function(input, output, session) {
       pd_change <- df$pd_shock - df$pd_baseline
 
       if (total_exposure > 0) {
-        weighted_pd_change <- sum(pd_change * df$exposure_value_usd, na.rm = TRUE) / total_exposure
-        weighted_pd_baseline <- sum(df$pd_baseline * df$exposure_value_usd, na.rm = TRUE) / total_exposure
-        weighted_pd_change_pct <- if (weighted_pd_baseline != 0) {
+        weighted_pd_change <- weighted_mean_covered(pd_change, df$exposure_value_usd)
+        weighted_pd_baseline <- weighted_mean_covered(ifelse(is.na(pd_change), NA, df$pd_baseline),
+                                                      df$exposure_value_usd)
+        weighted_pd_change_pct <- if (is.finite(weighted_pd_baseline) && weighted_pd_baseline != 0) {
           weighted_pd_change / weighted_pd_baseline * 100
         } else NA_real_
       } else {
@@ -1770,6 +1790,7 @@ server <- function(input, output, session) {
       total_exposure <- 0
     }
 
+    if (!is.finite(weighted_pd_change)) return(tags$p("No TRISK PD results for this portfolio."))
     pd_class <- if (weighted_pd_change > 0.001) "negative" else if (weighted_pd_change < -0.001) "positive" else "neutral"
 
     # EL aggregates
@@ -1778,7 +1799,7 @@ server <- function(input, output, session) {
       total_el_shock <- sum(df$expected_loss_shock, na.rm = TRUE)
       total_el_change <- total_el_shock - total_el_baseline
       total_el_change_pct <- if (total_el_baseline != 0) {
-        total_el_change / total_el_baseline * 100
+        total_el_change / abs(total_el_baseline) * 100
       } else NA_real_
 
       # EL values are negative (losses), so more negative shock = worse = "negative" class
@@ -1924,7 +1945,7 @@ server <- function(input, output, session) {
             tags$p(style = "margin: 0; font-size: 13px; color: #666;",
                    paste0(length(years), " shock years analyzed: ",
                           paste(years, collapse = ", "),
-                          " | ", nrow(rv$results_by_year[[1]]), " companies"))
+                          " | ", n_companies(rv$results_by_year[[1]]), " companies"))
           ),
           column(4, style = "text-align: right; padding-top: 8px;",
             downloadButton("download_horizon_csv", "Export Multi-Horizon CSV",
@@ -2070,9 +2091,9 @@ server <- function(input, output, session) {
       p <- p %>% add_trace(data = cd, x = ~shock_year, y = ~pd,
                            type = "scatter", mode = "lines",
                            line = list(width = 1.5, color = "rgba(200,150,160,0.5)"),
-                           name = comp, legendgroup = "companies",
+                           name = escape_html(comp), legendgroup = "companies",
                            showlegend = (comp == companies[1]),
-                           hovertemplate = paste0(comp, "<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>"))
+                           hovertemplate = paste0(escape_html(comp), "<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>"))
     }
     # Portfolio average (thick, dark)
     p <- p %>% add_trace(data = avg_data, x = ~shock_year, y = ~pd,
@@ -2104,9 +2125,17 @@ server <- function(input, output, session) {
           right = TRUE)
     }
 
-    id_col <- if ("company_id" %in% names(first_year)) "company_id" else "company_name"
-    from_df <- data.frame(id = first_year[[id_col]], from = pd_bucket(first_year$pd_shock))
-    to_df <- data.frame(id = last_year[[id_col]], to = pd_bucket(last_year$pd_shock))
+    # One exposure-weighted PD per company and year; merging row-level data
+    # (company x technology) would count a company k^2 times
+    company_pd <- function(df) {
+      w <- if ("exposure_value_usd" %in% names(df)) df$exposure_value_usd else rep(1, nrow(df))
+      df %>% mutate(.w = w, id = company_key(df)) %>%
+        group_by(id) %>%
+        summarise(pd = weighted_mean_covered(pd_shock, .w), .groups = "drop") %>%
+        filter(!is.na(pd))
+    }
+    from_df <- company_pd(first_year) %>% transmute(id, from = pd_bucket(pd))
+    to_df <- company_pd(last_year) %>% transmute(id, to = pd_bucket(pd))
     migration <- merge(from_df, to_df, by = "id")
 
     # Build transition matrix
@@ -2237,7 +2266,7 @@ server <- function(input, output, session) {
         `Avg NPV Change (%)` = round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2),
         `Total EL` = round(sum(df$expected_loss_shock, na.rm = TRUE), 0),
         `Total EL Change` = round(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE), 0),
-        Companies = nrow(df),
+        Companies = n_companies(df),
         check.names = FALSE
       )
     })
@@ -2268,8 +2297,8 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results_by_year)
-      combined <- bind_rows(rv$results_by_year, .id = "shock_year")
-      write.csv(sanitize_export(combined), file, row.names = FALSE)
+      combined <- bind_rows(rv$results_by_year)  # each frame already has shock_year
+      write.csv(neutralize_formulas(sanitize_export(combined)), file, row.names = FALSE)
     }
   )
 
@@ -2444,8 +2473,7 @@ server <- function(input, output, session) {
     sps <- scenario_portfolio_summary()
     req(sps)
 
-    # Use earliest year for ranking
-    earliest_yr <- min(sps$shock_year)
+    # Rank on the latest shock year
     ranking <- sps %>%
       filter(shock_year == max(sps$shock_year)) %>%
       arrange(desc(avg_pd_shock)) %>%
@@ -2518,7 +2546,7 @@ server <- function(input, output, session) {
 
     plot_ly(sector_scen, x = ~sector, y = ~avg_pd, color = ~scenario_label,
             type = "bar", hoverinfo = "text",
-            text = ~paste0(scenario_label, "\n", sector, ": ", round(avg_pd, 3), "%")) %>%
+            text = ~paste0(escape_html(scenario_label), "\n", escape_html(sector), ": ", round(avg_pd, 3), "%")) %>%
       layout(barmode = "group",
              xaxis = list(title = "Sector"),
              yaxis = list(title = "Avg PD Shock (%)"),
@@ -2609,7 +2637,7 @@ server <- function(input, output, session) {
     text_matrix <- matrix("", nrow = length(companies), ncol = length(scenarios))
     for (r in seq_along(companies)) {
       for (cc in seq_along(scenarios)) {
-        text_matrix[r, cc] <- paste0(companies[r], "\n", scenarios[cc], "\nPD: ", z_matrix[r, cc], "%")
+        text_matrix[r, cc] <- paste0(companies[r], "\n", escape_html(scenarios[cc]), "\nPD: ", z_matrix[r, cc], "%")
       }
     }
 
@@ -2744,7 +2772,8 @@ server <- function(input, output, session) {
 
     # Build exceedance: probability of exceeding threshold x
     pd_vals <- sort(sps_yr$avg_pd_shock * 100)
-    exceed_probs <- 1 - (seq_along(pd_vals) - 0.5) / n
+    # Share of scenarios whose PD is strictly above each scenario's PD
+    exceed_probs <- vapply(pd_vals, function(x) mean(pd_vals > x), numeric(1))
 
     plot_ly() %>%
       add_lines(x = pd_vals, y = exceed_probs * 100,
@@ -2838,7 +2867,12 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       scd <- scenario_comparison_data()
-      if (!is.null(scd)) write.csv(sanitize_export(scd), file, row.names = FALSE)
+      if (is.null(scd)) {
+        # needs 2+ target scenarios; still return a valid (empty) CSV
+        writeLines("note\n\"Scenario comparison needs two or more target scenarios\"", file)
+      } else {
+        write.csv(neutralize_formulas(sanitize_export(scd)), file, row.names = FALSE)
+      }
     }
   )
 
@@ -2859,7 +2893,11 @@ server <- function(input, output, session) {
     has_tech <- "technology" %in% names(df)
     has_company <- any(c("company_name", "company_id") %in% names(df))
 
-    total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
+    # Attribute over rows that have both PDs and an exposure, so the header,
+    # waterfall and contributions share one denominator
+    df <- df[!is.na(df$pd_baseline) & !is.na(df$pd_shock) & !is.na(df$exposure_value_usd), , drop = FALSE]
+    if (nrow(df) == 0) return(NULL)  # no TRISK PD on any row: the UI shows its placeholder
+    total_exposure <- sum(df$exposure_value_usd)
 
     # --- Company-level attribution ---
     # After portfolio enrichment, results may have multiple rows per company
@@ -2870,7 +2908,7 @@ server <- function(input, output, session) {
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
         pd_contribution = pd_change * weight,
-        company_label = htmltools::htmlEscape(.data[[company_label_col]]),
+        company_label = as.character(.data[[company_label_col]]),
         el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
         npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
       )
@@ -2932,8 +2970,8 @@ server <- function(input, output, session) {
     } else NULL
 
     # --- Portfolio-level waterfall steps ---
-    portfolio_pd_baseline <- weighted.mean(df$pd_baseline, df$exposure_value_usd, na.rm = TRUE)
-    portfolio_pd_shock <- weighted.mean(df$pd_shock, df$exposure_value_usd, na.rm = TRUE)
+    portfolio_pd_baseline <- weighted.mean(df$pd_baseline, df$exposure_value_usd)
+    portfolio_pd_shock <- weighted.mean(df$pd_shock, df$exposure_value_usd)
     portfolio_pd_change <- portfolio_pd_shock - portfolio_pd_baseline
 
     list(
@@ -2953,7 +2991,7 @@ server <- function(input, output, session) {
 
   # ---- Attribution Dashboard UI ----
   output$attribution_ui <- renderUI({
-    ad <- attribution_data()
+    ad <- if (is.null(rv$results)) NULL else attribution_data()
     if (is.null(ad)) {
       return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
         icon("chart-bar", style = "font-size: 48px; margin-bottom: 15px;"),
@@ -3080,7 +3118,7 @@ server <- function(input, output, session) {
     # Hover text
     wf_text <- c(
       paste0("Baseline PD: ", round(baseline, 4), "%"),
-      paste0(sector_df$sector,
+      paste0(escape_html(sector_df$sector),
              "\nContribution: ", ifelse(sector_df$pd_contribution >= 0, "+", ""),
              round(sector_df$pd_contribution * 100, 4), " pp",
              "\nWeight: ", round(sector_df$weight * 100, 1), "%",
@@ -3128,10 +3166,11 @@ server <- function(input, output, session) {
       arrange(pd_contribution)
 
     colors <- ifelse(company_df$pd_contribution >= 0, BRAND_CORAL, STATUS_GREEN)
+    bar_labels <- plot_labels(company_df$company_label, company_df$sector)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      escape_html(company_df$company_label),
+      "\nSector: ", escape_html(company_df$sector),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(company_df$weight * 100, 1), "%",
@@ -3140,7 +3179,7 @@ server <- function(input, output, session) {
     )
 
     plot_ly(
-      y = factor(company_df$company_label, levels = company_df$company_label),
+      y = factor(bar_labels, levels = bar_labels),
       x = company_df$pd_contribution * 100,
       type = "bar",
       orientation = "h",
@@ -3185,23 +3224,30 @@ server <- function(input, output, session) {
     colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      escape_html(company_df$company_label),
+      "\nSector: ", escape_html(company_df$sector),
       "\nShare of total PD change: ", round(company_df$share_pct, 1), "%",
       "\nDirection: ", company_df$direction,
       "\nContribution: ", round(company_df$pd_contribution * 100, 4), " pp"
     )
 
+    # Treemaps need every parent to exist as a node: add one root per sector
+    sectors <- unique(as.character(company_df$sector))
+    sector_share <- vapply(sectors, function(s) sum(company_df$share_pct[company_df$sector == s]), numeric(1))
+    sector_hover <- paste0(escape_html(sectors), "\nShare of total PD change: ", round(sector_share, 1), "%")
+
     plot_ly(
-      labels = company_df$company_label,
-      values = company_df$share_pct,
-      parents = company_df$sector,
+      ids = c(paste0("sector:", sectors), paste0("company:", seq_len(nrow(company_df)))),
+      labels = c(escape_html(sectors), plot_labels(company_df$company_label, company_df$sector)),
+      values = c(rep(0, length(sectors)), company_df$share_pct),
+      parents = c(rep("", length(sectors)), paste0("sector:", company_df$sector)),
+      branchvalues = "remainder",
       type = "treemap",
       marker = list(
-        colors = colors,
+        colors = c(rep(SECONDARY_PINK, length(sectors)), colors),
         line = list(color = "white", width = 1)
       ),
-      text = hover_text,
+      text = c(sector_hover, hover_text),
       hoverinfo = "text",
       textinfo = "label+percent parent",
       textfont = list(size = 11)
@@ -3236,13 +3282,13 @@ server <- function(input, output, session) {
         if (nrow(match_row) > 0) {
           z_matrix[r, cc] <- match_row$pd_contribution[1] * 100
           text_matrix[r, cc] <- paste0(
-            techs[r], " / ", sectors[cc],
+            escape_html(techs[r]), " / ", escape_html(sectors[cc]),
             "\nPD Contribution: ", round(match_row$pd_contribution[1] * 100, 4), " pp",
             "\nCompanies: ", match_row$n_companies[1],
             "\nExposure: $", format(round(match_row$total_exposure[1]), big.mark = ",")
           )
         } else {
-          text_matrix[r, cc] <- paste0(techs[r], " / ", sectors[cc], "\nNo data")
+          text_matrix[r, cc] <- paste0(escape_html(techs[r]), " / ", escape_html(sectors[cc]), "\nNo data")
         }
       }
     }
@@ -3294,7 +3340,7 @@ server <- function(input, output, session) {
     wf_measure <- c(rep("relative", nrow(sector_df)), "total")
 
     hover_text <- c(
-      paste0(sector_df$sector,
+      paste0(escape_html(sector_df$sector),
              "\nEL Change: $", format(round(sector_df$el_change), big.mark = ","),
              "\nExposure: $", format(round(sector_df$total_exposure), big.mark = ","),
              "\nCompanies: ", sector_df$n_companies),
@@ -3346,15 +3392,12 @@ server <- function(input, output, session) {
         `PD Change (pp)` = round(pd_change * 100, 4),
         `Contribution (pp)` = round(pd_contribution * 100, 4),
         `Contribution (%)` = if (abs(ad$portfolio_pd_change) > 1e-10)
-          round(pd_contribution / ad$portfolio_pd_change * 100, 1) else NA_real_
+          round(pd_contribution / ad$portfolio_pd_change * 100, 1) else NA_real_,
+        `EL Change ($)` = round(el_change, 0),
+        `NPV Change (%)` = round(npv_change_pct, 2)
       )
-
-    if (ad$has_el) {
-      display_df$`EL Change ($)` <- round(detail_df$el_change, 0)
-    }
-    if (ad$has_npv) {
-      display_df$`NPV Change (%)` <- round(detail_df$npv_change_pct, 2)
-    }
+    if (!ad$has_el) display_df$`EL Change ($)` <- NULL
+    if (!ad$has_npv) display_df$`NPV Change (%)` <- NULL
 
     datatable(display_df, rownames = FALSE,
       options = list(
@@ -3397,7 +3440,7 @@ server <- function(input, output, session) {
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(neutralize_formulas(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -3421,28 +3464,38 @@ server <- function(input, output, session) {
 
     total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
 
-    # --- Company-level enrichment ---
+    # --- Row-level enrichment (rows are company x technology x asset) ---
     company_label_col <- if (has_company && "company_name" %in% names(df)) "company_name" else "company_id"
-    company_df <- df %>%
+    row_df <- df %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
-        company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]]))
+        company_label = as.character(.data[[company_label_col]])
       )
-    # Guard NA labels: replace with row-index fallback
-    company_df$company_label <- ifelse(
-      is.na(company_df$company_label) | company_df$company_label == "",
-      paste0("Company_", seq_len(nrow(company_df))),
-      company_df$company_label
-    )
-    if (has_el) {
-      company_df <- company_df %>%
-        mutate(el_change = expected_loss_shock - expected_loss_baseline)
-    }
-    if (has_npv) {
-      company_df <- company_df %>%
-        mutate(npv_change_pct = crispy_perc_value_change * 100)
-    }
+    # One label and one key per counterparty (not per row), also when names or ids are missing
+    row_df$company_label <- company_display_label(df)
+    row_df$.company_key <- company_key(df)
+    row_df$el_change <- if (has_el) row_df$expected_loss_shock - row_df$expected_loss_baseline else NA_real_
+    row_df$npv_change_pct <- if (has_npv) row_df$crispy_perc_value_change * 100 else NA_real_
+
+    # --- Company level: single-name concentration is about counterparties, not rows ---
+    company_df <- row_df %>%
+      group_by(.company_key) %>%
+      summarise(
+        company_label = dplyr::first(company_label),
+        across(any_of(c("company_id", "country_iso2")), dplyr::first),
+        sector = sector[order(-exposure_value_usd)][1],   # most-exposed sector
+        # weighted means before exposure_value_usd is overwritten by sum()
+        pd_baseline = weighted_mean_covered(pd_baseline, exposure_value_usd),
+        pd_shock = weighted_mean_covered(pd_shock, exposure_value_usd),
+        npv_change_pct = if (has_npv) weighted_mean_covered(npv_change_pct, exposure_value_usd) else NA_real_,
+        el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
+        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
+        weight = sum(weight, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(pd_change = pd_shock - pd_baseline) %>%
+      select(-".company_key")
 
     # --- Concentration metrics ---
     weights <- company_df$weight
@@ -3466,10 +3519,10 @@ server <- function(input, output, session) {
     } else 0
 
     # --- Sector-level aggregation ---
-    sector_df <- company_df %>%
+    sector_df <- row_df %>%
       group_by(sector) %>%
       summarise(
-        n_companies = n(),
+        n_companies = n_distinct(.company_key),
         total_exposure = sum(exposure_value_usd, na.rm = TRUE),
         weight = sum(weight, na.rm = TRUE),
         avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
@@ -3483,10 +3536,10 @@ server <- function(input, output, session) {
 
     # --- Geography-level aggregation ---
     geo_df <- if (has_geo) {
-      company_df %>%
+      row_df %>%
         group_by(country_iso2) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(.company_key),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
@@ -3499,10 +3552,10 @@ server <- function(input, output, session) {
 
     # --- Sector × Geography cross-tab ---
     cross_df <- if (has_geo) {
-      company_df %>%
+      row_df %>%
         group_by(sector, country_iso2) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(.company_key),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
@@ -3514,10 +3567,10 @@ server <- function(input, output, session) {
 
     # --- Sector × Technology cross-tab ---
     cross_tech_df <- if (has_tech) {
-      company_df %>%
+      row_df %>%
         group_by(sector, technology) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(.company_key),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
@@ -3537,6 +3590,7 @@ server <- function(input, output, session) {
 
     list(
       company = company_df,
+      rows = row_df,
       sector = sector_df,
       geo = geo_df,
       cross = cross_df,
@@ -3558,7 +3612,7 @@ server <- function(input, output, session) {
 
   # ---- Concentration UI ----
   output$concentration_ui <- renderUI({
-    cd <- concentration_data()
+    cd <- if (is.null(rv$results)) NULL else concentration_data()
     if (is.null(cd)) {
       return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
         icon("th-large", style = "font-size: 48px; margin-bottom: 15px;"),
@@ -3762,10 +3816,10 @@ server <- function(input, output, session) {
       row_label <- "Technology"
     } else {
       # sector_company fallback: always available
-      cross <- cd$company %>%
+      cross <- cd$rows %>%
         group_by(sector, company_label) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(.company_key),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
@@ -3820,7 +3874,7 @@ server <- function(input, output, session) {
           val <- match_row[[metric_col]][1]
           z_matrix[r, cc] <- if (metric == "pd_change") val * 100 else val
           text_matrix[r, cc] <- paste0(
-            rows[r], " / ", cols[cc],
+            escape_html(rows[r]), " / ", escape_html(cols[cc]),
             "\n", metric_label, ": ",
             if (metric == "pd_change") paste0(round(val * 100, 4), " pp")
             else if (metric == "exposure") paste0("$", format(round(val), big.mark = ","))
@@ -3829,7 +3883,7 @@ server <- function(input, output, session) {
             "\nCompanies: ", match_row$n_companies[1]
           )
         } else {
-          text_matrix[r, cc] <- paste0(rows[r], " / ", cols[cc], "\nNo data")
+          text_matrix[r, cc] <- paste0(escape_html(rows[r]), " / ", escape_html(cols[cc]), "\nNo data")
         }
       }
     }
@@ -3848,8 +3902,8 @@ server <- function(input, output, session) {
     }
 
     trace_args <- list(
-      x = cols,
-      y = rows,
+      x = escape_html(cols),
+      y = plot_labels(rows),
       z = z_matrix,
       type = "heatmap",
       colorscale = colorscale,
@@ -3891,10 +3945,10 @@ server <- function(input, output, session) {
 
     # Build labels/values — only add "Others" slice if there are remaining companies
     if (n_others > 0 && other_weight > 0.001) {
-      labels <- c(as.character(company_df$company_label), "Others")
+      labels <- c(plot_labels(company_df$company_label), "Others")
       values <- c(company_df$weight * 100, other_weight * 100)
     } else {
-      labels <- as.character(company_df$company_label)
+      labels <- plot_labels(company_df$company_label)
       values <- company_df$weight * 100
     }
 
@@ -3906,8 +3960,8 @@ server <- function(input, output, session) {
       rep(palette, length.out = n_top)
     }
 
-    hover_text <- paste0(company_df$company_label,
-             "\nSector: ", company_df$sector,
+    hover_text <- paste0(escape_html(company_df$company_label),
+             "\nSector: ", escape_html(company_df$sector),
              "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
              "\nWeight: ", round(company_df$weight * 100, 1), "%",
              "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp")
@@ -3959,8 +4013,8 @@ server <- function(input, output, session) {
     if (is.na(pd_range) || pd_range == 0) pd_range <- 1  # avoid division by zero
 
     hover_text <- paste0(
-      top_co$company_label,
-      "\nSector: ", top_co$sector,
+      escape_html(top_co$company_label),
+      "\nSector: ", escape_html(top_co$sector),
       "\nExposure: $", format(round(top_co$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(top_co$weight * 100, 1), "%",
       "\nPD Change: ", round(top_co$pd_change * 100, 4), " pp"
@@ -3987,19 +4041,22 @@ server <- function(input, output, session) {
     sector_color_vals <- sector_pd / pd_range
 
     sector_hover <- paste0(
-      sectors,
+      escape_html(sectors),
       "\nTotal weight: ", round(sector_weights, 1), "%",
       "\nAvg PD Change: ", round(sector_pd * 100, 4), " pp"
     )
 
-    # Combine: sector roots first, then company leaves
-    all_labels <- c(sectors, treemap_labels)
-    all_parents <- c(rep("", length(sectors)), as.character(top_co$sector))
+    # Combine: sector roots first, then company leaves (ids keep nodes distinct
+    # when a company name equals a sector name or appears in two sectors)
+    all_ids <- c(paste0("sector:", sectors), paste0("company:", seq_len(nrow(top_co))))
+    all_labels <- c(escape_html(sectors), plot_labels(treemap_labels, top_co$sector))
+    all_parents <- c(rep("", length(sectors)), paste0("sector:", top_co$sector))
     all_values <- c(rep(0, length(sectors)), top_co$weight * 100)  # sector values=0 so they don't double-count
     all_colors <- c(sector_color_vals, color_vals)
     all_text <- c(sector_hover, hover_text)
 
     plot_ly(
+      ids = all_ids,
       labels = all_labels,
       parents = all_parents,
       values = all_values,
@@ -4098,8 +4155,8 @@ server <- function(input, output, session) {
     colors <- ifelse(company_df$pd_change >= 0, BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      escape_html(company_df$company_label),
+      "\nSector: ", escape_html(company_df$sector),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nWeight: ", round(company_df$weight * 100, 2), "%",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
@@ -4158,7 +4215,7 @@ server <- function(input, output, session) {
     }
 
     hover_text <- paste0(
-      geo_df$country_iso2,
+      escape_html(geo_df$country_iso2),
       "\nCompanies: ", geo_df$n_companies,
       "\nExposure: $", format(round(geo_df$total_exposure), big.mark = ","),
       "\nWeight: ", round(geo_df$weight * 100, 1), "%",
@@ -4335,7 +4392,8 @@ server <- function(input, output, session) {
                            "% | CR10=", round(cd$cr10, 1), "% | Gini=", round(cd$gini, 3))),
           stringsAsFactors = FALSE
         )
-        write.csv(export_df, file, row.names = FALSE)
+        export_df <- bind_rows(metrics_row, export_df)
+        write.csv(neutralize_formulas(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -4372,6 +4430,7 @@ server <- function(input, output, session) {
   # PD input table (editable Internal_PD column)
   output$pd_integration_table <- renderDT({
     req(rv$results)
+    rv$pd_table_redraw  # a rejected cell edit redraws the table with the stored value
     df <- rv$results
 
     # Build display with key identifiers + PD columns
@@ -4381,18 +4440,16 @@ server <- function(input, output, session) {
 
     display_df <- df[, show_cols, drop = FALSE]
 
-    # Round pd_baseline and pd_shock for display
-    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
-    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
-
-    # Add computed PD change
+    # Add computed PD change (from full-precision PDs), then round for display
     if (all(c("pd_baseline", "pd_shock") %in% names(display_df))) {
-      display_df$PD_Change <- smart_round(display_df$pd_shock - display_df$pd_baseline)
+      display_df$PD_Change <- smart_round(df$pd_shock - df$pd_baseline)
       display_df$PD_Change_Pct <- smart_round(
-        ifelse(display_df$pd_baseline != 0,
-               (display_df$pd_shock - display_df$pd_baseline) / display_df$pd_baseline * 100,
+        ifelse(df$pd_baseline != 0,
+               (df$pd_shock - df$pd_baseline) / df$pd_baseline * 100,
                NA_real_))
     }
+    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
+    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
 
     # Editable Internal_PD column:
     # Priority: (1) user-uploaded/edited values in rv$internal_pd, (2) pd_baseline, (3) zero
@@ -4428,8 +4485,14 @@ server <- function(input, output, session) {
 
     # The editable column is the last one (Internal_PD)
     row_idx <- info$row
-    new_val <- as.numeric(info$value)
-    if (!is.na(new_val) && row_idx >= 1 && row_idx <= length(rv$internal_pd)) {
+    new_val <- suppressWarnings(as.numeric(info$value))
+    if (is.na(new_val) || new_val < 0 || new_val > 1) {
+      showNotification("Internal PD must be a probability between 0 and 1 (e.g. 0.02 for 2%).",
+                       type = "error", duration = 6)
+      rv$pd_table_redraw <- (if (is.null(rv$pd_table_redraw)) 0 else rv$pd_table_redraw) + 1
+      return()
+    }
+    if (row_idx >= 1 && row_idx <= length(rv$internal_pd)) {
       rv$internal_pd[row_idx] <- new_val
     }
   })
@@ -4438,7 +4501,8 @@ server <- function(input, output, session) {
   observeEvent(input$upload_internal_pd, {
     req(input$upload_internal_pd, rv$results)
     tryCatch({
-      uploaded <- read.csv(input$upload_internal_pd$datapath, stringsAsFactors = FALSE)
+      uploaded <- as.data.frame(read_upload_csv(input$upload_internal_pd$datapath,
+                                                input$upload_internal_pd$name))
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -4453,27 +4517,23 @@ server <- function(input, output, session) {
       df <- rv$results
       internal_pd <- if ("pd_baseline" %in% names(df)) df$pd_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_pd[idx[1]])
-          if (!is.na(val)) {
-            internal_pd[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      idx <- match(as.character(df$company_id), as.character(uploaded$company_id))
+      vals <- as.numeric(uploaded$internal_pd)[idx]
+      hit <- !is.na(vals)
+      internal_pd[hit] <- vals[hit]
+      matched <- dplyr::n_distinct(as.character(df$company_id)[hit])
 
       rv$internal_pd <- internal_pd
       showNotification(
-        paste0("Internal PDs loaded: ", matched, " of ", nrow(df), " counterparties matched."),
+        paste0("Internal PDs loaded: ", matched, " of ", dplyr::n_distinct(as.character(df$company_id)),
+               " counterparties matched."),
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
       message(paste("ERROR (PD CSV read):", conditionMessage(e)))
-      showNotification("Could not read the PD CSV file. Please check the file format.", type = "error", duration = 8)
+      showNotification(if (inherits(e, "user_error")) conditionMessage(e)
+                       else "Could not read the PD CSV file. Please check the file format.",
+                       type = "error", duration = 8)
     })
   })
 
@@ -4494,8 +4554,8 @@ server <- function(input, output, session) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom PD values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
-                                icon("clock-rotate-left"), " Preserved from previous run")
+            tagList(tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
+                                         icon("clock-rotate-left"), " Preserved from previous run"))
         )
       } else {
         tags$span(class = "text-muted", icon("info-circle"),
@@ -4530,13 +4590,14 @@ server <- function(input, output, session) {
         internal_pd + pd_change
       },
       "relative" = {
-        internal_pd * (1 + pd_change_pct)
+        # a zero baseline has no relative change; use the absolute one
+        ifelse(pd_baseline != 0, internal_pd * (1 + pd_change_pct), internal_pd + pd_change)
       },
       "zscore" = {
         # Basel IRB z-score integration
         # adjusted = Phi(Phi^{-1}(internal) + Phi^{-1}(shock) - Phi^{-1}(baseline))
-        # Clip inputs to (0.0001, 0.9999) to avoid Inf from qnorm
-        clip_pd <- function(x) pmin(pmax(x, 0.0001), 0.9999)
+        # Clip only far enough to keep qnorm finite; a 1bp floor erased shocks on low PDs
+        clip_pd <- function(x) pmin(pmax(x, 1e-10), 1 - 1e-10)
         z_internal <- qnorm(clip_pd(internal_pd))
         z_shock <- qnorm(clip_pd(pd_shock))
         z_baseline <- qnorm(clip_pd(pd_baseline))
@@ -4551,13 +4612,13 @@ server <- function(input, output, session) {
     id_cols <- intersect(c("company_id", "company_name", "sector", "technology",
                            "exposure_value_usd"), names(df))
     result_df <- df[, id_cols, drop = FALSE]
-    result_df$Internal_PD <- smart_round(internal_pd)
-    result_df$PD_Baseline <- smart_round(pd_baseline)
-    result_df$PD_Shock <- smart_round(pd_shock)
-    result_df$PD_Change <- smart_round(pd_change)
-    result_df$PD_Change_Pct <- smart_round(pd_change_pct * 100)
-    result_df$TRISK_Adjusted_PD <- smart_round(adjusted_pd)
-    result_df$PD_Adjustment <- smart_round(adjusted_pd - internal_pd)
+    result_df$Internal_PD <- internal_pd
+    result_df$PD_Baseline <- pd_baseline
+    result_df$PD_Shock <- pd_shock
+    result_df$PD_Change <- pd_change
+    result_df$PD_Change_Pct <- pd_change_pct * 100
+    result_df$TRISK_Adjusted_PD <- adjusted_pd
+    result_df$PD_Adjustment <- adjusted_pd - internal_pd
 
     rv$pd_integration_result <- result_df
 
@@ -4592,6 +4653,7 @@ server <- function(input, output, session) {
       "PD_Adjustment"    = "PD Adjustment"
     )
     display_df <- df
+    display_df[] <- lapply(display_df, function(x) if (is.numeric(x)) smart_round(x) else x)
     for (old_name in names(pd_renames)) {
       if (old_name %in% names(display_df)) {
         names(display_df)[names(display_df) == old_name] <- pd_renames[old_name]
@@ -4703,13 +4765,16 @@ server <- function(input, output, session) {
       "absolute" = tagList(
         tags$b("Absolute Change Application"),
         tags$p("TRISK-adjusted EL = Internal_EL + (EL_shock - EL_baseline)"),
-        tags$p("Adds the raw EL change from TRISK to your internal Expected Loss estimate.")
+        tags$p("Adds the raw EL change from TRISK to your internal Expected Loss estimate."),
+        tags$p(class = "text-muted", "Internal EL can be entered as a positive amount: it is read as a loss (negative), matching TRISK's sign convention.")
       ),
       "relative" = tagList(
         tags$b("Relative Change Application"),
         tags$p("TRISK-adjusted EL = Internal_EL * (1 + EL_change%)"),
-        tags$p("Scales your internal EL by the relative percentage shift from the TRISK model.")
-      )
+        tags$p("Scales your internal EL by the relative percentage shift from the TRISK model."),
+        tags$p(class = "text-muted", "Internal EL can be entered as a positive amount: it is read as a loss (negative), matching TRISK's sign convention.")
+      ),
+      NULL
     )
     desc
   })
@@ -4731,7 +4796,7 @@ server <- function(input, output, session) {
       display_df$EL_Change_Pct <- smart_round(
         ifelse(display_df$expected_loss_baseline != 0,
                (display_df$expected_loss_shock - display_df$expected_loss_baseline) /
-                 display_df$expected_loss_baseline * 100,
+                 abs(display_df$expected_loss_baseline) * 100,
                NA_real_))
     }
 
@@ -4767,7 +4832,7 @@ server <- function(input, output, session) {
     }
 
     row_idx <- info$row
-    new_val <- as.numeric(info$value)
+    new_val <- suppressWarnings(as.numeric(info$value))
     if (!is.na(new_val) && row_idx >= 1 && row_idx <= length(rv$internal_el)) {
       rv$internal_el[row_idx] <- new_val
     }
@@ -4777,7 +4842,8 @@ server <- function(input, output, session) {
   observeEvent(input$upload_internal_el, {
     req(input$upload_internal_el, rv$results)
     tryCatch({
-      uploaded <- read.csv(input$upload_internal_el$datapath, stringsAsFactors = FALSE)
+      uploaded <- as.data.frame(read_upload_csv(input$upload_internal_el$datapath,
+                                                input$upload_internal_el$name))
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -4791,27 +4857,31 @@ server <- function(input, output, session) {
       df <- rv$results
       internal_el <- if ("expected_loss_baseline" %in% names(df)) df$expected_loss_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_el[idx[1]])
-          if (!is.na(val)) {
-            internal_el[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      idx <- match(as.character(df$company_id), as.character(uploaded$company_id))
+      vals <- as.numeric(uploaded$internal_el)[idx]
+      hit <- !is.na(vals)
+      # The upload is one amount per counterparty; results have one row per
+      # technology/asset with the exposure split across them, so split the
+      # amount the same way (equal shares if the company has no exposure)
+      expo <- if ("exposure_value_usd" %in% names(df)) ifelse(is.na(df$exposure_value_usd), 0, df$exposure_value_usd)
+              else rep(1, nrow(df))
+      cid <- as.character(df$company_id)
+      total <- ave(expo, cid, FUN = sum)
+      share <- ifelse(total > 0, expo / total, 1 / ave(expo, cid, FUN = length))
+      internal_el[hit] <- vals[hit] * share[hit]
+      matched <- dplyr::n_distinct(cid[hit])
 
       rv$internal_el <- internal_el
       showNotification(
-        paste0("Internal ELs loaded: ", matched, " of ", nrow(df), " counterparties matched."),
+        paste0("Internal ELs loaded: ", matched, " of ", dplyr::n_distinct(as.character(df$company_id)),
+               " counterparties matched."),
         type = if (matched > 0) "message" else "warning", duration = 6
       )
     }, error = function(e) {
       message(paste("ERROR (EL CSV read):", conditionMessage(e)))
-      showNotification("Could not read the EL CSV file. Please check the file format.", type = "error", duration = 8)
+      showNotification(if (inherits(e, "user_error")) conditionMessage(e)
+                       else "Could not read the EL CSV file. Please check the file format.",
+                       type = "error", duration = 8)
     })
   })
 
@@ -4832,8 +4902,8 @@ server <- function(input, output, session) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom EL values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
-                                icon("clock-rotate-left"), " Preserved from previous run")
+            tagList(tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
+                                         icon("clock-rotate-left"), " Preserved from previous run"))
         )
       } else {
         tags$span(class = "text-muted", icon("info-circle"),
@@ -4856,31 +4926,38 @@ server <- function(input, output, session) {
       rep(0, nrow(df))
     }
 
+    # TRISK reports EL as a negative amount (a loss); banks usually report it
+    # positive. Read internal EL in TRISK's convention so a shock that raises
+    # the loss always makes the adjusted EL more negative.
+    internal_el <- -abs(internal_el)
+
     el_baseline <- if ("expected_loss_baseline" %in% names(df)) df$expected_loss_baseline else rep(0, nrow(df))
     el_shock <- if ("expected_loss_shock" %in% names(df)) df$expected_loss_shock else rep(0, nrow(df))
 
     el_change <- el_shock - el_baseline
-    el_change_pct <- ifelse(el_baseline != 0, el_change / el_baseline, 0)
+    el_ratio <- ifelse(el_baseline != 0, el_shock / el_baseline, NA_real_)
 
     adjusted_el <- switch(method,
       "absolute" = {
         internal_el + el_change
       },
       "relative" = {
-        internal_el * (1 + el_change_pct)
+        # scale by the TRISK loss ratio; a zero baseline has none, use the absolute change
+        ifelse(is.na(el_ratio), internal_el + el_change, internal_el * el_ratio)
       }
     )
 
     id_cols <- intersect(c("company_id", "company_name", "sector", "technology",
                            "exposure_value_usd"), names(df))
     result_df <- df[, id_cols, drop = FALSE]
-    result_df$Internal_EL <- smart_round(internal_el)
-    result_df$EL_Baseline <- smart_round(el_baseline)
-    result_df$EL_Shock <- smart_round(el_shock)
-    result_df$EL_Change <- smart_round(el_change)
-    result_df$EL_Change_Pct <- smart_round(el_change_pct * 100)
-    result_df$TRISK_Adjusted_EL <- smart_round(adjusted_el)
-    result_df$EL_Adjustment <- smart_round(adjusted_el - internal_el)
+    result_df$Internal_EL <- internal_el
+    result_df$EL_Baseline <- el_baseline
+    result_df$EL_Shock <- el_shock
+    result_df$EL_Change <- el_change
+    # relative to |baseline|: a bigger loss shows as a negative %
+    result_df$EL_Change_Pct <- ifelse(el_baseline != 0, el_change / abs(el_baseline) * 100, NA_real_)
+    result_df$TRISK_Adjusted_EL <- adjusted_el
+    result_df$EL_Adjustment <- adjusted_el - internal_el
 
     rv$el_integration_result <- result_df
 
@@ -4914,6 +4991,7 @@ server <- function(input, output, session) {
       "EL_Adjustment"    = "EL Adjustment"
     )
     display_df <- df
+    display_df[] <- lapply(display_df, function(x) if (is.numeric(x)) smart_round(x) else x)
     for (old_name in names(col_renames)) {
       if (old_name %in% names(display_df)) {
         names(display_df)[names(display_df) == old_name] <- col_renames[old_name]
@@ -4965,7 +5043,7 @@ server <- function(input, output, session) {
     total_adjusted_el <- sum(df$TRISK_Adjusted_EL, na.rm = TRUE)
     total_el_adjustment <- total_adjusted_el - total_internal_el
     total_el_adj_pct <- if (total_internal_el != 0) {
-      total_el_adjustment / total_internal_el * 100
+      total_el_adjustment / abs(total_internal_el) * 100
     } else NA_real_
 
     exp_col <- if ("exposure_value_usd" %in% names(df)) "exposure_value_usd" else NULL
@@ -5225,71 +5303,90 @@ server <- function(input, output, session) {
   # Downloads
   # ============================================
 
+  # Workbook sheets for the Excel export (shared by filename() and content())
+  excel_export_sheets <- function() {
+    df <- rv$results
+    grp_cols <- intersect(c("sector", "technology"), names(df))
+
+    summary_df <- if (length(grp_cols) > 0) {
+      tryCatch({
+        df %>%
+          group_by(across(all_of(grp_cols))) %>%
+          summarise(n_rows = n(), .groups = "drop")
+      }, error = function(e) df)
+    } else {
+      df
+    }
+
+    sheets <- list(
+      "Summary" = summary_df,
+      "Full Results" = df
+    )
+
+    # Add multi-horizon results if available
+    if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
+      sheets[["Multi-Horizon"]] <- bind_rows(rv$results_by_year)  # each frame already has shock_year
+    }
+
+    # Add multi-scenario comparison if available
+    if (!is.null(rv$results_by_scenario) && length(rv$results_by_scenario) > 1) {
+      all_scen_rows <- list()
+      for (scen_code in names(rv$results_by_scenario)) {
+        for (yr_key in names(rv$results_by_scenario[[scen_code]])) {
+          df_s <- rv$results_by_scenario[[scen_code]][[yr_key]]
+          df_s$target_scenario <- scen_code
+          df_s$shock_year <- as.integer(yr_key)
+          all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
+        }
+      }
+      sheets[["Scenario Comparison"]] <- bind_rows(all_scen_rows)
+    }
+
+    # Add integration results if available
+    if (!is.null(rv$pd_integration_result)) {
+      sheets[["PD Integration"]] <- rv$pd_integration_result
+    }
+    if (!is.null(rv$el_integration_result)) {
+      sheets[["EL Integration"]] <- rv$el_integration_result
+    }
+
+    # Sanitize all sheets to export-safe columns
+    sheets <- lapply(sheets, sanitize_export)
+    sheets
+  }
+
+  # writexl builds the whole workbook in memory: above this many rows in any
+  # one sheet, export every sheet as CSV inside a .zip instead
+  EXCEL_MAX_SHEET_ROWS <- 100000
+  excel_too_large <- function(sheets) max(vapply(sheets, nrow, integer(1))) > EXCEL_MAX_SHEET_ROWS
+
   output$download_excel <- downloadHandler(
     filename = function() {
-      paste0("trisk_results_", rv$run_id, ".xlsx")
+      ext <- if (!is.null(rv$results) && excel_too_large(excel_export_sheets())) ".zip" else ".xlsx"
+      paste0("trisk_results_", rv$run_id, ext)
     },
     content = function(file) {
       req(rv$results)
       audit_log("export", list(format = "xlsx", run_id = rv$run_id, rows = nrow(rv$results)))
+      sheets <- excel_export_sheets()
 
-      df <- rv$results
-      grp_cols <- intersect(c("sector", "technology"), names(df))
-
-      summary_df <- if (length(grp_cols) > 0) {
-        tryCatch({
-          df %>%
-            group_by(across(all_of(grp_cols))) %>%
-            summarise(n_rows = n(), .groups = "drop")
-        }, error = function(e) df)
-      } else {
-        df
-      }
-
-      sheets <- list(
-        "Summary" = summary_df,
-        "Full Results" = df
-      )
-
-      # Add multi-horizon results if available
-      if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
-        sheets[["Multi-Horizon"]] <- bind_rows(rv$results_by_year, .id = "shock_year")
-      }
-
-      # Add multi-scenario comparison if available
-      if (!is.null(rv$results_by_scenario) && length(rv$results_by_scenario) > 1) {
-        all_scen_rows <- list()
-        for (scen_code in names(rv$results_by_scenario)) {
-          for (yr_key in names(rv$results_by_scenario[[scen_code]])) {
-            df_s <- rv$results_by_scenario[[scen_code]][[yr_key]]
-            df_s$target_scenario <- scen_code
-            df_s$shock_year <- as.integer(yr_key)
-            all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
-          }
-        }
-        sheets[["Scenario Comparison"]] <- bind_rows(all_scen_rows)
-      }
-
-      # Add integration results if available
-      if (!is.null(rv$pd_integration_result)) {
-        sheets[["PD Integration"]] <- rv$pd_integration_result
-      }
-      if (!is.null(rv$el_integration_result)) {
-        sheets[["EL Integration"]] <- rv$el_integration_result
-      }
-
-      # Sanitize all sheets to export-safe columns
-      sheets <- lapply(sheets, sanitize_export)
-
-      # Guard against OOM: writexl builds the entire workbook in memory.
-      # For large exports (>100K rows), write CSV instead which streams to disk.
-      total_rows <- sum(vapply(sheets, nrow, integer(1)))
-      if (total_rows > 100000) {
+      if (excel_too_large(sheets)) {
         showNotification(
-          paste0("Large export (", format(total_rows, big.mark = ","),
-                 " rows) — writing CSV instead of Excel to avoid memory issues."),
+          paste0("Large export (", format(max(vapply(sheets, nrow, integer(1))), big.mark = ","),
+                 " rows in one sheet) — downloading every sheet as CSV in a .zip instead of Excel."),
           type = "warning", duration = 8)
-        data.table::fwrite(sheets[["Full Results"]], file)
+        tmp <- tempfile("trisk_export_")
+        dir.create(tmp)
+        on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+        csvs <- file.path(tmp, paste0(gsub("[^A-Za-z0-9]+", "_", names(sheets)), ".csv"))
+        for (k in seq_along(sheets)) data.table::fwrite(neutralize_formulas(sheets[[k]]), csvs[k])
+        zip_path <- file.path(tmp, "export.zip")
+        zip_status <- utils::zip(zip_path, csvs, flags = "-j -q")
+        if (zip_status != 0 || !file.exists(zip_path) || !file.copy(zip_path, file, overwrite = TRUE)) {
+          showNotification("Could not create the .zip export. Use the CSV download instead.",
+                           type = "error", duration = 10)
+          stop("zip export failed with status ", zip_status)
+        }
       } else {
         writexl::write_xlsx(sheets, file)
       }
@@ -5303,7 +5400,7 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results)
       audit_log("export", list(format = "csv", run_id = rv$run_id, rows = nrow(rv$results)))
-      write_csv(sanitize_export(rv$results), file)
+      write_csv(neutralize_formulas(sanitize_export(rv$results)), file)
     }
   )
 
@@ -5314,29 +5411,40 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results)
       audit_log("export", list(format = "json", run_id = rv$run_id, rows = nrow(rv$results)))
-      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
+      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE, digits = NA, na = "null")
     }
   )
 
   output$download_config <- downloadHandler(
     filename = function() {
-      paste0("trisk_config_", rv$run_id, ".json")
+      paste0("trisk_config_", if (is.null(rv$run_id)) "not_run" else rv$run_id, ".json")
     },
     content = function(file) {
       audit_log("export", list(format = "config_json", run_id = rv$run_id))
+      # Before the first run there is no snapshot: export the current settings
+      cfg <- rv$run_config
+      if (is.null(cfg)) cfg <- list(
+        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
+        target_scenario = paste(input$target_scenarios, collapse = ", "),
+        scenario_geography = input$scenario_geography,
+        shock_year = paste(input$shock_years, collapse = ", "),
+        risk_free_rate = input$risk_free_rate, discount_rate = input$discount_rate,
+        growth_rate = input$growth_rate, market_passthrough = input$market_passthrough,
+        carbon_price_model = input$carbon_price_model,
+        timestamp = paste(Sys.time(), "(settings only, no analysis run yet)"))
       config <- list(
         run_id = rv$run_id,
-        timestamp = as.character(Sys.time()),
+        timestamp = as.character(cfg$timestamp),
         parameters = list(
-          baseline_scenarios = paste(input$baseline_scenario, collapse = ", "),
-          target_scenarios = paste(input$target_scenarios, collapse = ", "),
-          scenario_geography = input$scenario_geography,
-          shock_years = paste(input$shock_years, collapse = ", "),
-          risk_free_rate = input$risk_free_rate,
-          discount_rate = input$discount_rate,
-          growth_rate = input$growth_rate,
-          market_passthrough = input$market_passthrough,
-          carbon_price_model = input$carbon_price_model
+          baseline_scenarios = cfg$baseline_scenario,
+          target_scenarios = cfg$target_scenario,
+          scenario_geography = cfg$scenario_geography,
+          shock_years = cfg$shock_year,
+          risk_free_rate = cfg$risk_free_rate,
+          discount_rate = cfg$discount_rate,
+          growth_rate = cfg$growth_rate,
+          market_passthrough = cfg$market_passthrough,
+          carbon_price_model = cfg$carbon_price_model
         ),
         data_summary = list(
           portfolio_rows = nrow(rv$portfolio),
@@ -5357,15 +5465,15 @@ server <- function(input, output, session) {
   # ============================================
 
   output$metadata_summary <- renderText({
-    if (is.null(rv$run_id)) {
+    if (is.null(rv$run_id) || is.null(rv$run_config)) {
       "No analysis run yet."
     } else {
       paste(
         "Run ID:", rv$run_id,
-        "\nTimestamp:", as.character(Sys.time()),
-        "\nBaseline(s):", paste(input$baseline_scenario, collapse = ", "),
-        "\nTarget(s):", paste(input$target_scenarios, collapse = ", "),
-        "\nGeography:", input$scenario_geography,
+        "\nTimestamp:", as.character(rv$run_config$timestamp),
+        "\nBaseline(s):", rv$run_config$baseline_scenario,
+        "\nTarget(s):", rv$run_config$target_scenario,
+        "\nGeography:", rv$run_config$scenario_geography,
         "\nResults rows:", if (!is.null(rv$results)) as.character(nrow(rv$results)) else "N/A"
       )
     }

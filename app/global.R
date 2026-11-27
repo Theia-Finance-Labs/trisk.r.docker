@@ -66,19 +66,20 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
-# Cap upload size to 50 MB (Shiny default is 5 MB).
-options(shiny.maxRequestSize = 50 * 1024^2)  # 50 MB — sufficient for CSV portfolios
+# Cap upload size to 300 MB (Shiny default is 5 MB): the container has 4 GB of
+# memory and uploads are held on the 2 GB /tmp tmpfs, which counts against it.
+# Bank portfolios with full asset-level production trajectories can reach 200-300 MB.
+options(shiny.maxRequestSize = 300 * 1024^2)
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic
 # "An error has occurred" in the browser. Server-side logs still contain the full trace.
 options(shiny.sanitize.errors = TRUE)
 
-MAX_UPLOAD_ROWS <- 500000L  # Row count limit for uploaded CSVs
+MAX_UPLOAD_ROWS <- 5000000L  # Row count limit for uploaded CSVs (enforced in read_upload_csv)
 
-SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
-INPUT_DIR <- "/data/input"
-OUTPUT_DIR <- "/data/output"
+# Override for bare-metal installs (see INSTALL.md); runApp() runs with app/ as working dir
+SCENARIOS_PATH <- Sys.getenv("TRISK_SCENARIOS_PATH", "/opt/trisk/data/scenarios/scenarios.csv")
 
 #' Default model parameter values (single source of truth)
 #' Used by UI for initial values and by Reset button
@@ -238,12 +239,27 @@ validate_portfolio <- function(df) {
   if (length(missing) > 0) {
     return(paste("Missing required columns:", paste(missing, collapse = ", ")))
   }
+  # Types and ranges: a "1,000,000" exposure is read as text, an LGD of 45
+  # (percent) makes every EL 100x too large
+  for (col in c("exposure_value_usd", "term", "loss_given_default")) {
+    # an entirely blank column (e.g. no terms: NPV-only analysis) is read as logical NA
+    if (!is.numeric(df[[col]]) && !all(is.na(df[[col]]))) return(paste0("Column '", col, "' must be numeric (no thousands separators or % signs)"))
+  }
+  if (any(df$exposure_value_usd < 0, na.rm = TRUE)) return("Column 'exposure_value_usd' must not be negative")
+  if (any(df$loss_given_default < 0 | df$loss_given_default > 1, na.rm = TRUE))
+    return("Column 'loss_given_default' must be a ratio in [0, 1] (e.g. 0.45, not 45)")
+  if (any(df$term < 1 | df$term != round(df$term), na.rm = TRUE))
+    return("Column 'term' must be a whole number of years (1 or more)")
   return(NULL)
 }
 
 #' Validate assets data structure
 validate_assets <- function(df) {
-  required_cols <- c("company_id", "sector", "technology", "production_year", "capacity", "capacity_factor")
+  # Every column trisk.model reads (read_production_data); a missing one only
+  # failed later, inside the run, with a generic error
+  required_cols <- c("asset_id", "asset_name", "company_id", "company_name", "country_iso2",
+                     "sector", "technology", "production_year", "capacity", "capacity_factor",
+                     "emission_factor")
   missing <- setdiff(required_cols, names(df))
   if (length(missing) > 0) {
     return(paste("Missing required columns:", paste(missing, collapse = ", ")))
@@ -277,16 +293,7 @@ strip_columns <- function(df, type) {
     message(sprintf("[security] Stripped %d non-model columns from %s upload: %s",
                     length(dropped), type, paste(dropped, collapse = ", ")))
   }
-  df <- df[, keep, drop = FALSE]
-
-  # Formula injection protection: strip leading =, +, -, @ from string columns
-  # to prevent CSV injection when data is later exported to Excel
-  char_cols <- names(df)[sapply(df, is.character)]
-  for (col in char_cols) {
-    df[[col]] <- sub("^[=+\\-@]+", "", df[[col]])
-  }
-
-  df
+  df[, keep, drop = FALSE]
 }
 
 # Server-side file type validation (defense-in-depth beyond client-side accept= hint)
@@ -304,13 +311,159 @@ validate_file_type <- function(filepath, original_name) {
   NULL
 }
 
+#' Read an uploaded CSV with the security controls applied to every upload:
+#' file-type check, row limit, encoding repair and (optionally) column allowlist.
+#' Stops with a user-facing message on rejection; parse errors propagate as-is.
+read_upload_csv <- function(filepath, original_name, type = NULL) {
+  file_check <- validate_file_type(filepath, original_name)
+  if (!is.null(file_check)) stop(user_error(file_check))
+
+  # integer64 = "double": a whole-number exposure >= 2^31 would otherwise load as
+  # bit64::integer64, whose arithmetic truncates PD x exposure products to 0.
+  # fread only warns when it stops at a malformed line and returns the rows
+  # read so far; treat that as a rejected file instead of a silent truncation.
+  read_csv <- function(...) {
+    withCallingHandlers(
+      data.table::fread(filepath, integer64 = "double", blank.lines.skip = TRUE, ...),
+      warning = function(w) {
+        if (grepl("Stopped early|Discarded single-line footer", conditionMessage(w))) {
+          line <- regmatches(conditionMessage(w), regexpr("line [0-9]+", conditionMessage(w)))
+          stop(user_error(paste0(
+            "The file could not be read completely: a row",
+            if (length(line) > 0) paste0(" (", line, ")") else "",
+            " has a different number of fields than the header. ",
+            "Check for unquoted commas or stray text, then upload again.")))
+        }
+      })
+  }
+  df <- read_csv(nrows = MAX_UPLOAD_ROWS + 1L)
+  if (nrow(df) > MAX_UPLOAD_ROWS) {
+    stop(user_error(sprintf(
+      "File has more than %s rows. Please split it into smaller files.",
+      format(MAX_UPLOAD_ROWS, big.mark = ",", scientific = FALSE))))
+  }
+  # fread reads the text "NA" as missing, which loses Namibia's ISO code
+  if ("country_iso2" %in% names(df) && anyNA(df$country_iso2)) {
+    iso <- read_csv(select = "country_iso2", colClasses = list(character = "country_iso2"),
+                    na.strings = "", nrows = nrow(df))
+    if (nrow(iso) == nrow(df)) df$country_iso2 <- iso$country_iso2
+  }
+  df <- repair_encoding(tibble::as_tibble(df))
+  if (!is.null(type)) df <- strip_columns(df, type)
+  df
+}
+
+#' Error condition whose message is our own text and safe to show to the user
+#' (other errors may carry internals and are shown generically, CWE-209)
+user_error <- function(msg) {
+  structure(class = c("user_error", "error", "condition"),
+            list(message = msg, call = NULL))
+}
+
+#' Message to show for a failed upload: our own rejection text, or a generic one
+upload_error_message <- function(e) {
+  if (inherits(e, "user_error")) conditionMessage(e)
+  else "Could not parse the uploaded file. Please check the format."
+}
+
+#' Allocate each portfolio row's exposure across the result rows it was joined
+#' to (one per technology after enrichment, one per asset from trisk), in
+#' proportion to positive baseline NPV as trisk.analysis does for company-level
+#' portfolios; equal split when no NPV is usable. Total exposure is preserved.
+allocate_exposure <- function(df, row_col = ".portfolio_row") {
+  if (!row_col %in% names(df)) return(df)
+  g <- df[[row_col]]
+  npv <- if ("net_present_value_baseline" %in% names(df)) df$net_present_value_baseline else rep(NA_real_, nrow(df))
+  npv <- pmax(ifelse(is.na(npv), 0, npv), 0)
+  total <- ave(npv, g, FUN = sum)
+  n_rows <- ave(rep(1, nrow(df)), g, FUN = length)
+  df$exposure_value_usd <- df$exposure_value_usd * ifelse(total > 0, npv / total, 1 / n_rows)
+  df[[row_col]] <- NULL
+  df
+}
+
+#' Carry the user's per-row values (internal PD/EL) from one run's rows to the
+#' next run's rows by company/country/sector/technology/asset/term instead of by
+#' position. Only values the user actually set (different from `old_default`,
+#' the previous run's baseline) are carried; every other row gets the new run's
+#' `default`. Rows sharing a key are told apart by their order within the key.
+#' Returns NULL when no user value carries over.
+remap_by_key <- function(values, old_df, new_df, default, old_default = NULL) {
+  if (is.null(values) || is.null(old_df) || length(values) != nrow(old_df)) return(NULL)
+  key_cols <- intersect(c("company_id", "country_iso2", "sector", "technology", "asset_id", "term"),
+                        intersect(names(old_df), names(new_df)))
+  if (length(key_cols) == 0) return(NULL)
+  row_key <- function(d) {
+    k <- do.call(paste, c(lapply(key_cols, function(col) as.character(d[[col]])), sep = "\r"))
+    paste(k, ave(seq_along(k), k, FUN = seq_along), sep = "\r")
+  }
+  user_set <- if (is.null(old_default)) rep(TRUE, length(values))
+              else !is.na(values) & (is.na(old_default) | values != old_default)
+  carried <- ifelse(user_set, values, NA)[match(row_key(new_df), row_key(old_df))]
+  if (all(is.na(carried))) return(NULL)
+  ifelse(is.na(carried), default, carried)
+}
+
+#' Carbon price scenarios offered in the UI ("no_carbon_tax" first)
+carbon_price_choices <- function(carbon) {
+  available <- if (is.null(carbon)) character() else sort(unique(as.character(carbon$scenario)))
+  c("no_carbon_tax", setdiff(available, "no_carbon_tax"))
+}
+
+#' Re-encode non-UTF-8 text columns (e.g. Excel "CSV (Comma delimited)" saves
+#' as Windows-1252) so downstream string functions don't fail on invalid input.
+repair_encoding <- function(df) {
+  for (col in names(df)[vapply(df, is.character, logical(1))]) {
+    x <- df[[col]]
+    bad <- !is.na(x) & !validUTF8(x)
+    if (any(bad)) {
+      x[bad] <- iconv(x[bad], from = "CP1252", to = "UTF-8", sub = "?")
+      df[[col]] <- x
+    }
+  }
+  df
+}
+
+#' Neutralise spreadsheet formula injection (CWE-1236) in text columns before
+#' writing CSV: cells starting with = + - @ tab or CR get a leading apostrophe
+#' so Excel treats them as text. Applied at export so uploaded values stay intact.
+neutralize_formulas <- function(df) {
+  text_cols <- vapply(df, function(x) is.character(x) || is.factor(x), logical(1))
+  for (col in names(df)[text_cols]) {
+    x <- as.character(df[[col]])
+    risky <- !is.na(x) & grepl("^[-=+@\t\r]", x)
+    x[risky] <- paste0("'", x[risky])
+    df[[col]] <- x
+  }
+  df
+}
+
+#' HTML-escape user-supplied text before it goes into Plotly hover/label strings,
+#' which Plotly renders as (a subset of) HTML.
+escape_html <- function(x) htmltools::htmlEscape(as.character(x))
+
+#' Escaped, unique display labels for Plotly categories. A name that occurs
+#' more than once (e.g. a company with assets in two sectors) gets its sector
+#' appended, so factor levels and treemap nodes stay distinct.
+plot_labels <- function(label, sector = NULL) {
+  label <- as.character(label)
+  if (!is.null(sector)) {
+    dup <- label %in% label[duplicated(label)]
+    label[dup] <- paste0(label[dup], " (", sector[dup], ")")
+  }
+  escape_html(make.unique(label, sep = " #"))
+}
+
 # Structured audit logging — writes JSON to stderr (captured by Docker log driver)
 # Use for security-relevant events: uploads, analysis runs, exports
 audit_log <- function(event, details = list()) {
   entry <- list(
     timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
     event = event,
-    session = if (exists("session")) session$token else "startup"
+    session = {
+      domain <- shiny::getDefaultReactiveDomain()
+      if (is.null(domain)) "startup" else domain$token
+    }
   )
   entry <- c(entry, details)
   message(jsonlite::toJSON(entry, auto_unbox = TRUE))
@@ -336,7 +489,17 @@ audit_dataset <- function(df, type) {
   n_rows <- nrow(df)
   n_cols <- ncol(df)
   n_distinct_id <- if ("company_id" %in% names(df)) length(unique(df$company_id)) else NA
-  n_duplicate_id <- if ("company_id" %in% names(df)) sum(duplicated(df$company_id)) else NA
+  # What makes a row unique differs per dataset: assets have one row per asset,
+  # technology and year; a portfolio may hold several loans (terms) per company
+  dup_keys <- intersect(switch(type,
+    "assets"    = c("asset_id", "technology", "production_year"),
+    "portfolio" = c("company_id", "technology", "term"),
+    "company_id"
+  ), names(df))
+  # pasted key: duplicated() on a data.frame slice is slow and memory-hungry on large files
+  dup_key <- if (length(dup_keys) > 0) do.call(paste, c(lapply(dup_keys, function(k) as.character(df[[k]])), sep = "\r"))
+  dup_flags <- if (length(dup_keys) > 0) duplicated(dup_key) else rep(FALSE, nrow(df))
+  n_duplicate_id <- if (length(dup_keys) > 0) sum(dup_flags) else NA
 
   # Null rates per column
   null_rates <- sapply(df, function(col) round(sum(is.na(col)) / length(col) * 100, 1))
@@ -360,18 +523,16 @@ audit_dataset <- function(df, type) {
     }
   }
 
-  # Check for duplicate company_id
-  if ("company_id" %in% names(df)) {
-    dup_ids <- df$company_id[duplicated(df$company_id)]
-    if (length(dup_ids) > 0) {
-      dup_rows <- which(df$company_id %in% unique(dup_ids))
-      issues <- rbind(issues, data.frame(
-        row = dup_rows, column = "company_id",
-        issue_type = "duplicate_id",
-        detail = paste0("Duplicate company_id: ", df$company_id[dup_rows]),
-        stringsAsFactors = FALSE
-      ))
-    }
+  # Check for duplicate rows on the dataset's key
+  if (any(dup_flags)) {
+    key_str <- do.call(paste, c(lapply(dup_keys, function(k) as.character(df[[k]])), sep = " / "))
+    dup_rows <- which(key_str %in% key_str[dup_flags])
+    issues <- rbind(issues, data.frame(
+      row = dup_rows, column = paste(dup_keys, collapse = "+"),
+      issue_type = "duplicate_id",
+      detail = paste0("Duplicate ", paste(dup_keys, collapse = "/"), ": ", key_str[dup_rows]),
+      stringsAsFactors = FALSE
+    ))
   }
 
   # Portfolio-specific: check ISO-2 codes
@@ -415,12 +576,17 @@ dataset_template <- function(type) {
       stringsAsFactors = FALSE
     ),
     "assets" = data.frame(
+      asset_id = "ASSET001",
+      asset_name = "Example Power Plant",
       company_id = "COMP001",
+      company_name = "Example Corp",
+      country_iso2 = "US",
       sector = "Power",
       technology = "CoalCap",
       production_year = 2025,
       capacity = 500,
       capacity_factor = 0.85,
+      emission_factor = 0.95,
       stringsAsFactors = FALSE
     ),
     "financial" = data.frame(
@@ -434,6 +600,39 @@ dataset_template <- function(type) {
     data.frame()
   )
 }
+
+#' Exposure-weighted mean over rows where both value and weight are known.
+#' Rows without a TRISK result (e.g. loan term > 5 years) must not dilute it.
+weighted_mean_covered <- function(x, w) {
+  ok <- !is.na(x) & !is.na(w)
+  if (!any(ok) || sum(w[ok]) <= 0) return(NA_real_)
+  sum(x[ok] * w[ok]) / sum(w[ok])
+}
+
+#' One key per counterparty for row-level results (rows are company x
+#' technology x asset): company_id, else company_name (portfolios matched by
+#' name or country carry NA ids), else the row itself. NA ids must not be
+#' pooled into one "company".
+company_key <- function(df) {
+  n <- nrow(df)
+  id <- if ("company_id" %in% names(df)) as.character(df$company_id) else rep(NA_character_, n)
+  nm <- if ("company_name" %in% names(df)) as.character(df$company_name) else rep(NA_character_, n)
+  nm[!is.na(nm) & !nzchar(trimws(nm))] <- NA
+  ifelse(!is.na(id), paste0("id:", id), ifelse(!is.na(nm), paste0("name:", nm), paste0("row:", seq_len(n))))
+}
+
+#' Display label per row: company_name, else "Company <id>", else "Company_<row>".
+#' Constant within a company, so labels can be used to group and filter.
+company_display_label <- function(df) {
+  n <- nrow(df)
+  nm <- if ("company_name" %in% names(df)) as.character(df$company_name) else rep(NA_character_, n)
+  nm[!is.na(nm) & !nzchar(trimws(nm))] <- NA
+  id <- if ("company_id" %in% names(df)) as.character(df$company_id) else rep(NA_character_, n)
+  ifelse(!is.na(nm), nm, ifelse(!is.na(id), paste0("Company ", id), paste0("Company_", seq_len(n))))
+}
+
+#' Count of distinct companies (rows are company x technology x asset)
+n_companies <- function(df) dplyr::n_distinct(company_key(df))
 
 #' Smart rounding: 2 decimals for |x|>10, 5 decimals for |x|<=10
 smart_round <- function(x) {
@@ -634,6 +833,11 @@ baseline_for_scenario <- function(target_code, available_baselines, default_base
     if (length(family_baselines) > 0) return(family_baselines[1])
   }
 
+  # Any other target: prefer a selected baseline from the same family
+  # (same NGFS vintage + model, same IPR edition, ...)
+  same_family <- available_baselines[vapply(available_baselines, scenario_family, character(1)) == family]
+  if (length(same_family) > 0) return(same_family[1])
+
   # Default: use NGFS GCAM 2024 CP (or whatever the user selected as default)
   default_baseline
 }
@@ -702,6 +906,8 @@ EXPORT_COLUMNS <- c(
   # Scenario / run context
   "target_scenario", "baseline_scenario", "shock_year",
   "scenario_geography",
+  # Row keys: results have one row per loan x technology x asset
+  "term", "asset_id", "asset_name",
   # Exposure
   "exposure_value_usd", "loss_given_default", "exposure_at_default", "weight",
   # PD metrics
@@ -712,7 +918,15 @@ EXPORT_COLUMNS <- c(
   # EL metrics
   "expected_loss_baseline", "expected_loss_shock", "expected_loss_difference",
   # Attribution
-  "pd_change", "pd_contribution", "el_change", "npv_change_pct"
+  "pd_change", "pd_contribution", "el_change", "npv_change_pct",
+  # Excel summary sheet
+  "n_rows",
+  # PD integration (Integration tab)
+  "Internal_PD", "PD_Baseline", "PD_Shock", "PD_Change", "PD_Change_Pct",
+  "TRISK_Adjusted_PD", "PD_Adjustment",
+  # EL integration (Integration tab)
+  "Internal_EL", "EL_Baseline", "EL_Shock", "EL_Change", "EL_Change_Pct",
+  "TRISK_Adjusted_EL", "EL_Adjustment"
 )
 
 #' Filter a data.frame to only the allowed export columns.

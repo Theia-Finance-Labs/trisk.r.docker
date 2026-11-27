@@ -17,27 +17,29 @@ help:
 
 # Build Shiny image
 build:
-	docker-compose build trisk
+	docker compose build trisk
 
 # Build CLI image  
 build-cli:
 	docker build -f Dockerfile.cli -t theia-finance-labs/trisk-cli:latest .
 
-# Run container
+# Run container (see README "Quick Start" for the one-time .env / TLS setup)
 run:
-	docker-compose up -d
+	@grep -q "^TRISK_PASS_HASH=.\+" .env 2>/dev/null || { echo "Set TRISK_PASS_HASH in .env first (see .env.example)"; exit 1; }
+	@test -f tls/cert.pem -a -f tls/key.pem || { echo "Missing tls/cert.pem or tls/key.pem (see README)"; exit 1; }
+	docker compose up -d
 	@echo ""
 	@echo "TRISK is starting..."
-	@echo "Open http://localhost:3838/trisk/ in your browser"
+	@echo "Open https://localhost/ in your browser"
 	@echo ""
 
 # Stop container
 stop:
-	docker-compose down
+	docker compose down
 
 # View logs
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 # Open shell in container
 shell:
@@ -49,14 +51,14 @@ r-console:
 
 # Clean up
 clean:
-	docker-compose down -v --rmi local
+	docker compose down -v --rmi local
 	docker image prune -f
 
 # Run tests inside the container
 test:
-	docker-compose exec trisk Rscript /opt/trisk/scripts/run_tests.R
+	docker compose exec trisk Rscript /opt/trisk/scripts/run_tests.R
 
 # Rebuild from scratch (no cache)
 rebuild:
-	docker-compose build --no-cache
-	docker-compose up -d
+	docker compose build --no-cache
+	docker compose up -d

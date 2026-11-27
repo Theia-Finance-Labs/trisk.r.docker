@@ -65,13 +65,18 @@ RUN R -e "install.packages('pak', repos = '${CRAN_REPO}'); \
   if (!requireNamespace('pak', quietly = TRUE)) stop('pak could not be installed from ${CRAN_REPO}'); \
   if (packageVersion('pak') != '${PAK_VERSION}') stop('expected pak ${PAK_VERSION}, got ', packageVersion('pak'))"
 
-# Install TRISK core packages — pinned to exact commit SHAs, no upgrades
+# Install TRISK core packages — pinned to exact commit SHAs, no upgrades.
+# trisk.analysis declares `Remotes: Theia-Finance-Labs/trisk.model` without a ref, which
+# pak resolves to trisk.model's default branch and rejects as conflicting with the
+# pinned SHA. So: trisk.model@SHA with its dependencies, then trisk.analysis's other
+# CRAN imports, then trisk.analysis@SHA without dependency resolution.
 RUN R -e "\
   options(repos = c(CRAN = Sys.getenv('CRAN_REPO'))); \
-  pak::pak(c( \
-    'Theia-Finance-Labs/trisk.model@${TRISK_MODEL_SHA}', \
-    'Theia-Finance-Labs/trisk.analysis@${TRISK_ANALYSIS_SHA}' \
-  ), ask = FALSE, upgrade = FALSE)"
+  pak::pak('Theia-Finance-Labs/trisk.model@${TRISK_MODEL_SHA}', ask = FALSE, upgrade = FALSE); \
+  pak::pak(c('dplyr', 'magrittr', 'rlang', 'tibble', 'uuid', 'ggplot2', 'scales', \
+             'stringdist', 'tidyr', 'DBI', 'RPostgres'), ask = FALSE, upgrade = FALSE); \
+  pak::pkg_install('Theia-Finance-Labs/trisk.analysis@${TRISK_ANALYSIS_SHA}', \
+                   dependencies = FALSE, ask = FALSE, upgrade = FALSE)"
 
 # Install Shiny UI dependencies — from the frozen CRAN snapshot
 RUN R -e "\
@@ -82,11 +87,14 @@ RUN R -e "\
     'jsonlite', 'dplyr', 'tidyr', 'optparse' \
   ), ask = FALSE, upgrade = FALSE)"
 
-# Verify core packages load
+# Verify core packages load and are the pinned commits
 RUN R -e "\
   suppressPackageStartupMessages({ \
     library(trisk.model); library(trisk.analysis); library(shiny) \
   }); \
+  pinned <- c(trisk.model = '${TRISK_MODEL_SHA}', trisk.analysis = '${TRISK_ANALYSIS_SHA}'); \
+  for (p in names(pinned)) if (!identical(packageDescription(p)[['RemoteSha']], pinned[[p]])) \
+    stop(p, ' is not the pinned commit ', pinned[[p]]); \
   message('trisk.model  ', packageVersion('trisk.model')); \
   message('trisk.analysis ', packageVersion('trisk.analysis'))"
 

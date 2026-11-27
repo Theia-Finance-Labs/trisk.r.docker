@@ -519,24 +519,21 @@ server <- function(input, output, session) {
   })
 
   # ---- Quick-select buttons for target scenarios ----
-  observeEvent(input$sel_orderly, {
+  # An empty category leaves the selection alone (e.g. Current Policies
+  # scenarios are baselines, so "Hot House" usually has no targets)
+  select_target_category <- function(pattern) {
     req(rv$target_scenario_categories)
     cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Orderly", cats)])
+    selected <- names(cats[grepl(pattern, cats)])
+    if (length(selected) == 0) {
+      showNotification(paste0("No '", pattern, "' target scenarios in the loaded data."), type = "warning")
+      return()
+    }
     updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
-  observeEvent(input$sel_disorderly, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Disorderly", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
-  observeEvent(input$sel_hotthouse, {
-    req(rv$target_scenario_categories)
-    cats <- rv$target_scenario_categories
-    selected <- names(cats[grepl("Hot House", cats)])
-    updateSelectizeInput(session, "target_scenarios", selected = selected)
-  })
+  }
+  observeEvent(input$sel_orderly, select_target_category("Orderly"))
+  observeEvent(input$sel_disorderly, select_target_category("Disorderly"))
+  observeEvent(input$sel_hotthouse, select_target_category("Hot House"))
   observeEvent(input$sel_all_targets, {
     req(rv$target_scenarios_all)
     updateSelectizeInput(session, "target_scenarios", selected = rv$target_scenarios_all)
@@ -546,61 +543,31 @@ server <- function(input, output, session) {
   })
 
   # ---- Slider <-> Numeric input sync (Advanced Assumptions) ----
-  observeEvent(input$risk_free_rate, {
-    if (!isTRUE(all.equal(input$risk_free_rate, input$risk_free_rate_num))) {
-      updateNumericInput(session, "risk_free_rate_num", value = input$risk_free_rate)
-    }
-  })
-  observeEvent(input$risk_free_rate_num, {
-    val <- input$risk_free_rate_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 0.1) {
-      if (!isTRUE(all.equal(val, input$risk_free_rate))) {
-        updateSliderInput(session, "risk_free_rate", value = val)
+  # The model uses the slider value; an exact value outside the slider range
+  # is rejected visibly instead of being shown while silently ignored.
+  sync_exact_value <- function(slider_id, num_id, min_val, max_val) {
+    observeEvent(input[[slider_id]], {
+      if (!isTRUE(all.equal(input[[slider_id]], input[[num_id]]))) {
+        updateNumericInput(session, num_id, value = input[[slider_id]])
       }
-    }
-  })
-
-  observeEvent(input$discount_rate, {
-    if (!isTRUE(all.equal(input$discount_rate, input$discount_rate_num))) {
-      updateNumericInput(session, "discount_rate_num", value = input$discount_rate)
-    }
-  })
-  observeEvent(input$discount_rate_num, {
-    val <- input$discount_rate_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 0.2) {
-      if (!isTRUE(all.equal(val, input$discount_rate))) {
-        updateSliderInput(session, "discount_rate", value = val)
+    })
+    observeEvent(input[[num_id]], {
+      val <- input[[num_id]]
+      if (is.null(val) || is.na(val)) return()
+      if (val >= min_val && val <= max_val) {
+        if (!isTRUE(all.equal(val, input[[slider_id]]))) {
+          updateSliderInput(session, slider_id, value = val)
+        }
+      } else {
+        showNotification(sprintf("Value must be between %s and %s.", min_val, max_val), type = "warning")
+        updateNumericInput(session, num_id, value = input[[slider_id]])
       }
-    }
-  })
-
-  observeEvent(input$growth_rate, {
-    if (!isTRUE(all.equal(input$growth_rate, input$growth_rate_num))) {
-      updateNumericInput(session, "growth_rate_num", value = input$growth_rate)
-    }
-  })
-  observeEvent(input$growth_rate_num, {
-    val <- input$growth_rate_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 0.1) {
-      if (!isTRUE(all.equal(val, input$growth_rate))) {
-        updateSliderInput(session, "growth_rate", value = val)
-      }
-    }
-  })
-
-  observeEvent(input$market_passthrough, {
-    if (!isTRUE(all.equal(input$market_passthrough, input$market_passthrough_num))) {
-      updateNumericInput(session, "market_passthrough_num", value = input$market_passthrough)
-    }
-  })
-  observeEvent(input$market_passthrough_num, {
-    val <- input$market_passthrough_num
-    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 1) {
-      if (!isTRUE(all.equal(val, input$market_passthrough))) {
-        updateSliderInput(session, "market_passthrough", value = val)
-      }
-    }
-  })
+    })
+  }
+  sync_exact_value("risk_free_rate", "risk_free_rate_num", 0, 0.1)
+  sync_exact_value("discount_rate", "discount_rate_num", 0, 0.2)
+  sync_exact_value("growth_rate", "growth_rate_num", 0, 0.1)
+  sync_exact_value("market_passthrough", "market_passthrough_num", 0, 1)
 
   # ---- Reset to defaults button ----
   observeEvent(input$reset_defaults, {
@@ -1222,7 +1189,9 @@ server <- function(input, output, session) {
         paste0(round(mean(run$results$pd_shock, na.rm = TRUE) * 100, 4), "%")
       } else "N/A"
 
-      is_selected <- !is.null(rv$compare_run_idx) && rv$compare_run_idx == i
+      # isolate: re-rendering on every Compare click re-collapsed the box
+      cmp_idx <- isolate(rv$compare_run_idx)
+      is_selected <- !is.null(cmp_idx) && cmp_idx == i
       row_style <- if (is_selected) {
         "background: #FFFDE7; border-left: 3px solid #F53D3F; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px;"
       } else {
@@ -1288,63 +1257,60 @@ server <- function(input, output, session) {
     )
   })
 
-  # Handle compare button clicks for each history entry
-  observe({
-    lapply(seq_along(rv$run_history), function(i) {
-      btn_id <- paste0("compare_run_", i)
-      observeEvent(input[[btn_id]], {
-        if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
-          rv$compare_run_idx <- NULL  # Toggle off
-        } else {
-          rv$compare_run_idx <- i  # Select for comparison
-        }
-      }, ignoreInit = TRUE)
-    })
-  })
+  # History buttons: create each observer once (history is capped at 5 runs).
+  # Creating them inside observe() added a new set on every history change,
+  # so a click fired several handlers and Compare toggled itself back off.
+  for (i in 1:5) local({
+    i <- i
+    observeEvent(input[[paste0("compare_run_", i)]], {
+      if (i > length(rv$run_history)) return()
+      if (!is.null(rv$compare_run_idx) && rv$compare_run_idx == i) {
+        rv$compare_run_idx <- NULL  # Toggle off
+      } else {
+        rv$compare_run_idx <- i  # Select for comparison
+      }
+    }, ignoreInit = TRUE)
 
-  # Handle duplicate button clicks for each history entry
-  observe({
-    lapply(seq_along(rv$run_history), function(i) {
-      btn_id <- paste0("dup_run_", i)
-      observeEvent(input[[btn_id]], {
-        if (i > length(rv$run_history)) return()
-        cfg <- rv$run_history[[i]]$config
+    observeEvent(input[[paste0("dup_run_", i)]], {
+      if (i > length(rv$run_history)) return()
+      cfg <- rv$run_history[[i]]$config
 
-        # Restore all config inputs from the history entry
-        updateSelectInput(session, "baseline_scenario", selected = cfg$baseline_scenario)
-        if (!is.null(cfg$target_scenarios)) {
-          updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
-        }
-        updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
-        if (!is.null(cfg$shock_years)) {
-          updateSelectizeInput(session, "shock_years", selected = cfg$shock_years)
-        }
-        if (!is.null(cfg$risk_free_rate)) {
-          updateSliderInput(session, "risk_free_rate", value = cfg$risk_free_rate)
-          updateNumericInput(session, "risk_free_rate_num", value = cfg$risk_free_rate)
-        }
-        if (!is.null(cfg$discount_rate)) {
-          updateSliderInput(session, "discount_rate", value = cfg$discount_rate)
-          updateNumericInput(session, "discount_rate_num", value = cfg$discount_rate)
-        }
-        if (!is.null(cfg$growth_rate)) {
-          updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
-          updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
-        }
-        if (!is.null(cfg$market_passthrough)) {
-          updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
-          updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
-        }
-        if (!is.null(cfg$carbon_price_model)) {
-          updateSelectInput(session, "carbon_price_model", selected = cfg$carbon_price_model)
-        }
+      # Restore all config inputs from the history entry
+      baselines <- if (!is.null(cfg$baseline_scenarios)) cfg$baseline_scenarios
+                   else strsplit(cfg$baseline_scenario, ",\\s*")[[1]]
+      updateSelectizeInput(session, "baseline_scenario", selected = baselines)
+      if (!is.null(cfg$target_scenarios)) {
+        updateSelectizeInput(session, "target_scenarios", selected = cfg$target_scenarios)
+      }
+      updateSelectInput(session, "scenario_geography", selected = cfg$scenario_geography)
+      if (!is.null(cfg$shock_years)) {
+        updateSelectizeInput(session, "shock_years", selected = cfg$shock_years)
+      }
+      if (!is.null(cfg$risk_free_rate)) {
+        updateSliderInput(session, "risk_free_rate", value = cfg$risk_free_rate)
+        updateNumericInput(session, "risk_free_rate_num", value = cfg$risk_free_rate)
+      }
+      if (!is.null(cfg$discount_rate)) {
+        updateSliderInput(session, "discount_rate", value = cfg$discount_rate)
+        updateNumericInput(session, "discount_rate_num", value = cfg$discount_rate)
+      }
+      if (!is.null(cfg$growth_rate)) {
+        updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
+        updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
+      }
+      if (!is.null(cfg$market_passthrough)) {
+        updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
+        updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
+      }
+      if (!is.null(cfg$carbon_price_model)) {
+        updateSelectInput(session, "carbon_price_model", selected = cfg$carbon_price_model)
+      }
 
-        # Navigate to config tab
-        updateTabItems(session, "tabs", selected = "config")
-        showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
-                         type = "message", duration = 3)
-      }, ignoreInit = TRUE)
-    })
+      # Navigate to config tab
+      updateTabItems(session, "tabs", selected = "config")
+      showNotification(paste0("Config loaded from run #", i, ". Adjust and re-run."),
+                       type = "message", duration = 3)
+    }, ignoreInit = TRUE)
   })
 
   # Render comparison panel when a history run is selected
@@ -4560,8 +4526,8 @@ server <- function(input, output, session) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom PD values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
-                                icon("clock-rotate-left"), " Preserved from previous run")
+            tagList(tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
+                                         icon("clock-rotate-left"), " Preserved from previous run"))
         )
       } else {
         tags$span(class = "text-muted", icon("info-circle"),
@@ -4906,8 +4872,8 @@ server <- function(input, output, session) {
           tags$span(class = "text-success", icon("check-circle"),
                    paste0(n_custom, " custom EL values loaded")),
           if (length(rv$run_history) > 0)
-            tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
-                                icon("clock-rotate-left"), " Preserved from previous run")
+            tagList(tags$br(), tags$span(class = "text-muted", style = "font-size: 11px;",
+                                         icon("clock-rotate-left"), " Preserved from previous run"))
         )
       } else {
         tags$span(class = "text-muted", icon("info-circle"),

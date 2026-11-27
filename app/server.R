@@ -1090,6 +1090,18 @@ server <- function(input, output, session) {
         rv$results_by_scenario <- all_scenario_results
         log_message("Computed EL and derived columns for all scenarios × shock years")
 
+        # Rows without a PD (loan term outside 1-5 years, no matching assets) are
+        # excluded from PD/EL aggregates; say so instead of reporting silent success
+        covered <- !is.na(rv$results$pd_shock)
+        exp_all <- sum(rv$results$exposure_value_usd, na.rm = TRUE)
+        covered_share <- if (exp_all > 0) sum(rv$results$exposure_value_usd[covered], na.rm = TRUE) / exp_all else 0
+        if (covered_share < 0.999) {
+          msg <- paste0(round((1 - covered_share) * 100, 1), "% of exposure has no TRISK PD ",
+                        "(loan term outside 1-5 years or no matching assets) and is excluded from PD/EL figures.")
+          log_message(paste("  WARNING:", msg))
+          showNotification(msg, type = "warning", duration = 12)
+        }
+
         log_message("--- Results (Primary) ---")
         log_message(paste("  Primary scenario:", primary_scenario))
         log_message(paste("  Primary shock year:", primary_year))
@@ -1503,7 +1515,10 @@ server <- function(input, output, session) {
     }
     val <- {
       col <- safe_col(rv$results, "crispy_perc_value_change", "net_present_value_change", "npv_change")
-      if (!is.null(col)) mean(col, na.rm = TRUE) * 100 else 0
+      if (!is.null(col)) mean(col, na.rm = TRUE) * 100 else NA_real_
+    }
+    if (!is.finite(val)) {
+      return(valueBox("N/A", "Average NPV Change (%)", icon = icon("chart-line"), color = "blue"))
     }
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
@@ -1519,7 +1534,10 @@ server <- function(input, output, session) {
     }
     val <- {
       col <- safe_col(rv$results, "pd_shock", "crispy_pd_shock")
-      if (!is.null(col)) max(col, na.rm = TRUE) * 100 else 0
+      if (!is.null(col) && any(!is.na(col))) max(col, na.rm = TRUE) * 100 else NA_real_
+    }
+    if (!is.finite(val)) {
+      return(valueBox("N/A", "Maximum PD Shock (%)", icon = icon("chart-bar"), color = "blue"))
     }
     valueBox(tags$span(paste0(display_round(val), "%"),
                        title = paste0("Full precision: ", smart_round(val), "%"),
@@ -1534,14 +1552,14 @@ server <- function(input, output, session) {
     if (is.null(rv$results)) {
       return(valueBox("---", "PD Change, Exposure-Weighted (percentage points)", icon = icon("balance-scale"), color = "blue"))
     }
-    val <- 0
+    val <- NA_real_
     df <- rv$results
     if (all(c("pd_baseline", "pd_shock") %in% names(df))) {
       exp_col <- if ("exposure_value_usd" %in% names(df)) df$exposure_value_usd else rep(1, nrow(df))
-      total_exp <- sum(exp_col, na.rm = TRUE)
-      if (total_exp > 0) {
-        val <- sum((df$pd_shock - df$pd_baseline) * exp_col, na.rm = TRUE) / total_exp * 100
-      }
+      val <- weighted_mean_covered(df$pd_shock - df$pd_baseline, exp_col) * 100
+    }
+    if (!is.finite(val)) {
+      return(valueBox("N/A", "PD Change, Exposure-Weighted (percentage points)", icon = icon("balance-scale"), color = "blue"))
     }
     valueBox(tags$span(paste0(display_round(val), " pp"),
                        title = paste0("Full precision: ", smart_round(val), " pp"),
@@ -1651,20 +1669,18 @@ server <- function(input, output, session) {
 
     display_df <- df[, base_cols, drop = FALSE]
 
-    # Round pd_baseline and pd_shock for display
-    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
-    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
-
-    # Compute PD Change columns
+    # Compute PD Change columns from full-precision PDs, then round for display
     has_pd <- all(c("pd_baseline", "pd_shock") %in% names(display_df))
     if (has_pd) {
-      display_df$PD_Change <- smart_round(display_df$pd_shock - display_df$pd_baseline)
+      display_df$PD_Change <- smart_round(df$pd_shock - df$pd_baseline)
       display_df$PD_Change_Pct <- smart_round(
-        ifelse(display_df$pd_baseline != 0,
-               (display_df$pd_shock - display_df$pd_baseline) / display_df$pd_baseline * 100,
+        ifelse(df$pd_baseline != 0,
+               (df$pd_shock - df$pd_baseline) / df$pd_baseline * 100,
                NA_real_)
       )
     }
+    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
+    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
 
     # Compute EL columns from the full results (which have expected_loss_* computed)
     has_el <- all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))
@@ -1672,10 +1688,11 @@ server <- function(input, output, session) {
       display_df$EL_Baseline <- smart_round(df$expected_loss_baseline)
       display_df$EL_Shock <- smart_round(df$expected_loss_shock)
       display_df$EL_Change <- smart_round(df$expected_loss_shock - df$expected_loss_baseline)
+      # EL is negative (a loss): divide by |baseline| so a bigger loss is a negative %
       display_df$EL_Change_Pct <- smart_round(
         ifelse(df$expected_loss_baseline != 0,
                (df$expected_loss_shock - df$expected_loss_baseline) /
-                 df$expected_loss_baseline * 100,
+                 abs(df$expected_loss_baseline) * 100,
                NA_real_)
       )
     }
@@ -1763,9 +1780,10 @@ server <- function(input, output, session) {
       pd_change <- df$pd_shock - df$pd_baseline
 
       if (total_exposure > 0) {
-        weighted_pd_change <- sum(pd_change * df$exposure_value_usd, na.rm = TRUE) / total_exposure
-        weighted_pd_baseline <- sum(df$pd_baseline * df$exposure_value_usd, na.rm = TRUE) / total_exposure
-        weighted_pd_change_pct <- if (weighted_pd_baseline != 0) {
+        weighted_pd_change <- weighted_mean_covered(pd_change, df$exposure_value_usd)
+        weighted_pd_baseline <- weighted_mean_covered(ifelse(is.na(pd_change), NA, df$pd_baseline),
+                                                      df$exposure_value_usd)
+        weighted_pd_change_pct <- if (is.finite(weighted_pd_baseline) && weighted_pd_baseline != 0) {
           weighted_pd_change / weighted_pd_baseline * 100
         } else NA_real_
       } else {
@@ -1779,6 +1797,7 @@ server <- function(input, output, session) {
       total_exposure <- 0
     }
 
+    if (!is.finite(weighted_pd_change)) return(tags$p("No TRISK PD results for this portfolio."))
     pd_class <- if (weighted_pd_change > 0.001) "negative" else if (weighted_pd_change < -0.001) "positive" else "neutral"
 
     # EL aggregates
@@ -1787,7 +1806,7 @@ server <- function(input, output, session) {
       total_el_shock <- sum(df$expected_loss_shock, na.rm = TRUE)
       total_el_change <- total_el_shock - total_el_baseline
       total_el_change_pct <- if (total_el_baseline != 0) {
-        total_el_change / total_el_baseline * 100
+        total_el_change / abs(total_el_baseline) * 100
       } else NA_real_
 
       # EL values are negative (losses), so more negative shock = worse = "negative" class
@@ -1933,7 +1952,7 @@ server <- function(input, output, session) {
             tags$p(style = "margin: 0; font-size: 13px; color: #666;",
                    paste0(length(years), " shock years analyzed: ",
                           paste(years, collapse = ", "),
-                          " | ", nrow(rv$results_by_year[[1]]), " companies"))
+                          " | ", n_companies(rv$results_by_year[[1]]), " companies"))
           ),
           column(4, style = "text-align: right; padding-top: 8px;",
             downloadButton("download_horizon_csv", "Export Multi-Horizon CSV",
@@ -2246,7 +2265,7 @@ server <- function(input, output, session) {
         `Avg NPV Change (%)` = round(mean(df$crispy_perc_value_change, na.rm = TRUE) * 100, 2),
         `Total EL` = round(sum(df$expected_loss_shock, na.rm = TRUE), 0),
         `Total EL Change` = round(sum(df$expected_loss_shock - df$expected_loss_baseline, na.rm = TRUE), 0),
-        Companies = nrow(df),
+        Companies = n_companies(df),
         check.names = FALSE
       )
     })
@@ -2453,8 +2472,7 @@ server <- function(input, output, session) {
     sps <- scenario_portfolio_summary()
     req(sps)
 
-    # Use earliest year for ranking
-    earliest_yr <- min(sps$shock_year)
+    # Rank on the latest shock year
     ranking <- sps %>%
       filter(shock_year == max(sps$shock_year)) %>%
       arrange(desc(avg_pd_shock)) %>%
@@ -2753,7 +2771,8 @@ server <- function(input, output, session) {
 
     # Build exceedance: probability of exceeding threshold x
     pd_vals <- sort(sps_yr$avg_pd_shock * 100)
-    exceed_probs <- 1 - (seq_along(pd_vals) - 0.5) / n
+    # Share of scenarios whose PD is strictly above each scenario's PD
+    exceed_probs <- (n - seq_along(pd_vals)) / n
 
     plot_ly() %>%
       add_lines(x = pd_vals, y = exceed_probs * 100,
@@ -2868,7 +2887,11 @@ server <- function(input, output, session) {
     has_tech <- "technology" %in% names(df)
     has_company <- any(c("company_name", "company_id") %in% names(df))
 
-    total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
+    # Attribute over rows that have both PDs and an exposure, so the header,
+    # waterfall and contributions share one denominator
+    df <- df[!is.na(df$pd_baseline) & !is.na(df$pd_shock) & !is.na(df$exposure_value_usd), , drop = FALSE]
+    req(nrow(df) > 0)
+    total_exposure <- sum(df$exposure_value_usd)
 
     # --- Company-level attribution ---
     # After portfolio enrichment, results may have multiple rows per company
@@ -2941,8 +2964,8 @@ server <- function(input, output, session) {
     } else NULL
 
     # --- Portfolio-level waterfall steps ---
-    portfolio_pd_baseline <- weighted.mean(df$pd_baseline, df$exposure_value_usd, na.rm = TRUE)
-    portfolio_pd_shock <- weighted.mean(df$pd_shock, df$exposure_value_usd, na.rm = TRUE)
+    portfolio_pd_baseline <- weighted.mean(df$pd_baseline, df$exposure_value_usd)
+    portfolio_pd_shock <- weighted.mean(df$pd_shock, df$exposure_value_usd)
     portfolio_pd_change <- portfolio_pd_shock - portfolio_pd_baseline
 
     list(
@@ -2962,7 +2985,7 @@ server <- function(input, output, session) {
 
   # ---- Attribution Dashboard UI ----
   output$attribution_ui <- renderUI({
-    ad <- attribution_data()
+    ad <- if (is.null(rv$results)) NULL else attribution_data()
     if (is.null(ad)) {
       return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
         icon("chart-bar", style = "font-size: 48px; margin-bottom: 15px;"),
@@ -3363,15 +3386,12 @@ server <- function(input, output, session) {
         `PD Change (pp)` = round(pd_change * 100, 4),
         `Contribution (pp)` = round(pd_contribution * 100, 4),
         `Contribution (%)` = if (abs(ad$portfolio_pd_change) > 1e-10)
-          round(pd_contribution / ad$portfolio_pd_change * 100, 1) else NA_real_
+          round(pd_contribution / ad$portfolio_pd_change * 100, 1) else NA_real_,
+        `EL Change ($)` = round(el_change, 0),
+        `NPV Change (%)` = round(npv_change_pct, 2)
       )
-
-    if (ad$has_el) {
-      display_df$`EL Change ($)` <- round(detail_df$el_change, 0)
-    }
-    if (ad$has_npv) {
-      display_df$`NPV Change (%)` <- round(detail_df$npv_change_pct, 2)
-    }
+    if (!ad$has_el) display_df$`EL Change ($)` <- NULL
+    if (!ad$has_npv) display_df$`NPV Change (%)` <- NULL
 
     datatable(display_df, rownames = FALSE,
       options = list(
@@ -3575,7 +3595,7 @@ server <- function(input, output, session) {
 
   # ---- Concentration UI ----
   output$concentration_ui <- renderUI({
-    cd <- concentration_data()
+    cd <- if (is.null(rv$results)) NULL else concentration_data()
     if (is.null(cd)) {
       return(div(style = "text-align: center; padding: 60px 20px; color: #999;",
         icon("th-large", style = "font-size: 48px; margin-bottom: 15px;"),
@@ -4401,18 +4421,16 @@ server <- function(input, output, session) {
 
     display_df <- df[, show_cols, drop = FALSE]
 
-    # Round pd_baseline and pd_shock for display
-    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
-    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
-
-    # Add computed PD change
+    # Add computed PD change (from full-precision PDs), then round for display
     if (all(c("pd_baseline", "pd_shock") %in% names(display_df))) {
-      display_df$PD_Change <- smart_round(display_df$pd_shock - display_df$pd_baseline)
+      display_df$PD_Change <- smart_round(df$pd_shock - df$pd_baseline)
       display_df$PD_Change_Pct <- smart_round(
-        ifelse(display_df$pd_baseline != 0,
-               (display_df$pd_shock - display_df$pd_baseline) / display_df$pd_baseline * 100,
+        ifelse(df$pd_baseline != 0,
+               (df$pd_shock - df$pd_baseline) / df$pd_baseline * 100,
                NA_real_))
     }
+    if ("pd_baseline" %in% names(display_df)) display_df$pd_baseline <- smart_round(display_df$pd_baseline)
+    if ("pd_shock" %in% names(display_df)) display_df$pd_shock <- smart_round(display_df$pd_shock)
 
     # Editable Internal_PD column:
     # Priority: (1) user-uploaded/edited values in rv$internal_pd, (2) pd_baseline, (3) zero
@@ -4553,13 +4571,14 @@ server <- function(input, output, session) {
         internal_pd + pd_change
       },
       "relative" = {
-        internal_pd * (1 + pd_change_pct)
+        # a zero baseline has no relative change; use the absolute one
+        ifelse(pd_baseline != 0, internal_pd * (1 + pd_change_pct), internal_pd + pd_change)
       },
       "zscore" = {
         # Basel IRB z-score integration
         # adjusted = Phi(Phi^{-1}(internal) + Phi^{-1}(shock) - Phi^{-1}(baseline))
-        # Clip inputs to (0.0001, 0.9999) to avoid Inf from qnorm
-        clip_pd <- function(x) pmin(pmax(x, 0.0001), 0.9999)
+        # Clip only far enough to keep qnorm finite; a 1bp floor erased shocks on low PDs
+        clip_pd <- function(x) pmin(pmax(x, 1e-10), 1 - 1e-10)
         z_internal <- qnorm(clip_pd(internal_pd))
         z_shock <- qnorm(clip_pd(pd_shock))
         z_baseline <- qnorm(clip_pd(pd_baseline))
@@ -4574,13 +4593,13 @@ server <- function(input, output, session) {
     id_cols <- intersect(c("company_id", "company_name", "sector", "technology",
                            "exposure_value_usd"), names(df))
     result_df <- df[, id_cols, drop = FALSE]
-    result_df$Internal_PD <- smart_round(internal_pd)
-    result_df$PD_Baseline <- smart_round(pd_baseline)
-    result_df$PD_Shock <- smart_round(pd_shock)
-    result_df$PD_Change <- smart_round(pd_change)
-    result_df$PD_Change_Pct <- smart_round(pd_change_pct * 100)
-    result_df$TRISK_Adjusted_PD <- smart_round(adjusted_pd)
-    result_df$PD_Adjustment <- smart_round(adjusted_pd - internal_pd)
+    result_df$Internal_PD <- internal_pd
+    result_df$PD_Baseline <- pd_baseline
+    result_df$PD_Shock <- pd_shock
+    result_df$PD_Change <- pd_change
+    result_df$PD_Change_Pct <- pd_change_pct * 100
+    result_df$TRISK_Adjusted_PD <- adjusted_pd
+    result_df$PD_Adjustment <- adjusted_pd - internal_pd
 
     rv$pd_integration_result <- result_df
 
@@ -4615,6 +4634,7 @@ server <- function(input, output, session) {
       "PD_Adjustment"    = "PD Adjustment"
     )
     display_df <- df
+    display_df[] <- lapply(display_df, function(x) if (is.numeric(x)) smart_round(x) else x)
     for (old_name in names(pd_renames)) {
       if (old_name %in% names(display_df)) {
         names(display_df)[names(display_df) == old_name] <- pd_renames[old_name]
@@ -4726,13 +4746,16 @@ server <- function(input, output, session) {
       "absolute" = tagList(
         tags$b("Absolute Change Application"),
         tags$p("TRISK-adjusted EL = Internal_EL + (EL_shock - EL_baseline)"),
-        tags$p("Adds the raw EL change from TRISK to your internal Expected Loss estimate.")
+        tags$p("Adds the raw EL change from TRISK to your internal Expected Loss estimate."),
+        tags$p(class = "text-muted", "Internal EL can be entered as a positive amount: it is read as a loss (negative), matching TRISK's sign convention.")
       ),
       "relative" = tagList(
         tags$b("Relative Change Application"),
         tags$p("TRISK-adjusted EL = Internal_EL * (1 + EL_change%)"),
-        tags$p("Scales your internal EL by the relative percentage shift from the TRISK model.")
-      )
+        tags$p("Scales your internal EL by the relative percentage shift from the TRISK model."),
+        tags$p(class = "text-muted", "Internal EL can be entered as a positive amount: it is read as a loss (negative), matching TRISK's sign convention.")
+      ),
+      NULL
     )
     desc
   })
@@ -4754,7 +4777,7 @@ server <- function(input, output, session) {
       display_df$EL_Change_Pct <- smart_round(
         ifelse(display_df$expected_loss_baseline != 0,
                (display_df$expected_loss_shock - display_df$expected_loss_baseline) /
-                 display_df$expected_loss_baseline * 100,
+                 abs(display_df$expected_loss_baseline) * 100,
                NA_real_))
     }
 
@@ -4882,31 +4905,38 @@ server <- function(input, output, session) {
       rep(0, nrow(df))
     }
 
+    # TRISK reports EL as a negative amount (a loss); banks usually report it
+    # positive. Read internal EL in TRISK's convention so a shock that raises
+    # the loss always makes the adjusted EL more negative.
+    internal_el <- -abs(internal_el)
+
     el_baseline <- if ("expected_loss_baseline" %in% names(df)) df$expected_loss_baseline else rep(0, nrow(df))
     el_shock <- if ("expected_loss_shock" %in% names(df)) df$expected_loss_shock else rep(0, nrow(df))
 
     el_change <- el_shock - el_baseline
-    el_change_pct <- ifelse(el_baseline != 0, el_change / el_baseline, 0)
+    el_ratio <- ifelse(el_baseline != 0, el_shock / el_baseline, NA_real_)
 
     adjusted_el <- switch(method,
       "absolute" = {
         internal_el + el_change
       },
       "relative" = {
-        internal_el * (1 + el_change_pct)
+        # scale by the TRISK loss ratio; a zero baseline has none, use the absolute change
+        ifelse(is.na(el_ratio), internal_el + el_change, internal_el * el_ratio)
       }
     )
 
     id_cols <- intersect(c("company_id", "company_name", "sector", "technology",
                            "exposure_value_usd"), names(df))
     result_df <- df[, id_cols, drop = FALSE]
-    result_df$Internal_EL <- smart_round(internal_el)
-    result_df$EL_Baseline <- smart_round(el_baseline)
-    result_df$EL_Shock <- smart_round(el_shock)
-    result_df$EL_Change <- smart_round(el_change)
-    result_df$EL_Change_Pct <- smart_round(el_change_pct * 100)
-    result_df$TRISK_Adjusted_EL <- smart_round(adjusted_el)
-    result_df$EL_Adjustment <- smart_round(adjusted_el - internal_el)
+    result_df$Internal_EL <- internal_el
+    result_df$EL_Baseline <- el_baseline
+    result_df$EL_Shock <- el_shock
+    result_df$EL_Change <- el_change
+    # relative to |baseline|: a bigger loss shows as a negative %
+    result_df$EL_Change_Pct <- ifelse(el_baseline != 0, el_change / abs(el_baseline) * 100, NA_real_)
+    result_df$TRISK_Adjusted_EL <- adjusted_el
+    result_df$EL_Adjustment <- adjusted_el - internal_el
 
     rv$el_integration_result <- result_df
 
@@ -4940,6 +4970,7 @@ server <- function(input, output, session) {
       "EL_Adjustment"    = "EL Adjustment"
     )
     display_df <- df
+    display_df[] <- lapply(display_df, function(x) if (is.numeric(x)) smart_round(x) else x)
     for (old_name in names(col_renames)) {
       if (old_name %in% names(display_df)) {
         names(display_df)[names(display_df) == old_name] <- col_renames[old_name]
@@ -4991,7 +5022,7 @@ server <- function(input, output, session) {
     total_adjusted_el <- sum(df$TRISK_Adjusted_EL, na.rm = TRUE)
     total_el_adjustment <- total_adjusted_el - total_internal_el
     total_el_adj_pct <- if (total_internal_el != 0) {
-      total_el_adjustment / total_internal_el * 100
+      total_el_adjustment / abs(total_internal_el) * 100
     } else NA_real_
 
     exp_col <- if ("exposure_value_usd" %in% names(df)) "exposure_value_usd" else NULL

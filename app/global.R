@@ -526,6 +526,20 @@ dataset_template <- function(type) {
   )
 }
 
+#' Exposure-weighted mean over rows where both value and weight are known.
+#' Rows without a TRISK result (e.g. loan term > 5 years) must not dilute it.
+weighted_mean_covered <- function(x, w) {
+  ok <- !is.na(x) & !is.na(w)
+  if (!any(ok) || sum(w[ok]) <= 0) return(NA_real_)
+  sum(x[ok] * w[ok]) / sum(w[ok])
+}
+
+#' Count of distinct companies (rows are company x technology x asset)
+n_companies <- function(df) {
+  col <- intersect(c("company_id", "company_name"), names(df))
+  if (length(col) > 0) dplyr::n_distinct(df[[col[1]]]) else nrow(df)
+}
+
 #' Smart rounding: 2 decimals for |x|>10, 5 decimals for |x|<=10
 smart_round <- function(x) {
   ifelse(abs(x) > 10, round(x, 2), round(x, 5))

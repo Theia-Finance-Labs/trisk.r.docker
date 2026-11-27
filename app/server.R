@@ -2132,9 +2132,18 @@ server <- function(input, output, session) {
           right = TRUE)
     }
 
+    # One exposure-weighted PD per company and year; merging row-level data
+    # (company x technology) would count a company k^2 times
     id_col <- if ("company_id" %in% names(first_year)) "company_id" else "company_name"
-    from_df <- data.frame(id = first_year[[id_col]], from = pd_bucket(first_year$pd_shock))
-    to_df <- data.frame(id = last_year[[id_col]], to = pd_bucket(last_year$pd_shock))
+    company_pd <- function(df) {
+      w <- if ("exposure_value_usd" %in% names(df)) df$exposure_value_usd else rep(1, nrow(df))
+      df %>% mutate(.w = w) %>%
+        group_by(id = .data[[id_col]]) %>%
+        summarise(pd = weighted_mean_covered(pd_shock, .w), .groups = "drop") %>%
+        filter(!is.na(pd))
+    }
+    from_df <- company_pd(first_year) %>% transmute(id, from = pd_bucket(pd))
+    to_df <- company_pd(last_year) %>% transmute(id, to = pd_bucket(pd))
     migration <- merge(from_df, to_df, by = "id")
 
     # Build transition matrix
@@ -3458,28 +3467,42 @@ server <- function(input, output, session) {
 
     total_exposure <- sum(df$exposure_value_usd, na.rm = TRUE)
 
-    # --- Company-level enrichment ---
+    # --- Row-level enrichment (rows are company x technology x asset) ---
     company_label_col <- if (has_company && "company_name" %in% names(df)) "company_name" else "company_id"
-    company_df <- df %>%
+    row_df <- df %>%
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
         company_label = as.character(.data[[company_label_col]])
       )
     # Guard NA labels: replace with row-index fallback
-    company_df$company_label <- ifelse(
-      is.na(company_df$company_label) | company_df$company_label == "",
-      paste0("Company_", seq_len(nrow(company_df))),
-      company_df$company_label
+    row_df$company_label <- ifelse(
+      is.na(row_df$company_label) | row_df$company_label == "",
+      paste0("Company_", seq_len(nrow(row_df))),
+      row_df$company_label
     )
-    if (has_el) {
-      company_df <- company_df %>%
-        mutate(el_change = expected_loss_shock - expected_loss_baseline)
-    }
-    if (has_npv) {
-      company_df <- company_df %>%
-        mutate(npv_change_pct = crispy_perc_value_change * 100)
-    }
+    row_df$el_change <- if (has_el) row_df$expected_loss_shock - row_df$expected_loss_baseline else NA_real_
+    row_df$npv_change_pct <- if (has_npv) row_df$crispy_perc_value_change * 100 else NA_real_
+
+    # --- Company level: single-name concentration is about counterparties, not rows ---
+    company_key <- if ("company_id" %in% names(row_df)) "company_id" else "company_label"
+    company_df <- row_df %>%
+      group_by(.company_key = .data[[company_key]]) %>%
+      summarise(
+        company_label = dplyr::first(company_label),
+        across(any_of(c("company_id", "country_iso2")), dplyr::first),
+        sector = sector[order(-exposure_value_usd)][1],   # most-exposed sector
+        # weighted means before exposure_value_usd is overwritten by sum()
+        pd_baseline = weighted_mean_covered(pd_baseline, exposure_value_usd),
+        pd_shock = weighted_mean_covered(pd_shock, exposure_value_usd),
+        npv_change_pct = if (has_npv) weighted_mean_covered(npv_change_pct, exposure_value_usd) else NA_real_,
+        el_change = if (has_el) sum(el_change, na.rm = TRUE) else NA_real_,
+        exposure_value_usd = sum(exposure_value_usd, na.rm = TRUE),
+        weight = sum(weight, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(pd_change = pd_shock - pd_baseline) %>%
+      select(-".company_key")
 
     # --- Concentration metrics ---
     weights <- company_df$weight
@@ -3503,10 +3526,10 @@ server <- function(input, output, session) {
     } else 0
 
     # --- Sector-level aggregation ---
-    sector_df <- company_df %>%
+    sector_df <- row_df %>%
       group_by(sector) %>%
       summarise(
-        n_companies = n(),
+        n_companies = n_distinct(company_label),
         total_exposure = sum(exposure_value_usd, na.rm = TRUE),
         weight = sum(weight, na.rm = TRUE),
         avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
@@ -3520,10 +3543,10 @@ server <- function(input, output, session) {
 
     # --- Geography-level aggregation ---
     geo_df <- if (has_geo) {
-      company_df %>%
+      row_df %>%
         group_by(country_iso2) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_baseline = weighted.mean(pd_baseline, exposure_value_usd, na.rm = TRUE),
@@ -3536,10 +3559,10 @@ server <- function(input, output, session) {
 
     # --- Sector × Geography cross-tab ---
     cross_df <- if (has_geo) {
-      company_df %>%
+      row_df %>%
         group_by(sector, country_iso2) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
@@ -3551,10 +3574,10 @@ server <- function(input, output, session) {
 
     # --- Sector × Technology cross-tab ---
     cross_tech_df <- if (has_tech) {
-      company_df %>%
+      row_df %>%
         group_by(sector, technology) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
@@ -3574,6 +3597,7 @@ server <- function(input, output, session) {
 
     list(
       company = company_df,
+      rows = row_df,
       sector = sector_df,
       geo = geo_df,
       cross = cross_df,
@@ -3799,10 +3823,10 @@ server <- function(input, output, session) {
       row_label <- "Technology"
     } else {
       # sector_company fallback: always available
-      cross <- cd$company %>%
+      cross <- cd$rows %>%
         group_by(sector, company_label) %>%
         summarise(
-          n_companies = n(),
+          n_companies = n_distinct(company_label),
           total_exposure = sum(exposure_value_usd, na.rm = TRUE),
           weight = sum(weight, na.rm = TRUE),
           avg_pd_change = weighted.mean(pd_change, exposure_value_usd, na.rm = TRUE),
@@ -4375,6 +4399,7 @@ server <- function(input, output, session) {
                            "% | CR10=", round(cd$cr10, 1), "% | Gini=", round(cd$gini, 3))),
           stringsAsFactors = FALSE
         )
+        export_df <- bind_rows(metrics_row, export_df)
         write.csv(neutralize_formulas(export_df), file, row.names = FALSE)
       }
     }

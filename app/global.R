@@ -342,6 +342,19 @@ allocate_exposure <- function(df, row_col = ".portfolio_row") {
   df
 }
 
+#' Carry per-row values (internal PD/EL) from one run's rows to another's by
+#' (company_id, sector, technology, term) instead of by position; rows with no
+#' counterpart get `default`. Returns NULL when nothing matches.
+remap_by_key <- function(values, old_df, new_df, default) {
+  if (is.null(values) || is.null(old_df) || length(values) != nrow(old_df)) return(NULL)
+  key_cols <- intersect(c("company_id", "sector", "technology", "term"), intersect(names(old_df), names(new_df)))
+  if (length(key_cols) == 0) return(NULL)
+  row_key <- function(d) do.call(paste, c(lapply(key_cols, function(k) as.character(d[[k]])), sep = "\r"))
+  out <- values[match(row_key(new_df), row_key(old_df))]
+  if (all(is.na(out))) return(NULL)
+  ifelse(is.na(out), default, out)
+}
+
 #' Carbon price scenarios offered in the UI ("no_carbon_tax" first)
 carbon_price_choices <- function(carbon) {
   available <- if (is.null(carbon)) character() else sort(unique(as.character(carbon$scenario)))

@@ -1049,6 +1049,16 @@ server <- function(input, output, session) {
         }
         rv$run_config <- run_config
 
+        # Internal PD/EL values are kept across runs, re-matched to the new rows
+        # by company/sector/technology/term rather than by row position
+        new_primary <- all_scenario_results[[target_scenarios_run[1]]][[as.character(shock_years[1])]]
+        if (!is.null(rv$internal_pd)) {
+          rv$internal_pd <- remap_by_key(rv$internal_pd, rv$results, new_primary, new_primary$pd_baseline)
+        }
+        if (!is.null(rv$internal_el)) {
+          rv$internal_el <- remap_by_key(rv$internal_el, rv$results, new_primary, new_primary$expected_loss_baseline)
+        }
+
         # Primary results = first scenario, first year (backward compatibility)
         primary_scenario <- target_scenarios_run[1]
         primary_year <- as.character(shock_years[1])
@@ -2271,7 +2281,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$results_by_year)
-      combined <- bind_rows(rv$results_by_year, .id = "shock_year")
+      combined <- bind_rows(rv$results_by_year)  # each frame already has shock_year
       write.csv(neutralize_formulas(sanitize_export(combined)), file, row.names = FALSE)
     }
   )
@@ -2841,7 +2851,12 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       scd <- scenario_comparison_data()
-      if (!is.null(scd)) write.csv(neutralize_formulas(sanitize_export(scd)), file, row.names = FALSE)
+      if (is.null(scd)) {
+        # needs 2+ target scenarios; still return a valid (empty) CSV
+        writeLines("note\n\"Scenario comparison needs two or more target scenarios\"", file)
+      } else {
+        write.csv(neutralize_formulas(sanitize_export(scd)), file, row.names = FALSE)
+      }
     }
   )
 
@@ -4457,8 +4472,13 @@ server <- function(input, output, session) {
 
     # The editable column is the last one (Internal_PD)
     row_idx <- info$row
-    new_val <- as.numeric(info$value)
-    if (!is.na(new_val) && row_idx >= 1 && row_idx <= length(rv$internal_pd)) {
+    new_val <- suppressWarnings(as.numeric(info$value))
+    if (is.na(new_val) || new_val < 0 || new_val > 1) {
+      showNotification("Internal PD must be a probability between 0 and 1 (e.g. 0.02 for 2%).",
+                       type = "error", duration = 6)
+      return()
+    }
+    if (row_idx >= 1 && row_idx <= length(rv$internal_pd)) {
       rv$internal_pd[row_idx] <- new_val
     }
   })
@@ -4483,18 +4503,11 @@ server <- function(input, output, session) {
       df <- rv$results
       internal_pd <- if ("pd_baseline" %in% names(df)) df$pd_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_pd[idx[1]])
-          if (!is.na(val)) {
-            internal_pd[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      idx <- match(as.character(df$company_id), as.character(uploaded$company_id))
+      vals <- as.numeric(uploaded$internal_pd)[idx]
+      hit <- !is.na(vals)
+      internal_pd[hit] <- vals[hit]
+      matched <- sum(hit)
 
       rv$internal_pd <- internal_pd
       showNotification(
@@ -4804,7 +4817,7 @@ server <- function(input, output, session) {
     }
 
     row_idx <- info$row
-    new_val <- as.numeric(info$value)
+    new_val <- suppressWarnings(as.numeric(info$value))
     if (!is.na(new_val) && row_idx >= 1 && row_idx <= length(rv$internal_el)) {
       rv$internal_el[row_idx] <- new_val
     }
@@ -4829,18 +4842,11 @@ server <- function(input, output, session) {
       df <- rv$results
       internal_el <- if ("expected_loss_baseline" %in% names(df)) df$expected_loss_baseline else rep(0, nrow(df))
 
-      matched <- 0
-      for (i in seq_len(nrow(df))) {
-        cid <- as.character(df$company_id[i])
-        idx <- which(as.character(uploaded$company_id) == cid)
-        if (length(idx) > 0) {
-          val <- as.numeric(uploaded$internal_el[idx[1]])
-          if (!is.na(val)) {
-            internal_el[i] <- val
-            matched <- matched + 1
-          }
-        }
-      }
+      idx <- match(as.character(df$company_id), as.character(uploaded$company_id))
+      vals <- as.numeric(uploaded$internal_el)[idx]
+      hit <- !is.na(vals)
+      internal_el[hit] <- vals[hit]
+      matched <- sum(hit)
 
       rv$internal_el <- internal_el
       showNotification(
@@ -5273,71 +5279,86 @@ server <- function(input, output, session) {
   # Downloads
   # ============================================
 
+  # Workbook sheets for the Excel export (shared by filename() and content())
+  excel_export_sheets <- function() {
+    df <- rv$results
+    grp_cols <- intersect(c("sector", "technology"), names(df))
+
+    summary_df <- if (length(grp_cols) > 0) {
+      tryCatch({
+        df %>%
+          group_by(across(all_of(grp_cols))) %>%
+          summarise(n_rows = n(), .groups = "drop")
+      }, error = function(e) df)
+    } else {
+      df
+    }
+
+    sheets <- list(
+      "Summary" = summary_df,
+      "Full Results" = df
+    )
+
+    # Add multi-horizon results if available
+    if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
+      sheets[["Multi-Horizon"]] <- bind_rows(rv$results_by_year)  # each frame already has shock_year
+    }
+
+    # Add multi-scenario comparison if available
+    if (!is.null(rv$results_by_scenario) && length(rv$results_by_scenario) > 1) {
+      all_scen_rows <- list()
+      for (scen_code in names(rv$results_by_scenario)) {
+        for (yr_key in names(rv$results_by_scenario[[scen_code]])) {
+          df_s <- rv$results_by_scenario[[scen_code]][[yr_key]]
+          df_s$target_scenario <- scen_code
+          df_s$shock_year <- as.integer(yr_key)
+          all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
+        }
+      }
+      sheets[["Scenario Comparison"]] <- bind_rows(all_scen_rows)
+    }
+
+    # Add integration results if available
+    if (!is.null(rv$pd_integration_result)) {
+      sheets[["PD Integration"]] <- rv$pd_integration_result
+    }
+    if (!is.null(rv$el_integration_result)) {
+      sheets[["EL Integration"]] <- rv$el_integration_result
+    }
+
+    # Sanitize all sheets to export-safe columns
+    sheets <- lapply(sheets, sanitize_export)
+    sheets
+  }
+
+  # writexl builds the whole workbook in memory: above this many rows in any
+  # one sheet, export every sheet as CSV inside a .zip instead
+  EXCEL_MAX_SHEET_ROWS <- 100000
+  excel_too_large <- function(sheets) max(vapply(sheets, nrow, integer(1))) > EXCEL_MAX_SHEET_ROWS
+
   output$download_excel <- downloadHandler(
     filename = function() {
-      paste0("trisk_results_", rv$run_id, ".xlsx")
+      ext <- if (!is.null(rv$results) && excel_too_large(excel_export_sheets())) ".zip" else ".xlsx"
+      paste0("trisk_results_", rv$run_id, ext)
     },
     content = function(file) {
       req(rv$results)
       audit_log("export", list(format = "xlsx", run_id = rv$run_id, rows = nrow(rv$results)))
+      sheets <- excel_export_sheets()
 
-      df <- rv$results
-      grp_cols <- intersect(c("sector", "technology"), names(df))
-
-      summary_df <- if (length(grp_cols) > 0) {
-        tryCatch({
-          df %>%
-            group_by(across(all_of(grp_cols))) %>%
-            summarise(n_rows = n(), .groups = "drop")
-        }, error = function(e) df)
-      } else {
-        df
-      }
-
-      sheets <- list(
-        "Summary" = summary_df,
-        "Full Results" = df
-      )
-
-      # Add multi-horizon results if available
-      if (!is.null(rv$results_by_year) && length(rv$results_by_year) > 1) {
-        sheets[["Multi-Horizon"]] <- bind_rows(rv$results_by_year, .id = "shock_year")
-      }
-
-      # Add multi-scenario comparison if available
-      if (!is.null(rv$results_by_scenario) && length(rv$results_by_scenario) > 1) {
-        all_scen_rows <- list()
-        for (scen_code in names(rv$results_by_scenario)) {
-          for (yr_key in names(rv$results_by_scenario[[scen_code]])) {
-            df_s <- rv$results_by_scenario[[scen_code]][[yr_key]]
-            df_s$target_scenario <- scen_code
-            df_s$shock_year <- as.integer(yr_key)
-            all_scen_rows[[paste0(scen_code, "_", yr_key)]] <- df_s
-          }
-        }
-        sheets[["Scenario Comparison"]] <- bind_rows(all_scen_rows)
-      }
-
-      # Add integration results if available
-      if (!is.null(rv$pd_integration_result)) {
-        sheets[["PD Integration"]] <- rv$pd_integration_result
-      }
-      if (!is.null(rv$el_integration_result)) {
-        sheets[["EL Integration"]] <- rv$el_integration_result
-      }
-
-      # Sanitize all sheets to export-safe columns
-      sheets <- lapply(sheets, sanitize_export)
-
-      # Guard against OOM: writexl builds the entire workbook in memory.
-      # For large exports (>100K rows), write CSV instead which streams to disk.
-      total_rows <- sum(vapply(sheets, nrow, integer(1)))
-      if (total_rows > 100000) {
+      if (excel_too_large(sheets)) {
         showNotification(
-          paste0("Large export (", format(total_rows, big.mark = ","),
-                 " rows) — writing CSV instead of Excel to avoid memory issues."),
+          paste0("Large export (", format(max(vapply(sheets, nrow, integer(1))), big.mark = ","),
+                 " rows in one sheet) — downloading every sheet as CSV in a .zip instead of Excel."),
           type = "warning", duration = 8)
-        data.table::fwrite(neutralize_formulas(sheets[["Full Results"]]), file)
+        tmp <- tempfile("trisk_export_")
+        dir.create(tmp)
+        on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+        csvs <- file.path(tmp, paste0(gsub("[^A-Za-z0-9]+", "_", names(sheets)), ".csv"))
+        for (k in seq_along(sheets)) data.table::fwrite(neutralize_formulas(sheets[[k]]), csvs[k])
+        zip_path <- file.path(tmp, "export.zip")
+        utils::zip(zip_path, csvs, flags = "-j -q")
+        file.copy(zip_path, file, overwrite = TRUE)
       } else {
         writexl::write_xlsx(sheets, file)
       }
@@ -5362,7 +5383,7 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results)
       audit_log("export", list(format = "json", run_id = rv$run_id, rows = nrow(rv$results)))
-      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE)
+      jsonlite::write_json(sanitize_export(rv$results), file, pretty = TRUE, digits = NA, na = "null")
     }
   )
 

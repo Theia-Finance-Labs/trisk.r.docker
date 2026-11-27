@@ -300,11 +300,11 @@ validate_file_type <- function(filepath, original_name) {
 #' Stops with a user-facing message on rejection; parse errors propagate as-is.
 read_upload_csv <- function(filepath, original_name, type = NULL) {
   file_check <- validate_file_type(filepath, original_name)
-  if (!is.null(file_check)) stop(upload_rejection(file_check))
+  if (!is.null(file_check)) stop(user_error(file_check))
 
   df <- data.table::fread(filepath, nrows = MAX_UPLOAD_ROWS + 1L)
   if (nrow(df) > MAX_UPLOAD_ROWS) {
-    stop(upload_rejection(sprintf(
+    stop(user_error(sprintf(
       "File has more than %s rows. Please split it into smaller files.",
       format(MAX_UPLOAD_ROWS, big.mark = ",", scientific = FALSE))))
   }
@@ -313,16 +313,39 @@ read_upload_csv <- function(filepath, original_name, type = NULL) {
   df
 }
 
-#' Condition carrying a message that is safe to show to the user
-upload_rejection <- function(msg) {
-  structure(class = c("upload_rejection", "error", "condition"),
+#' Error condition whose message is our own text and safe to show to the user
+#' (other errors may carry internals and are shown generically, CWE-209)
+user_error <- function(msg) {
+  structure(class = c("user_error", "error", "condition"),
             list(message = msg, call = NULL))
 }
 
 #' Message to show for a failed upload: our own rejection text, or a generic one
 upload_error_message <- function(e) {
-  if (inherits(e, "upload_rejection")) conditionMessage(e)
+  if (inherits(e, "user_error")) conditionMessage(e)
   else "Could not parse the uploaded file. Please check the format."
+}
+
+#' Allocate each portfolio row's exposure across the result rows it was joined
+#' to (one per technology after enrichment, one per asset from trisk), in
+#' proportion to positive baseline NPV as trisk.analysis does for company-level
+#' portfolios; equal split when no NPV is usable. Total exposure is preserved.
+allocate_exposure <- function(df, row_col = ".portfolio_row") {
+  if (!row_col %in% names(df)) return(df)
+  g <- df[[row_col]]
+  npv <- if ("net_present_value_baseline" %in% names(df)) df$net_present_value_baseline else rep(NA_real_, nrow(df))
+  npv <- pmax(ifelse(is.na(npv), 0, npv), 0)
+  total <- ave(npv, g, FUN = sum)
+  n_rows <- ave(rep(1, nrow(df)), g, FUN = length)
+  df$exposure_value_usd <- df$exposure_value_usd * ifelse(total > 0, npv / total, 1 / n_rows)
+  df[[row_col]] <- NULL
+  df
+}
+
+#' Carbon price scenarios offered in the UI ("no_carbon_tax" first)
+carbon_price_choices <- function(carbon) {
+  available <- if (is.null(carbon)) character() else sort(unique(as.character(carbon$scenario)))
+  c("no_carbon_tax", setdiff(available, "no_carbon_tax"))
 }
 
 #' Re-encode non-UTF-8 text columns (e.g. Excel "CSV (Comma delimited)" saves
@@ -701,6 +724,11 @@ baseline_for_scenario <- function(target_code, available_baselines, default_base
     })]
     if (length(family_baselines) > 0) return(family_baselines[1])
   }
+
+  # Any other target: prefer a selected baseline from the same family
+  # (same NGFS vintage + model, same IPR edition, ...)
+  same_family <- available_baselines[vapply(available_baselines, scenario_family, character(1)) == family]
+  if (length(same_family) > 0) return(same_family[1])
 
   # Default: use NGFS GCAM 2024 CP (or whatever the user selected as default)
   default_baseline

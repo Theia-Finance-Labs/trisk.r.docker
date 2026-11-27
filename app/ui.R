@@ -403,13 +403,11 @@ ui <- dashboardPage(
               helpText("Firm's ability to pass carbon tax costs onto the consumer (0 = none, 1 = full)."),
               hr(),
               h5("Carbon Price Model", class = "font-heading fw-600"),
-              radioButtons("carbon_price_model", NULL,
-                           choices = c("No Carbon Tax" = "no_carbon_tax",
-                                     "Apply Carbon Tax" = "carbon_tax"),
-                           selected = config_defaults()$carbon_price_model,
-                           inline = TRUE),
-              helpText("Select whether to include carbon pricing effects in the analysis.
-                       When enabled, the model applies scenario-specific carbon prices to company emissions."),
+              selectInput("carbon_price_model", NULL,
+                          choices = carbon_price_choices(carbon_data_internal),
+                          selected = config_defaults()$carbon_price_model),
+              helpText("Carbon price path applied to company emissions ('no_carbon_tax' disables it).
+                       Market passthrough only has an effect when a carbon price applies."),
               hr(),
               actionButton("reset_defaults", "Reset All to Defaults",
                            icon = icon("undo"),
@@ -886,7 +884,7 @@ ui <- dashboardPage(
               tags$tr(tags$td("discount_rate"), tags$td("Discount rate of dividends per year in the DCF model.")),
               tags$tr(tags$td("growth_rate"), tags$td("Terminal growth rate of profits beyond the final year in the DCF.")),
               tags$tr(tags$td("market_passthrough"), tags$td("Firm's ability to pass carbon tax costs to consumers (0 = none, 1 = full).")),
-              tags$tr(tags$td("carbon_price_model"), tags$td("Whether to apply scenario-based carbon tax ('carbon_tax' or 'no_carbon_tax').")),
+              tags$tr(tags$td("carbon_price_model"), tags$td("Carbon price path from the carbon price data (e.g. 'increasing_carbon_tax_50'), or 'no_carbon_tax'.")),
               tags$tr(tags$td("div_netprofit_prop_coef"), tags$td("Coefficient determining how strongly future dividends propagate to company value."))
             ),
 

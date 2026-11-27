@@ -15,6 +15,7 @@ server <- function(input, output, session) {
     carbon = carbon_data_internal,
     results = NULL,
     run_id = NULL,
+    run_config = NULL,  # settings snapshot of the run that produced `results`
     analysis_log = character(),
     # Integration: internal PD/EL values entered by user
     internal_pd = NULL,
@@ -612,7 +613,7 @@ server <- function(input, output, session) {
     updateNumericInput(session, "growth_rate_num", value = defs$growth_rate)
     updateSliderInput(session, "market_passthrough", value = defs$market_passthrough)
     updateNumericInput(session, "market_passthrough_num", value = defs$market_passthrough)
-    updateRadioButtons(session, "carbon_price_model", selected = defs$carbon_price_model)
+    updateSelectInput(session, "carbon_price_model", selected = defs$carbon_price_model)
     updateSelectizeInput(session, "shock_years", selected = defs$shock_years)
     showNotification("All parameters reset to defaults.", type = "message", duration = 3)
   })
@@ -800,6 +801,11 @@ server <- function(input, output, session) {
       showNotification("Please select at least one target scenario on the Configure tab.", type = "error")
       return()
     }
+    # Terminal value is profit * (1 + g) / (r - g): r <= g gives infinite or sign-flipped NPVs
+    if (input$discount_rate <= input$growth_rate) {
+      showNotification("Discount rate must be greater than the growth rate (Configure tab).", type = "error")
+      return()
+    }
 
     if (!is.null(rv$results)) {
       # Show confirmation modal
@@ -840,42 +846,23 @@ server <- function(input, output, session) {
   execute_trisk_analysis <- function() {
     req(rv$portfolio, rv$assets, rv$financial, rv$scenarios)
 
-    # --- SAVE CURRENT RUN TO HISTORY (before overwriting) ---
-    if (!is.null(rv$results)) {
-      current_config <- list(
-        baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-        baseline_scenarios = input$baseline_scenario,
-        target_scenario = paste(input$target_scenarios, collapse = ", "),
-        target_scenarios = input$target_scenarios,
-        scenario_geography = input$scenario_geography,
-        shock_year = paste(input$shock_years, collapse = ", "),
-        shock_years = input$shock_years,
-        risk_free_rate = input$risk_free_rate,
-        discount_rate = input$discount_rate,
-        growth_rate = input$growth_rate,
-        carbon_price_model = input$carbon_price_model,
-        market_passthrough = input$market_passthrough
-      )
-
-      history_entry <- list(
-        results = rv$results,
-        config = current_config,
-        run_id = rv$run_id,
-        timestamp = Sys.time(),
-        n_companies = nrow(rv$results),
-        pd_integration = rv$pd_integration_result,
-        el_integration = rv$el_integration_result
-      )
-
-      # Prepend to history (most recent first), cap at 5
-      rv$run_history <- c(list(history_entry), rv$run_history)
-      if (length(rv$run_history) > 5) {
-        rv$run_history <- rv$run_history[1:5]
-      }
-      rv$compare_run_idx <- NULL
-
-      log_message(paste("Saved previous run to history. History size:", length(rv$run_history)))
-    }
+    # Snapshot the settings now: history, comparison and exports must describe
+    # the run they belong to, not whatever the inputs say later
+    run_config <- list(
+      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
+      baseline_scenarios = input$baseline_scenario,
+      target_scenario = paste(input$target_scenarios, collapse = ", "),
+      target_scenarios = input$target_scenarios,
+      scenario_geography = input$scenario_geography,
+      shock_year = paste(input$shock_years, collapse = ", "),
+      shock_years = input$shock_years,
+      risk_free_rate = input$risk_free_rate,
+      discount_rate = input$discount_rate,
+      growth_rate = input$growth_rate,
+      carbon_price_model = input$carbon_price_model,
+      market_passthrough = input$market_passthrough,
+      timestamp = Sys.time()
+    )
 
     rv$analysis_log <- character()
     log_message("Starting TRISK analysis...")
@@ -935,15 +922,28 @@ server <- function(input, output, session) {
         # to the portfolio by (company_id, country_iso2, sector, technology, term).
         # User-uploaded portfolios are often company-level (no technology column).
         # Expand each company to one row per technology from the assets data.
-        if (!"technology" %in% names(rv$portfolio)) {
+        # Works on a copy: rv$portfolio keeps the user's upload. .portfolio_row
+        # tags each input row so allocate_exposure() can split its exposure
+        # across the technology/asset rows it expands to (instead of repeating it).
+        portfolio_for_run <- rv$portfolio %>%
+          dplyr::mutate(company_id = as.character(.data$company_id),
+                        .portfolio_row = dplyr::row_number())
+        if (!"technology" %in% names(portfolio_for_run)) {
           company_techs <- rv$assets %>%
+            dplyr::mutate(company_id = as.character(.data$company_id)) %>%
             dplyr::distinct(.data$company_id, .data$sector, .data$technology)
-          portfolio_enriched <- rv$portfolio %>%
+          portfolio_enriched <- portfolio_for_run %>%
             dplyr::select(-any_of("sector")) %>%        # drop portfolio-level sector to avoid conflict
-            dplyr::inner_join(company_techs, by = "company_id")
+            dplyr::inner_join(company_techs, by = "company_id", relationship = "many-to-many")
           log_message(paste("  Portfolio enriched: added technology column from assets data.",
-                           nrow(rv$portfolio), "->", nrow(portfolio_enriched), "rows"))
-          rv$portfolio <- portfolio_enriched
+                           nrow(portfolio_for_run), "->", nrow(portfolio_enriched), "rows"))
+          n_unmatched <- nrow(portfolio_for_run) - dplyr::n_distinct(portfolio_enriched$.portfolio_row)
+          if (n_unmatched > 0) {
+            log_message(paste("  WARNING:", n_unmatched, "portfolio rows have no assets and are excluded"))
+            showNotification(paste(n_unmatched, "portfolio rows have no matching assets and were excluded."),
+                             type = "warning", duration = 8)
+          }
+          portfolio_for_run <- portfolio_enriched
         }
 
         # Validate year range compatibility between assets and scenarios
@@ -957,6 +957,14 @@ server <- function(input, output, session) {
             .data$scenario %in% c(all_baselines_used, target_scenarios_run),
             .data$scenario_geography %in% input$scenario_geography
           )
+        if (nrow(selected_scenarios) == 0) {
+          stop(user_error(paste0("No scenario data for the selected baseline/target scenarios in geography '",
+                                 input$scenario_geography, "'. Choose another geography or scenario.")))
+        }
+        if (!is.null(rv$carbon) && !input$carbon_price_model %in% rv$carbon$scenario) {
+          stop(user_error(paste0("Carbon price model '", input$carbon_price_model,
+                                 "' is not in the carbon price data.")))
+        }
         scen_min_year <- min(selected_scenarios$scenario_year)
         scen_max_year <- max(selected_scenarios$scenario_year)
 
@@ -1026,7 +1034,7 @@ server <- function(input, output, session) {
               scenarios_data = rv$scenarios,
               financial_data = rv$financial,
               carbon_data = rv$carbon,
-              portfolio_data = rv$portfolio,
+              portfolio_data = portfolio_for_run,
               baseline_scenario = matched_baseline,
               target_scenario = target_scen,
               scenario_geography = input$scenario_geography,
@@ -1034,10 +1042,12 @@ server <- function(input, output, session) {
               risk_free_rate = input$risk_free_rate,
               discount_rate = input$discount_rate,
               growth_rate = input$growth_rate,
-              market_passthrough = input$market_passthrough
+              market_passthrough = input$market_passthrough,
+              carbon_price_model = input$carbon_price_model
             )
 
             result_df <- extract_result_df(raw_results)
+            result_df <- allocate_exposure(result_df)
             result_df <- compute_el_columns(result_df)
             result_df$shock_year <- yr
             result_df$target_scenario <- target_scen
@@ -1048,6 +1058,29 @@ server <- function(input, output, session) {
 
           all_scenario_results[[target_scen]] <- all_year_results
         }
+
+        # --- SAVE PREVIOUS RUN TO HISTORY (only now that this run succeeded) ---
+        if (!is.null(rv$results)) {
+          history_entry <- list(
+            results = rv$results,
+            config = rv$run_config,
+            run_id = rv$run_id,
+            timestamp = if (!is.null(rv$run_config$timestamp)) rv$run_config$timestamp else Sys.time(),
+            n_companies = nrow(rv$results),
+            pd_integration = rv$pd_integration_result,
+            el_integration = rv$el_integration_result
+          )
+
+          # Prepend to history (most recent first), cap at 5
+          rv$run_history <- c(list(history_entry), rv$run_history)
+          if (length(rv$run_history) > 5) {
+            rv$run_history <- rv$run_history[1:5]
+          }
+          rv$compare_run_idx <- NULL
+
+          log_message(paste("Saved previous run to history. History size:", length(rv$run_history)))
+        }
+        rv$run_config <- run_config
 
         # Primary results = first scenario, first year (backward compatibility)
         primary_scenario <- target_scenarios_run[1]
@@ -1111,12 +1144,17 @@ server <- function(input, output, session) {
 
       }, error = function(e) {
         message(paste("ERROR (analysis run):", conditionMessage(e)))
-        log_message("ERROR: Analysis failed (see server log for details)")
-        showNotification(
-          "Analysis failed. Please check your data and parameters.",
-          type = "error",
-          duration = 10
-        )
+        if (inherits(e, "user_error")) {
+          log_message(paste("ERROR:", conditionMessage(e)))
+          showNotification(conditionMessage(e), type = "error", duration = 10)
+        } else {
+          log_message("ERROR: Analysis failed (see server log for details)")
+          showNotification(
+            "Analysis failed. Please check your data and parameters.",
+            type = "error",
+            duration = 10
+          )
+        }
       })
     })
   }
@@ -1286,7 +1324,7 @@ server <- function(input, output, session) {
           updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
         }
         if (!is.null(cfg$carbon_price_model)) {
-          updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)
+          updateSelectInput(session, "carbon_price_model", selected = cfg$carbon_price_model)
         }
 
         # Navigate to config tab
@@ -1308,14 +1346,8 @@ server <- function(input, output, session) {
     if (is.null(curr)) return(NULL)
 
     prev_cfg <- prev$config
-    curr_cfg <- list(
-      baseline_scenario = paste(input$baseline_scenario, collapse = ", "),
-      target_scenario = paste(input$target_scenarios, collapse = ", "),
-      scenario_geography = input$scenario_geography,
-      shock_year = paste(input$shock_years, collapse = ", "),
-      discount_rate = input$discount_rate,
-      growth_rate = input$growth_rate
-    )
+    curr_cfg <- rv$run_config  # settings of the displayed results, not the live inputs
+    req(prev_cfg, curr_cfg)
 
     # Compute deltas
     curr_npv <- if ("crispy_perc_value_change" %in% names(curr))
@@ -4462,7 +4494,7 @@ server <- function(input, output, session) {
       )
     }, error = function(e) {
       message(paste("ERROR (PD CSV read):", conditionMessage(e)))
-      showNotification(if (inherits(e, "upload_rejection")) conditionMessage(e)
+      showNotification(if (inherits(e, "user_error")) conditionMessage(e)
                        else "Could not read the PD CSV file. Please check the file format.",
                        type = "error", duration = 8)
     })
@@ -4803,7 +4835,7 @@ server <- function(input, output, session) {
       )
     }, error = function(e) {
       message(paste("ERROR (EL CSV read):", conditionMessage(e)))
-      showNotification(if (inherits(e, "upload_rejection")) conditionMessage(e)
+      showNotification(if (inherits(e, "user_error")) conditionMessage(e)
                        else "Could not read the EL CSV file. Please check the file format.",
                        type = "error", duration = 8)
     })
@@ -5317,20 +5349,22 @@ server <- function(input, output, session) {
       paste0("trisk_config_", rv$run_id, ".json")
     },
     content = function(file) {
+      req(rv$run_config)
       audit_log("export", list(format = "config_json", run_id = rv$run_id))
+      cfg <- rv$run_config
       config <- list(
         run_id = rv$run_id,
-        timestamp = as.character(Sys.time()),
+        timestamp = as.character(cfg$timestamp),
         parameters = list(
-          baseline_scenarios = paste(input$baseline_scenario, collapse = ", "),
-          target_scenarios = paste(input$target_scenarios, collapse = ", "),
-          scenario_geography = input$scenario_geography,
-          shock_years = paste(input$shock_years, collapse = ", "),
-          risk_free_rate = input$risk_free_rate,
-          discount_rate = input$discount_rate,
-          growth_rate = input$growth_rate,
-          market_passthrough = input$market_passthrough,
-          carbon_price_model = input$carbon_price_model
+          baseline_scenarios = cfg$baseline_scenario,
+          target_scenarios = cfg$target_scenario,
+          scenario_geography = cfg$scenario_geography,
+          shock_years = cfg$shock_year,
+          risk_free_rate = cfg$risk_free_rate,
+          discount_rate = cfg$discount_rate,
+          growth_rate = cfg$growth_rate,
+          market_passthrough = cfg$market_passthrough,
+          carbon_price_model = cfg$carbon_price_model
         ),
         data_summary = list(
           portfolio_rows = nrow(rv$portfolio),
@@ -5351,15 +5385,15 @@ server <- function(input, output, session) {
   # ============================================
 
   output$metadata_summary <- renderText({
-    if (is.null(rv$run_id)) {
+    if (is.null(rv$run_id) || is.null(rv$run_config)) {
       "No analysis run yet."
     } else {
       paste(
         "Run ID:", rv$run_id,
-        "\nTimestamp:", as.character(Sys.time()),
-        "\nBaseline(s):", paste(input$baseline_scenario, collapse = ", "),
-        "\nTarget(s):", paste(input$target_scenarios, collapse = ", "),
-        "\nGeography:", input$scenario_geography,
+        "\nTimestamp:", as.character(rv$run_config$timestamp),
+        "\nBaseline(s):", rv$run_config$baseline_scenario,
+        "\nTarget(s):", rv$run_config$target_scenario,
+        "\nGeography:", rv$run_config$scenario_geography,
         "\nResults rows:", if (!is.null(rv$results)) as.character(nrow(rv$results)) else "N/A"
       )
     }

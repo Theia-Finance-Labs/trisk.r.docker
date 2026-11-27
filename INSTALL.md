@@ -20,11 +20,26 @@ The fastest and most reproducible path. All dependencies, data, and security har
 ```bash
 git clone https://github.com/Theia-Finance-Labs/trisk.r.docker.git
 cd trisk.r.docker
+
+# 1. Scenario data (57 MB, SHA256-verified) — required before the first build
+bash scripts/download_scenarios.sh
+
+# 2. Login password for the web UI
+cp .env.example .env
+docker run --rm caddy:2.10.2-alpine caddy hash-password --plaintext 'choose-a-password'
+#    Paste the output into .env inside SINGLE quotes: TRISK_PASS_HASH='$2a$14$...'
+
+# 3. TLS certificate (self-signed for a single workstation; use your bank-issued cert/key otherwise)
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
+  -keyout tls/key.pem -out tls/cert.pem
+chmod 644 tls/key.pem   # Caddy runs with all capabilities dropped; it cannot read a 0600 key
+
+# 4. Build and start
 docker compose up --build
-# → open http://localhost:3838
+# → open https://localhost/ and log in as `analyst` (or your TRISK_USER)
 ```
 
-Everything else (R, packages, scenarios, fonts, security policy) is handled by the Dockerfile. No further setup needed.
+Everything else (R, packages, fonts, security policy) is handled by the Dockerfile. On Windows, run the commands in Git Bash.
 
 **Pre-built image (alternative to building locally):**
 
@@ -42,7 +57,7 @@ If your institution uses an internal registry (JFrog Artifactory, Sonatype Nexus
 docker compose build --build-arg BASE_IMAGE=artifactory.bank.com/approved/r-ver:4.4.1
 
 # Option 2: .env file (not committed to git)
-echo "BASE_IMAGE=artifactory.bank.com/approved/r-ver:4.4.1" > .env
+echo "BASE_IMAGE=artifactory.bank.com/approved/r-ver:4.4.1" >> .env
 docker compose up --build
 ```
 
@@ -270,7 +285,7 @@ shiny::runApp("app", host = "127.0.0.1", port = 3838, launch.browser = TRUE)
 
 - **No outbound network at runtime** — all fonts, data, and assets are vendored locally
 - **Localhost-only binding** (`127.0.0.1:3838`) — not exposed on LAN
-- **Upload cap**: 50 MB max file size (`shiny.maxRequestSize`)
+- **Upload cap**: 500 MB max file size (`shiny.maxRequestSize`) and 5 million rows per CSV
 - **Export allowlist**: Only approved columns are included in CSV/Excel/JSON downloads
 - **No credentials stored**: No authentication layer, no database, no API keys
 - **Content Security Policy**: CSP meta tag blocks inline script injection

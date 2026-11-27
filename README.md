@@ -24,26 +24,44 @@ TRISK helps financial institutions assess the impact of climate transition scena
 
 ```bash
 # Clone this repository
-git clone https://github.com/Theia-Finance-Labs/trisk.docker.git
-cd trisk.docker
+git clone https://github.com/Theia-Finance-Labs/trisk.r.docker.git
+cd trisk.r.docker
 
-# Build and start the container
-docker-compose up -d
+# 1. Scenario data (57 MB, SHA256-verified) — required before the first build
+bash scripts/download_scenarios.sh
+
+# 2. Login password for the web UI
+cp .env.example .env
+docker run --rm caddy:2.10.2-alpine caddy hash-password --plaintext 'choose-a-password'
+#    Paste the output into .env inside SINGLE quotes: TRISK_PASS_HASH='$2a$14$...'
+
+# 3. TLS certificate (self-signed for a single workstation; use your bank-issued cert/key otherwise)
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=localhost" \
+  -keyout tls/key.pem -out tls/cert.pem
+chmod 644 tls/key.pem   # Caddy runs with all capabilities dropped; it cannot read a 0600 key
+
+# 4. Build and start (Caddy TLS proxy + app)
+docker compose up -d --build
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
+
+On Windows, run these commands in Git Bash (it ships `bash` and `openssl`).
 
 ### Option 2: Using Docker directly
 
 ```bash
+# Scenario data is required before the first build
+bash scripts/download_scenarios.sh
+
 # Build the image
 docker build -t trisk:latest .
 
-# Run the container
+# Run the container (no TLS or login — localhost only)
 docker run -d \
   --name trisk-app \
-  -p 3838:3838 \
+  -p 127.0.0.1:3838:3838 \
   -v $(pwd)/data/input:/data/input:ro \
   -v $(pwd)/data/output:/data/output \
   trisk:latest
@@ -51,7 +69,8 @@ docker run -d \
 
 ### Access the Application
 
-Open your browser to: **http://localhost:3838/trisk/**
+- Docker Compose (Option 1): **https://localhost/** — accept the self-signed certificate warning and log in as `analyst` (or your `TRISK_USER`) with the password you hashed.
+- Docker directly (Option 2): **http://localhost:3838/**
 
 ## Data Requirements
 
@@ -161,7 +180,7 @@ deploy:
 - All data processing happens locally inside the container
 - No external network calls after initial setup
 - Input data is mounted read-only
-- Container runs as non-root user (shiny)
+- Container runs as non-root user (trisk)
 
 ## Troubleshooting
 
@@ -170,9 +189,10 @@ deploy:
 ```bash
 # Check logs
 docker logs trisk-app
+docker logs trisk-proxy   # Caddy: missing TRISK_PASS_HASH, unreadable tls/key.pem, ...
 
 # Check if port is in use
-lsof -i :3838
+lsof -i :443
 ```
 
 ### Out of memory
@@ -197,8 +217,8 @@ chmod -R 755 ./data
 ### Rebuild after changes
 
 ```bash
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ### Access container shell

@@ -13,14 +13,15 @@
         X-Content-Type-Options "nosniff"
         Referrer-Policy "no-referrer"
         Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'"
         Strict-Transport-Security "max-age=63072000; includeSubDomains"
         -Server
     }
 
-    # HTTP Basic Auth — override TRISK_USER and hash via: caddy hash-password
-    basicauth {
-        {$TRISK_USER:analyst} {$TRISK_PASS_HASH:JDJhJDE0JEdNMHFLLjVzZWMxbFRKQjZHZkxsdWVibXdEaVlNN01na1VxUjJPZXNmMUlwOWZ1VjdIMnlx}
+    # HTTP Basic Auth — set TRISK_USER / TRISK_PASS_HASH in .env (see .env.example).
+    # No fallback hash: Caddy refuses to start if TRISK_PASS_HASH is empty.
+    basic_auth {
+        {$TRISK_USER:analyst} {$TRISK_PASS_HASH}
     }
 
     reverse_proxy trisk:3838

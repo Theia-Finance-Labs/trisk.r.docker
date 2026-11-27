@@ -116,6 +116,6 @@ jobs:
         run: |
           docker run -d --name test-container -p 127.0.0.1:3838:3838 trisk-test:latest
           sleep 30
-          curl -f http://localhost:3838/trisk/ || exit 1
+          curl -f http://localhost:3838/ || exit 1
           docker logs test-container
           docker stop test-container

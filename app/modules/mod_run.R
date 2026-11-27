@@ -364,7 +364,7 @@ setup_run <- function(input, output, session, rv, log_message) {
             tryCatch({
               # Per-pair geography fallback: use selected geography if available,
               # otherwise fall back to "Global" (e.g. IPR/MissionPossible don't have OecdAndEu)
-              geo_result <- get_geography_for_pair(pair$baseline, input$scenario_geography)
+              geo_result <- get_geography_for_pair(pair$baseline, input$scenario_geography, rv$scenarios)
               pair_geography <- geo_result$geography
               if (geo_result$fallback) {
                 log_message(paste0("  Geography fallback for ", pair$label,
@@ -423,6 +423,9 @@ setup_run <- function(input, output, session, rv, log_message) {
               year_results[[key]] <- result_df
               log_message(paste0("  ", nrow(result_df), " rows from ", pair$label))
             }, error = function(e) {
+              message(paste0("ANALYSIS ERROR: ", pair$label, " year=", yr,
+                            " bl=", pair$baseline, " tgt=", pair$target,
+                            " geo=", pair_geography, " err=", conditionMessage(e)))
               log_message(paste0("  WARNING: ", pair$label, " failed for year ", yr,
                                 ": ", conditionMessage(e)))
               showNotification(

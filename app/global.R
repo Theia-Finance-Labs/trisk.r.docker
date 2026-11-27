@@ -1058,6 +1058,22 @@ compute_el_columns <- function(df) {
   return(df)
 }
 
+#' Determine the best geography for a scenario pair.
+#' Uses selected_geography if available in the scenario data,
+#' otherwise falls back to "Global".
+#' @param scenario_code character — the scenario ID to check
+#' @param selected_geography character — the user's geography selection
+#' @param scenarios_df data.frame — the scenarios data (rv$scenarios)
+#' @return list with $geography and $fallback (logical)
+get_geography_for_pair <- function(scenario_code, selected_geography, scenarios_df = NULL) {
+  if (is.null(scenarios_df)) return(list(geography = "Global", fallback = TRUE))
+  available_geos <- unique(scenarios_df$scenario_geography[scenarios_df$scenario == scenario_code])
+  if (selected_geography %in% available_geos) {
+    return(list(geography = selected_geography, fallback = FALSE))
+  }
+  return(list(geography = "Global", fallback = TRUE))
+}
+
 # ============================================
 # Export column allowlist
 # ============================================

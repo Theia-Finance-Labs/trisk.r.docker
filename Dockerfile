@@ -59,7 +59,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pinned pak version
-RUN R -e "install.packages('pak', repos = '${CRAN_REPO}', version = '${PAK_VERSION}')"
+# install.packages() only warns on failure and has no version argument, so check both
+RUN R -e "install.packages('pak', repos = '${CRAN_REPO}'); \
+  if (!requireNamespace('pak', quietly = TRUE)) stop('pak could not be installed from ${CRAN_REPO}'); \
+  if (packageVersion('pak') != '${PAK_VERSION}') stop('expected pak ${PAK_VERSION}, got ', packageVersion('pak'))"
 
 # Install TRISK core packages — pinned to exact commit SHAs, no upgrades
 RUN R -e "\

@@ -66,15 +66,16 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
-# Cap upload size to 50 MB (Shiny default is 5 MB).
-options(shiny.maxRequestSize = 50 * 1024^2)  # 50 MB — sufficient for CSV portfolios
+# Cap upload size to 500 MB (Shiny default is 5 MB).
+# Bank portfolios with full asset-level production trajectories can reach 200-300 MB.
+options(shiny.maxRequestSize = 500 * 1024^2)
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic
 # "An error has occurred" in the browser. Server-side logs still contain the full trace.
 options(shiny.sanitize.errors = TRUE)
 
-MAX_UPLOAD_ROWS <- 500000L  # Row count limit for uploaded CSVs
+MAX_UPLOAD_ROWS <- 5000000L  # Row count limit for uploaded CSVs (enforced in read_upload_csv)
 
 SCENARIOS_PATH <- "/opt/trisk/data/scenarios/scenarios.csv"
 INPUT_DIR <- "/data/input"
@@ -277,16 +278,7 @@ strip_columns <- function(df, type) {
     message(sprintf("[security] Stripped %d non-model columns from %s upload: %s",
                     length(dropped), type, paste(dropped, collapse = ", ")))
   }
-  df <- df[, keep, drop = FALSE]
-
-  # Formula injection protection: strip leading =, +, -, @ from string columns
-  # to prevent CSV injection when data is later exported to Excel
-  char_cols <- names(df)[sapply(df, is.character)]
-  for (col in char_cols) {
-    df[[col]] <- sub("^[=+\\-@]+", "", df[[col]])
-  }
-
-  df
+  df[, keep, drop = FALSE]
 }
 
 # Server-side file type validation (defense-in-depth beyond client-side accept= hint)
@@ -304,13 +296,90 @@ validate_file_type <- function(filepath, original_name) {
   NULL
 }
 
+#' Read an uploaded CSV with the security controls applied to every upload:
+#' file-type check, row limit, encoding repair and (optionally) column allowlist.
+#' Stops with a user-facing message on rejection; parse errors propagate as-is.
+read_upload_csv <- function(filepath, original_name, type = NULL) {
+  file_check <- validate_file_type(filepath, original_name)
+  if (!is.null(file_check)) stop(upload_rejection(file_check))
+
+  df <- data.table::fread(filepath, nrows = MAX_UPLOAD_ROWS + 1L)
+  if (nrow(df) > MAX_UPLOAD_ROWS) {
+    stop(upload_rejection(sprintf(
+      "File has more than %s rows. Please split it into smaller files.",
+      format(MAX_UPLOAD_ROWS, big.mark = ",", scientific = FALSE))))
+  }
+  df <- repair_encoding(tibble::as_tibble(df))
+  if (!is.null(type)) df <- strip_columns(df, type)
+  df
+}
+
+#' Condition carrying a message that is safe to show to the user
+upload_rejection <- function(msg) {
+  structure(class = c("upload_rejection", "error", "condition"),
+            list(message = msg, call = NULL))
+}
+
+#' Message to show for a failed upload: our own rejection text, or a generic one
+upload_error_message <- function(e) {
+  if (inherits(e, "upload_rejection")) conditionMessage(e)
+  else "Could not parse the uploaded file. Please check the format."
+}
+
+#' Re-encode non-UTF-8 text columns (e.g. Excel "CSV (Comma delimited)" saves
+#' as Windows-1252) so downstream string functions don't fail on invalid input.
+repair_encoding <- function(df) {
+  for (col in names(df)[vapply(df, is.character, logical(1))]) {
+    x <- df[[col]]
+    bad <- !is.na(x) & !validUTF8(x)
+    if (any(bad)) {
+      x[bad] <- iconv(x[bad], from = "CP1252", to = "UTF-8", sub = "?")
+      df[[col]] <- x
+    }
+  }
+  df
+}
+
+#' Neutralise spreadsheet formula injection (CWE-1236) in text columns before
+#' writing CSV: cells starting with = + - @ tab or CR get a leading apostrophe
+#' so Excel treats them as text. Applied at export so uploaded values stay intact.
+neutralize_formulas <- function(df) {
+  text_cols <- vapply(df, function(x) is.character(x) || is.factor(x), logical(1))
+  for (col in names(df)[text_cols]) {
+    x <- as.character(df[[col]])
+    risky <- !is.na(x) & grepl("^[-=+@\t\r]", x)
+    x[risky] <- paste0("'", x[risky])
+    df[[col]] <- x
+  }
+  df
+}
+
+#' HTML-escape user-supplied text before it goes into Plotly hover/label strings,
+#' which Plotly renders as (a subset of) HTML.
+escape_html <- function(x) htmltools::htmlEscape(as.character(x))
+
+#' Escaped, unique display labels for Plotly categories. A name that occurs
+#' more than once (e.g. a company with assets in two sectors) gets its sector
+#' appended, so factor levels and treemap nodes stay distinct.
+plot_labels <- function(label, sector = NULL) {
+  label <- as.character(label)
+  if (!is.null(sector)) {
+    dup <- label %in% label[duplicated(label)]
+    label[dup] <- paste0(label[dup], " (", sector[dup], ")")
+  }
+  escape_html(make.unique(label, sep = " #"))
+}
+
 # Structured audit logging — writes JSON to stderr (captured by Docker log driver)
 # Use for security-relevant events: uploads, analysis runs, exports
 audit_log <- function(event, details = list()) {
   entry <- list(
     timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
     event = event,
-    session = if (exists("session")) session$token else "startup"
+    session = {
+      domain <- shiny::getDefaultReactiveDomain()
+      if (is.null(domain)) "startup" else domain$token
+    }
   )
   entry <- c(entry, details)
   message(jsonlite::toJSON(entry, auto_unbox = TRUE))
@@ -712,7 +781,15 @@ EXPORT_COLUMNS <- c(
   # EL metrics
   "expected_loss_baseline", "expected_loss_shock", "expected_loss_difference",
   # Attribution
-  "pd_change", "pd_contribution", "el_change", "npv_change_pct"
+  "pd_change", "pd_contribution", "el_change", "npv_change_pct",
+  # Excel summary sheet
+  "n_rows",
+  # PD integration (Integration tab)
+  "Internal_PD", "PD_Baseline", "PD_Shock", "PD_Change", "PD_Change_Pct",
+  "TRISK_Adjusted_PD", "PD_Adjustment",
+  # EL integration (Integration tab)
+  "Internal_EL", "EL_Baseline", "EL_Shock", "EL_Change", "EL_Change_Pct",
+  "TRISK_Adjusted_EL", "EL_Adjustment"
 )
 
 #' Filter a data.frame to only the allowed export columns.

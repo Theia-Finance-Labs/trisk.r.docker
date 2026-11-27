@@ -51,8 +51,18 @@ ui <- dashboardPage(
     # No runtime network dependency on fonts.googleapis.com.
     tags$head(
       # CSP, X-Frame-Options, and other security headers are set by the
-      # Caddy reverse proxy (see Caddyfile). Do not add a <meta> CSP here —
-      # HTTP headers are more secure and support frame-ancestors.
+      # Caddy reverse proxy (see Caddyfile). This <meta> CSP is a fallback for
+      # direct `docker run -p 3838` and bare-metal runs without the proxy; keep
+      # it in sync with the Caddyfile (frame-ancestors only works as a header).
+      tags$meta(`http-equiv` = "Content-Security-Policy",
+        content = paste0(
+          "default-src 'self'; ",
+          "script-src 'self' 'unsafe-eval' 'unsafe-inline'; ",
+          "style-src 'self' 'unsafe-inline'; ",
+          "img-src 'self' data: blob:; ",
+          "font-src 'self'; ",
+          "connect-src 'self' ws: wss:"
+        )),
       tags$link(rel = "stylesheet", href = "fonts.css"),
       tags$link(rel = "stylesheet", href = "trisk.css"),
       tags$script(src = "trisk.js")

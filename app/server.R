@@ -151,66 +151,43 @@ server <- function(input, output, session) {
   observeEvent(input$portfolio_file, {
     req(input$portfolio_file)
     tryCatch({
-      file_check <- validate_file_type(input$portfolio_file$datapath, input$portfolio_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$portfolio <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$portfolio_file$datapath)), "portfolio")
+      rv$portfolio <- read_upload_csv(input$portfolio_file$datapath, input$portfolio_file$name, "portfolio")
       audit_log("upload", list(type = "portfolio", rows = nrow(rv$portfolio)))
       showNotification(paste("Portfolio loaded:", nrow(rv$portfolio), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (portfolio upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
   observeEvent(input$assets_file, {
     req(input$assets_file)
     tryCatch({
-      file_check <- validate_file_type(input$assets_file$datapath, input$assets_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$assets <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$assets_file$datapath)), "assets")
+      rv$assets <- read_upload_csv(input$assets_file$datapath, input$assets_file$name, "assets")
       audit_log("upload", list(type = "assets", rows = nrow(rv$assets)))
       showNotification(paste("Assets loaded:", nrow(rv$assets), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (assets upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
   observeEvent(input$financial_file, {
     req(input$financial_file)
     tryCatch({
-      file_check <- validate_file_type(input$financial_file$datapath, input$financial_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$financial <- strip_columns(
-        tibble::as_tibble(data.table::fread(input$financial_file$datapath)), "financial")
+      rv$financial <- read_upload_csv(input$financial_file$datapath, input$financial_file$name, "financial")
       audit_log("upload", list(type = "financial", rows = nrow(rv$financial)))
       showNotification(paste("Financial data loaded:", nrow(rv$financial), "rows"), type = "message")
     }, error = function(e) {
       message(paste("ERROR (financial upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
   observeEvent(input$scenarios_file, {
     req(input$scenarios_file)
     tryCatch({
-      file_check <- validate_file_type(input$scenarios_file$datapath, input$scenarios_file$name)
-      if (!is.null(file_check)) {
-        showNotification(file_check, type = "error")
-        return()
-      }
-      rv$scenarios <- tibble::as_tibble(data.table::fread(input$scenarios_file$datapath))
+      rv$scenarios <- read_upload_csv(input$scenarios_file$datapath, input$scenarios_file$name)
       audit_log("upload", list(type = "scenarios", rows = nrow(rv$scenarios)))
       showNotification(
         paste("Scenarios loaded:", length(unique(rv$scenarios$scenario)), "scenarios"),
@@ -218,7 +195,7 @@ server <- function(input, output, session) {
       )
     }, error = function(e) {
       message(paste("ERROR (scenarios upload):", conditionMessage(e)))
-      showNotification("Could not parse the uploaded file. Please check the format.", type = "error")
+      showNotification(upload_error_message(e), type = "error")
     })
   })
 
@@ -460,7 +437,7 @@ server <- function(input, output, session) {
           }
         }
       }
-      write.csv(all_issues, file, row.names = FALSE)
+      write.csv(neutralize_formulas(all_issues), file, row.names = FALSE)
     }
   )
 
@@ -2070,9 +2047,9 @@ server <- function(input, output, session) {
       p <- p %>% add_trace(data = cd, x = ~shock_year, y = ~pd,
                            type = "scatter", mode = "lines",
                            line = list(width = 1.5, color = "rgba(200,150,160,0.5)"),
-                           name = comp, legendgroup = "companies",
+                           name = escape_html(comp), legendgroup = "companies",
                            showlegend = (comp == companies[1]),
-                           hovertemplate = paste0(comp, "<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>"))
+                           hovertemplate = paste0(escape_html(comp), "<br>Year: %{x}<br>PD: %{y:.4f}%<extra></extra>"))
     }
     # Portfolio average (thick, dark)
     p <- p %>% add_trace(data = avg_data, x = ~shock_year, y = ~pd,
@@ -2269,7 +2246,7 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results_by_year)
       combined <- bind_rows(rv$results_by_year, .id = "shock_year")
-      write.csv(sanitize_export(combined), file, row.names = FALSE)
+      write.csv(neutralize_formulas(sanitize_export(combined)), file, row.names = FALSE)
     }
   )
 
@@ -2518,7 +2495,7 @@ server <- function(input, output, session) {
 
     plot_ly(sector_scen, x = ~sector, y = ~avg_pd, color = ~scenario_label,
             type = "bar", hoverinfo = "text",
-            text = ~paste0(scenario_label, "\n", sector, ": ", round(avg_pd, 3), "%")) %>%
+            text = ~paste0(escape_html(scenario_label), "\n", escape_html(sector), ": ", round(avg_pd, 3), "%")) %>%
       layout(barmode = "group",
              xaxis = list(title = "Sector"),
              yaxis = list(title = "Avg PD Shock (%)"),
@@ -2609,7 +2586,7 @@ server <- function(input, output, session) {
     text_matrix <- matrix("", nrow = length(companies), ncol = length(scenarios))
     for (r in seq_along(companies)) {
       for (cc in seq_along(scenarios)) {
-        text_matrix[r, cc] <- paste0(companies[r], "\n", scenarios[cc], "\nPD: ", z_matrix[r, cc], "%")
+        text_matrix[r, cc] <- paste0(companies[r], "\n", escape_html(scenarios[cc]), "\nPD: ", z_matrix[r, cc], "%")
       }
     }
 
@@ -2838,7 +2815,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       scd <- scenario_comparison_data()
-      if (!is.null(scd)) write.csv(sanitize_export(scd), file, row.names = FALSE)
+      if (!is.null(scd)) write.csv(neutralize_formulas(sanitize_export(scd)), file, row.names = FALSE)
     }
   )
 
@@ -2870,7 +2847,7 @@ server <- function(input, output, session) {
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
         pd_contribution = pd_change * weight,
-        company_label = htmltools::htmlEscape(.data[[company_label_col]]),
+        company_label = as.character(.data[[company_label_col]]),
         el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
         npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
       )
@@ -3080,7 +3057,7 @@ server <- function(input, output, session) {
     # Hover text
     wf_text <- c(
       paste0("Baseline PD: ", round(baseline, 4), "%"),
-      paste0(sector_df$sector,
+      paste0(escape_html(sector_df$sector),
              "\nContribution: ", ifelse(sector_df$pd_contribution >= 0, "+", ""),
              round(sector_df$pd_contribution * 100, 4), " pp",
              "\nWeight: ", round(sector_df$weight * 100, 1), "%",
@@ -3128,10 +3105,11 @@ server <- function(input, output, session) {
       arrange(pd_contribution)
 
     colors <- ifelse(company_df$pd_contribution >= 0, BRAND_CORAL, STATUS_GREEN)
+    bar_labels <- plot_labels(company_df$company_label, company_df$sector)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      escape_html(company_df$company_label),
+      "\nSector: ", escape_html(company_df$sector),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(company_df$weight * 100, 1), "%",
@@ -3140,7 +3118,7 @@ server <- function(input, output, session) {
     )
 
     plot_ly(
-      y = factor(company_df$company_label, levels = company_df$company_label),
+      y = factor(bar_labels, levels = bar_labels),
       x = company_df$pd_contribution * 100,
       type = "bar",
       orientation = "h",
@@ -3185,23 +3163,30 @@ server <- function(input, output, session) {
     colors <- ifelse(company_df$direction == "Risk Increase", BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      escape_html(company_df$company_label),
+      "\nSector: ", escape_html(company_df$sector),
       "\nShare of total PD change: ", round(company_df$share_pct, 1), "%",
       "\nDirection: ", company_df$direction,
       "\nContribution: ", round(company_df$pd_contribution * 100, 4), " pp"
     )
 
+    # Treemaps need every parent to exist as a node: add one root per sector
+    sectors <- unique(as.character(company_df$sector))
+    sector_share <- vapply(sectors, function(s) sum(company_df$share_pct[company_df$sector == s]), numeric(1))
+    sector_hover <- paste0(escape_html(sectors), "\nShare of total PD change: ", round(sector_share, 1), "%")
+
     plot_ly(
-      labels = company_df$company_label,
-      values = company_df$share_pct,
-      parents = company_df$sector,
+      ids = c(paste0("sector:", sectors), paste0("company:", seq_len(nrow(company_df)))),
+      labels = c(escape_html(sectors), plot_labels(company_df$company_label, company_df$sector)),
+      values = c(rep(0, length(sectors)), company_df$share_pct),
+      parents = c(rep("", length(sectors)), paste0("sector:", company_df$sector)),
+      branchvalues = "remainder",
       type = "treemap",
       marker = list(
-        colors = colors,
+        colors = c(rep(SECONDARY_PINK, length(sectors)), colors),
         line = list(color = "white", width = 1)
       ),
-      text = hover_text,
+      text = c(sector_hover, hover_text),
       hoverinfo = "text",
       textinfo = "label+percent parent",
       textfont = list(size = 11)
@@ -3236,13 +3221,13 @@ server <- function(input, output, session) {
         if (nrow(match_row) > 0) {
           z_matrix[r, cc] <- match_row$pd_contribution[1] * 100
           text_matrix[r, cc] <- paste0(
-            techs[r], " / ", sectors[cc],
+            escape_html(techs[r]), " / ", escape_html(sectors[cc]),
             "\nPD Contribution: ", round(match_row$pd_contribution[1] * 100, 4), " pp",
             "\nCompanies: ", match_row$n_companies[1],
             "\nExposure: $", format(round(match_row$total_exposure[1]), big.mark = ",")
           )
         } else {
-          text_matrix[r, cc] <- paste0(techs[r], " / ", sectors[cc], "\nNo data")
+          text_matrix[r, cc] <- paste0(escape_html(techs[r]), " / ", escape_html(sectors[cc]), "\nNo data")
         }
       }
     }
@@ -3294,7 +3279,7 @@ server <- function(input, output, session) {
     wf_measure <- c(rep("relative", nrow(sector_df)), "total")
 
     hover_text <- c(
-      paste0(sector_df$sector,
+      paste0(escape_html(sector_df$sector),
              "\nEL Change: $", format(round(sector_df$el_change), big.mark = ","),
              "\nExposure: $", format(round(sector_df$total_exposure), big.mark = ","),
              "\nCompanies: ", sector_df$n_companies),
@@ -3397,7 +3382,7 @@ server <- function(input, output, session) {
           select(any_of(c("company_label", "company_id", "sector", "technology",
                          "exposure_value_usd", "weight", "pd_baseline", "pd_shock",
                          "pd_change", "pd_contribution", "el_change", "npv_change_pct")))
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(neutralize_formulas(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -3427,7 +3412,7 @@ server <- function(input, output, session) {
       mutate(
         pd_change = pd_shock - pd_baseline,
         weight = exposure_value_usd / total_exposure,
-        company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]]))
+        company_label = as.character(.data[[company_label_col]])
       )
     # Guard NA labels: replace with row-index fallback
     company_df$company_label <- ifelse(
@@ -3820,7 +3805,7 @@ server <- function(input, output, session) {
           val <- match_row[[metric_col]][1]
           z_matrix[r, cc] <- if (metric == "pd_change") val * 100 else val
           text_matrix[r, cc] <- paste0(
-            rows[r], " / ", cols[cc],
+            escape_html(rows[r]), " / ", escape_html(cols[cc]),
             "\n", metric_label, ": ",
             if (metric == "pd_change") paste0(round(val * 100, 4), " pp")
             else if (metric == "exposure") paste0("$", format(round(val), big.mark = ","))
@@ -3829,7 +3814,7 @@ server <- function(input, output, session) {
             "\nCompanies: ", match_row$n_companies[1]
           )
         } else {
-          text_matrix[r, cc] <- paste0(rows[r], " / ", cols[cc], "\nNo data")
+          text_matrix[r, cc] <- paste0(escape_html(rows[r]), " / ", escape_html(cols[cc]), "\nNo data")
         }
       }
     }
@@ -3848,8 +3833,8 @@ server <- function(input, output, session) {
     }
 
     trace_args <- list(
-      x = cols,
-      y = rows,
+      x = escape_html(cols),
+      y = plot_labels(rows),
       z = z_matrix,
       type = "heatmap",
       colorscale = colorscale,
@@ -3891,10 +3876,10 @@ server <- function(input, output, session) {
 
     # Build labels/values — only add "Others" slice if there are remaining companies
     if (n_others > 0 && other_weight > 0.001) {
-      labels <- c(as.character(company_df$company_label), "Others")
+      labels <- c(plot_labels(company_df$company_label), "Others")
       values <- c(company_df$weight * 100, other_weight * 100)
     } else {
-      labels <- as.character(company_df$company_label)
+      labels <- plot_labels(company_df$company_label)
       values <- company_df$weight * 100
     }
 
@@ -3906,8 +3891,8 @@ server <- function(input, output, session) {
       rep(palette, length.out = n_top)
     }
 
-    hover_text <- paste0(company_df$company_label,
-             "\nSector: ", company_df$sector,
+    hover_text <- paste0(escape_html(company_df$company_label),
+             "\nSector: ", escape_html(company_df$sector),
              "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
              "\nWeight: ", round(company_df$weight * 100, 1), "%",
              "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp")
@@ -3959,8 +3944,8 @@ server <- function(input, output, session) {
     if (is.na(pd_range) || pd_range == 0) pd_range <- 1  # avoid division by zero
 
     hover_text <- paste0(
-      top_co$company_label,
-      "\nSector: ", top_co$sector,
+      escape_html(top_co$company_label),
+      "\nSector: ", escape_html(top_co$sector),
       "\nExposure: $", format(round(top_co$exposure_value_usd), big.mark = ","),
       "\nWeight: ", round(top_co$weight * 100, 1), "%",
       "\nPD Change: ", round(top_co$pd_change * 100, 4), " pp"
@@ -3987,19 +3972,22 @@ server <- function(input, output, session) {
     sector_color_vals <- sector_pd / pd_range
 
     sector_hover <- paste0(
-      sectors,
+      escape_html(sectors),
       "\nTotal weight: ", round(sector_weights, 1), "%",
       "\nAvg PD Change: ", round(sector_pd * 100, 4), " pp"
     )
 
-    # Combine: sector roots first, then company leaves
-    all_labels <- c(sectors, treemap_labels)
-    all_parents <- c(rep("", length(sectors)), as.character(top_co$sector))
+    # Combine: sector roots first, then company leaves (ids keep nodes distinct
+    # when a company name equals a sector name or appears in two sectors)
+    all_ids <- c(paste0("sector:", sectors), paste0("company:", seq_len(nrow(top_co))))
+    all_labels <- c(escape_html(sectors), plot_labels(treemap_labels, top_co$sector))
+    all_parents <- c(rep("", length(sectors)), paste0("sector:", top_co$sector))
     all_values <- c(rep(0, length(sectors)), top_co$weight * 100)  # sector values=0 so they don't double-count
     all_colors <- c(sector_color_vals, color_vals)
     all_text <- c(sector_hover, hover_text)
 
     plot_ly(
+      ids = all_ids,
       labels = all_labels,
       parents = all_parents,
       values = all_values,
@@ -4098,8 +4086,8 @@ server <- function(input, output, session) {
     colors <- ifelse(company_df$pd_change >= 0, BRAND_CORAL, STATUS_GREEN)
 
     hover_text <- paste0(
-      company_df$company_label,
-      "\nSector: ", company_df$sector,
+      escape_html(company_df$company_label),
+      "\nSector: ", escape_html(company_df$sector),
       "\nPD Change: ", round(company_df$pd_change * 100, 4), " pp",
       "\nWeight: ", round(company_df$weight * 100, 2), "%",
       "\nExposure: $", format(round(company_df$exposure_value_usd), big.mark = ","),
@@ -4158,7 +4146,7 @@ server <- function(input, output, session) {
     }
 
     hover_text <- paste0(
-      geo_df$country_iso2,
+      escape_html(geo_df$country_iso2),
       "\nCompanies: ", geo_df$n_companies,
       "\nExposure: $", format(round(geo_df$total_exposure), big.mark = ","),
       "\nWeight: ", round(geo_df$weight * 100, 1), "%",
@@ -4335,7 +4323,7 @@ server <- function(input, output, session) {
                            "% | CR10=", round(cd$cr10, 1), "% | Gini=", round(cd$gini, 3))),
           stringsAsFactors = FALSE
         )
-        write.csv(export_df, file, row.names = FALSE)
+        write.csv(neutralize_formulas(export_df), file, row.names = FALSE)
       }
     }
   )
@@ -4438,7 +4426,8 @@ server <- function(input, output, session) {
   observeEvent(input$upload_internal_pd, {
     req(input$upload_internal_pd, rv$results)
     tryCatch({
-      uploaded <- read.csv(input$upload_internal_pd$datapath, stringsAsFactors = FALSE)
+      uploaded <- as.data.frame(read_upload_csv(input$upload_internal_pd$datapath,
+                                                input$upload_internal_pd$name))
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -4473,7 +4462,9 @@ server <- function(input, output, session) {
       )
     }, error = function(e) {
       message(paste("ERROR (PD CSV read):", conditionMessage(e)))
-      showNotification("Could not read the PD CSV file. Please check the file format.", type = "error", duration = 8)
+      showNotification(if (inherits(e, "upload_rejection")) conditionMessage(e)
+                       else "Could not read the PD CSV file. Please check the file format.",
+                       type = "error", duration = 8)
     })
   })
 
@@ -4777,7 +4768,8 @@ server <- function(input, output, session) {
   observeEvent(input$upload_internal_el, {
     req(input$upload_internal_el, rv$results)
     tryCatch({
-      uploaded <- read.csv(input$upload_internal_el$datapath, stringsAsFactors = FALSE)
+      uploaded <- as.data.frame(read_upload_csv(input$upload_internal_el$datapath,
+                                                input$upload_internal_el$name))
       names(uploaded) <- tolower(names(uploaded))
 
       # Schema + value validation
@@ -4811,7 +4803,9 @@ server <- function(input, output, session) {
       )
     }, error = function(e) {
       message(paste("ERROR (EL CSV read):", conditionMessage(e)))
-      showNotification("Could not read the EL CSV file. Please check the file format.", type = "error", duration = 8)
+      showNotification(if (inherits(e, "upload_rejection")) conditionMessage(e)
+                       else "Could not read the EL CSV file. Please check the file format.",
+                       type = "error", duration = 8)
     })
   })
 
@@ -5289,7 +5283,7 @@ server <- function(input, output, session) {
           paste0("Large export (", format(total_rows, big.mark = ","),
                  " rows) — writing CSV instead of Excel to avoid memory issues."),
           type = "warning", duration = 8)
-        data.table::fwrite(sheets[["Full Results"]], file)
+        data.table::fwrite(neutralize_formulas(sheets[["Full Results"]]), file)
       } else {
         writexl::write_xlsx(sheets, file)
       }
@@ -5303,7 +5297,7 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$results)
       audit_log("export", list(format = "csv", run_id = rv$run_id, rows = nrow(rv$results)))
-      write_csv(sanitize_export(rv$results), file)
+      write_csv(neutralize_formulas(sanitize_export(rv$results)), file)
     }
   )
 

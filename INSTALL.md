@@ -282,7 +282,7 @@ shiny::runApp("app", host = "127.0.0.1", port = 3838, launch.browser = TRUE)
 
 - **No outbound network at runtime** — all fonts, data, and assets are vendored locally
 - **Localhost-only binding** (`127.0.0.1:3838`) — not exposed on LAN
-- **Upload cap**: 500 MB max file size (`shiny.maxRequestSize`) and 5 million rows per CSV
+- **Upload cap**: 300 MB max file size (`shiny.maxRequestSize`) and 5 million rows per CSV
 - **Export allowlist**: Only approved columns are included in CSV/Excel/JSON downloads
 - **No credentials stored**: No authentication layer, no database, no API keys
 - **Content Security Policy**: CSP meta tag blocks inline script injection

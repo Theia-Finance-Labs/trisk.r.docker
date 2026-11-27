@@ -66,9 +66,10 @@ trisk_plot_theme <- function() {
 # Configuration
 # ============================================
 
-# Cap upload size to 500 MB (Shiny default is 5 MB).
+# Cap upload size to 300 MB (Shiny default is 5 MB): the container has 4 GB of
+# memory and uploads are held on the 2 GB /tmp tmpfs, which counts against it.
 # Bank portfolios with full asset-level production trajectories can reach 200-300 MB.
-options(shiny.maxRequestSize = 500 * 1024^2)
+options(shiny.maxRequestSize = 300 * 1024^2)
 
 # Sanitize error messages shown to users (CWE-209: Information Exposure Through an Error Message)
 # When TRUE, Shiny replaces raw R stack traces / e$message with a generic

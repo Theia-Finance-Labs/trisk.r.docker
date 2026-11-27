@@ -47,8 +47,17 @@ message(paste("Column names:", paste(names(test_read), collapse = ", ")))
 expected_sha <- Sys.getenv("SCENARIOS_SHA256",
                            unset = "b181045bd27628e427d541ddffc860a63e3b3f8148ccaa01d708cfbbc29b4b56")
 message("\nVerifying SHA256 checksum...")
-result <- system2("sha256sum", shQuote(scenarios_file), stdout = TRUE)
-actual_sha <- sub("\\s+.*$", "", result)
+# sha256sum (Linux, Git Bash) or shasum (macOS); certutil on a plain Windows console
+actual_sha <- if (nzchar(Sys.which("sha256sum"))) {
+  sub("\\s+.*$", "", system2("sha256sum", shQuote(scenarios_file), stdout = TRUE))
+} else if (nzchar(Sys.which("shasum"))) {
+  sub("\\s+.*$", "", system2("shasum", c("-a", "256", shQuote(scenarios_file)), stdout = TRUE))
+} else if (nzchar(Sys.which("certutil"))) {
+  gsub("\\s", "", system2("certutil", c("-hashfile", shQuote(scenarios_file), "SHA256"), stdout = TRUE)[2])
+} else {
+  unlink(scenarios_file)
+  stop("No SHA256 tool found (sha256sum, shasum or certutil); cannot verify the download.")
+}
 if (!identical(actual_sha, expected_sha)) {
   unlink(scenarios_file)
   stop(paste0(

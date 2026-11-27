@@ -148,7 +148,7 @@ ui <- dashboardPage(
                   or upload your own CSV files below."),
                 tags$ul(
                   tags$li(strong("Portfolio:"), " Your loan book with company_id, company_name, country_iso2, exposure_value_usd, term, and loss_given_default."),
-                  tags$li(strong("Assets:"), " Company-level production data: company_id, sector, technology, production_year, capacity, capacity_factor, emission_factor."),
+                  tags$li(strong("Assets:"), " Asset-level production data: asset_id, asset_name, company_id, company_name, country_iso2, sector, technology, production_year, capacity, capacity_factor, emission_factor."),
                   tags$li(strong("Financial Features:"), " Company financial metrics: company_id, pd (probability of default), net_profit_margin, debt_equity_ratio, volatility."),
                   tags$li(strong("Scenarios:"), " Climate transition pathways with scenario_geography, scenario, sector, technology, scenario_year, scenario_price.")
                 )

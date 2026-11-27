@@ -42,6 +42,7 @@ chmod 644 tls/key.pem   # Caddy runs with all capabilities dropped; it cannot re
 
 # 4. Build and start (Caddy TLS proxy + app)
 docker compose up -d --build
+docker compose ps   # trisk-proxy must be "Up"; if it exited, see `docker logs trisk-proxy`
 
 # View logs
 docker compose logs -f

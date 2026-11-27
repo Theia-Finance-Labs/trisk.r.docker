@@ -137,6 +137,22 @@ tryCatch({
                                assets_data$production_year <= max(scenario_years), ]
   if (nrow(assets_data) == 0) stop("no asset production years fall inside the scenario year range")
 
+  # Same portfolio handling as the Shiny app: tag each loan, expand a
+  # company-level portfolio (no technology column) to the company's
+  # technologies, and after the run split each loan's exposure across its
+  # result rows by baseline NPV share instead of repeating it on every row.
+  portfolio_data$company_id <- as.character(portfolio_data$company_id)
+  portfolio_data$.portfolio_row <- seq_len(nrow(portfolio_data))
+  if (!"technology" %in% names(portfolio_data)) {
+    company_techs <- unique(data.frame(
+      company_id = as.character(assets_data$company_id),
+      sector = assets_data$sector, technology = assets_data$technology,
+      stringsAsFactors = FALSE))
+    portfolio_data <- merge(portfolio_data[, setdiff(names(portfolio_data), "sector"), drop = FALSE],
+                            company_techs, by = "company_id")
+    if (nrow(portfolio_data) == 0) stop("no portfolio company_id matches the assets data")
+  }
+
   log_msg("Running TRISK model...")
   
   # Run analysis
@@ -157,6 +173,12 @@ tryCatch({
     carbon_price_model = args$`carbon-price-model`
   )
   
+  npv <- pmax(ifelse(is.na(results$net_present_value_baseline), 0, results$net_present_value_baseline), 0)
+  npv_total <- ave(npv, results$.portfolio_row, FUN = sum)
+  n_rows <- ave(npv, results$.portfolio_row, FUN = length)
+  results$exposure_value_usd <- results$exposure_value_usd * ifelse(npv_total > 0, npv / npv_total, 1 / n_rows)
+  results$.portfolio_row <- NULL
+
   # Create output directory if needed
   if (!dir.exists(args$output)) {
     dir.create(args$output, recursive = TRUE)

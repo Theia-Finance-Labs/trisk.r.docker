@@ -241,7 +241,8 @@ validate_portfolio <- function(df) {
   # Types and ranges: a "1,000,000" exposure is read as text, an LGD of 45
   # (percent) makes every EL 100x too large
   for (col in c("exposure_value_usd", "term", "loss_given_default")) {
-    if (!is.numeric(df[[col]])) return(paste0("Column '", col, "' must be numeric (no thousands separators or % signs)"))
+    # an entirely blank column (e.g. no terms: NPV-only analysis) is read as logical NA
+    if (!is.numeric(df[[col]]) && !all(is.na(df[[col]]))) return(paste0("Column '", col, "' must be numeric (no thousands separators or % signs)"))
   }
   if (any(df$exposure_value_usd < 0, na.rm = TRUE)) return("Column 'exposure_value_usd' must not be negative")
   if (any(df$loss_given_default < 0 | df$loss_given_default > 1, na.rm = TRUE))
@@ -316,7 +317,25 @@ read_upload_csv <- function(filepath, original_name, type = NULL) {
   file_check <- validate_file_type(filepath, original_name)
   if (!is.null(file_check)) stop(user_error(file_check))
 
-  df <- data.table::fread(filepath, nrows = MAX_UPLOAD_ROWS + 1L)
+  # integer64 = "double": a whole-number exposure >= 2^31 would otherwise load as
+  # bit64::integer64, whose arithmetic truncates PD x exposure products to 0.
+  # fread only warns when it stops at a malformed line and returns the rows
+  # read so far; treat that as a rejected file instead of a silent truncation.
+  read_csv <- function(...) {
+    withCallingHandlers(
+      data.table::fread(filepath, integer64 = "double", blank.lines.skip = TRUE, ...),
+      warning = function(w) {
+        if (grepl("Stopped early|Discarded single-line footer", conditionMessage(w))) {
+          line <- regmatches(conditionMessage(w), regexpr("line [0-9]+", conditionMessage(w)))
+          stop(user_error(paste0(
+            "The file could not be read completely: a row",
+            if (length(line) > 0) paste0(" (", line, ")") else "",
+            " has a different number of fields than the header. ",
+            "Check for unquoted commas or stray text, then upload again.")))
+        }
+      })
+  }
+  df <- read_csv(nrows = MAX_UPLOAD_ROWS + 1L)
   if (nrow(df) > MAX_UPLOAD_ROWS) {
     stop(user_error(sprintf(
       "File has more than %s rows. Please split it into smaller files.",
@@ -324,9 +343,9 @@ read_upload_csv <- function(filepath, original_name, type = NULL) {
   }
   # fread reads the text "NA" as missing, which loses Namibia's ISO code
   if ("country_iso2" %in% names(df) && anyNA(df$country_iso2)) {
-    iso <- data.table::fread(filepath, select = "country_iso2", colClasses = list(character = "country_iso2"),
-                             na.strings = "", nrows = nrow(df))
-    df$country_iso2 <- iso$country_iso2
+    iso <- read_csv(select = "country_iso2", colClasses = list(character = "country_iso2"),
+                    na.strings = "", nrows = nrow(df))
+    if (nrow(iso) == nrow(df)) df$country_iso2 <- iso$country_iso2
   }
   df <- repair_encoding(tibble::as_tibble(df))
   if (!is.null(type)) df <- strip_columns(df, type)
@@ -362,17 +381,26 @@ allocate_exposure <- function(df, row_col = ".portfolio_row") {
   df
 }
 
-#' Carry per-row values (internal PD/EL) from one run's rows to another's by
-#' (company_id, sector, technology, term) instead of by position; rows with no
-#' counterpart get `default`. Returns NULL when nothing matches.
-remap_by_key <- function(values, old_df, new_df, default) {
+#' Carry the user's per-row values (internal PD/EL) from one run's rows to the
+#' next run's rows by company/country/sector/technology/asset/term instead of by
+#' position. Only values the user actually set (different from `old_default`,
+#' the previous run's baseline) are carried; every other row gets the new run's
+#' `default`. Rows sharing a key are told apart by their order within the key.
+#' Returns NULL when no user value carries over.
+remap_by_key <- function(values, old_df, new_df, default, old_default = NULL) {
   if (is.null(values) || is.null(old_df) || length(values) != nrow(old_df)) return(NULL)
-  key_cols <- intersect(c("company_id", "sector", "technology", "term"), intersect(names(old_df), names(new_df)))
+  key_cols <- intersect(c("company_id", "country_iso2", "sector", "technology", "asset_id", "term"),
+                        intersect(names(old_df), names(new_df)))
   if (length(key_cols) == 0) return(NULL)
-  row_key <- function(d) do.call(paste, c(lapply(key_cols, function(k) as.character(d[[k]])), sep = "\r"))
-  out <- values[match(row_key(new_df), row_key(old_df))]
-  if (all(is.na(out))) return(NULL)
-  ifelse(is.na(out), default, out)
+  row_key <- function(d) {
+    k <- do.call(paste, c(lapply(key_cols, function(col) as.character(d[[col]])), sep = "\r"))
+    paste(k, ave(seq_along(k), k, FUN = seq_along), sep = "\r")
+  }
+  user_set <- if (is.null(old_default)) rep(TRUE, length(values))
+              else !is.na(values) & (is.na(old_default) | values != old_default)
+  carried <- ifelse(user_set, values, NA)[match(row_key(new_df), row_key(old_df))]
+  if (all(is.na(carried))) return(NULL)
+  ifelse(is.na(carried), default, carried)
 }
 
 #' Carbon price scenarios offered in the UI ("no_carbon_tax" first)
@@ -578,11 +606,30 @@ weighted_mean_covered <- function(x, w) {
   sum(x[ok] * w[ok]) / sum(w[ok])
 }
 
-#' Count of distinct companies (rows are company x technology x asset)
-n_companies <- function(df) {
-  col <- intersect(c("company_id", "company_name"), names(df))
-  if (length(col) > 0) dplyr::n_distinct(df[[col[1]]]) else nrow(df)
+#' One key per counterparty for row-level results (rows are company x
+#' technology x asset): company_id, else company_name (portfolios matched by
+#' name or country carry NA ids), else the row itself. NA ids must not be
+#' pooled into one "company".
+company_key <- function(df) {
+  n <- nrow(df)
+  id <- if ("company_id" %in% names(df)) as.character(df$company_id) else rep(NA_character_, n)
+  nm <- if ("company_name" %in% names(df)) as.character(df$company_name) else rep(NA_character_, n)
+  nm[!is.na(nm) & !nzchar(trimws(nm))] <- NA
+  ifelse(!is.na(id), paste0("id:", id), ifelse(!is.na(nm), paste0("name:", nm), paste0("row:", seq_len(n))))
 }
+
+#' Display label per row: company_name, else "Company <id>", else "Company_<row>".
+#' Constant within a company, so labels can be used to group and filter.
+company_display_label <- function(df) {
+  n <- nrow(df)
+  nm <- if ("company_name" %in% names(df)) as.character(df$company_name) else rep(NA_character_, n)
+  nm[!is.na(nm) & !nzchar(trimws(nm))] <- NA
+  id <- if ("company_id" %in% names(df)) as.character(df$company_id) else rep(NA_character_, n)
+  ifelse(!is.na(nm), nm, ifelse(!is.na(id), paste0("Company ", id), paste0("Company_", seq_len(n))))
+}
+
+#' Count of distinct companies (rows are company x technology x asset)
+n_companies <- function(df) dplyr::n_distinct(company_key(df))
 
 #' Smart rounding: 2 decimals for |x|>10, 5 decimals for |x|<=10
 smart_round <- function(x) {

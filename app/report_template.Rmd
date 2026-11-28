@@ -29,8 +29,8 @@ df <- params$results
 n_companies <- if ("company_id" %in% names(df)) length(unique(df$company_id)) else nrow(df)
 total_exposure <- if ("exposure_value_usd" %in% names(df)) sum(df$exposure_value_usd, na.rm = TRUE) else NA
 
-avg_npv <- if ("crispy_perc_value_change" %in% names(df)) {
-  mean(df$crispy_perc_value_change, na.rm = TRUE) * 100
+avg_npv <- if ("trisk_perc_value_change" %in% names(df)) {
+  mean(df$trisk_perc_value_change, na.rm = TRUE) * 100
 } else NA
 
 max_pd <- if ("pd_shock" %in% names(df)) {
@@ -60,10 +60,10 @@ format_num <- function(x) {
 ### NPV Change by Sector
 
 ```{r sector_npv, fig.width=8, fig.height=5}
-if (all(c("sector", "crispy_perc_value_change") %in% names(df))) {
+if (all(c("sector", "trisk_perc_value_change") %in% names(df))) {
   sector_data <- df %>%
     group_by(sector) %>%
-    summarise(avg_npv_change = mean(crispy_perc_value_change, na.rm = TRUE) * 100,
+    summarise(avg_npv_change = mean(trisk_perc_value_change, na.rm = TRUE) * 100,
               .groups = "drop") %>%
     arrange(avg_npv_change)
 

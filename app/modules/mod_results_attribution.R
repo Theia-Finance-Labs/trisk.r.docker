@@ -15,7 +15,7 @@ setup_results_attribution <- function(input, output, session, rv) {
     req(all(c("pd_baseline", "pd_shock", "exposure_value_usd", "sector") %in% names(df)))
 
     has_el <- all(c("expected_loss_baseline", "expected_loss_shock") %in% names(df))
-    has_npv <- "crispy_perc_value_change" %in% names(df)
+    has_npv <- "trisk_perc_value_change" %in% names(df)
     has_tech <- "technology" %in% names(df)
     has_company <- any(c("company_name", "company_id") %in% names(df))
 
@@ -33,7 +33,7 @@ setup_results_attribution <- function(input, output, session, rv) {
         pd_contribution = pd_change * weight,
         company_label = htmltools::htmlEscape(as.character(.data[[company_label_col]])),
         el_change = if (has_el) expected_loss_shock - expected_loss_baseline else NA_real_,
-        npv_change_pct = if (has_npv) crispy_perc_value_change * 100 else NA_real_
+        npv_change_pct = if (has_npv) trisk_perc_value_change * 100 else NA_real_
       )
 
     company_df <- row_df %>%

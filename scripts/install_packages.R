@@ -21,8 +21,8 @@ message(paste("CRAN repo:", cran_repo))
 
 # ── GitHub commit SHAs ──
 # These are overridden by Dockerfile build-args; keep as fallback.
-trisk_model_ref    <- Sys.getenv("TRISK_MODEL_SHA",    unset = "b716c9d3573bee2a730973995b9da6fc9b9703c5")
-trisk_analysis_ref <- Sys.getenv("TRISK_ANALYSIS_SHA", unset = "307e52aa035b3ebe8bb0ddb967268e38600a1763")
+trisk_model_ref    <- Sys.getenv("TRISK_MODEL_SHA",    unset = "748ef51fd2d25a8e184a128bb7de71a39657ea85")
+trisk_analysis_ref <- Sys.getenv("TRISK_ANALYSIS_SHA", unset = "1f5a1e2f72c01089801396cf03492e03e1be6694")
 
 message("\n[1/3] Installing core TRISK packages from GitHub (pinned commits)...")
 

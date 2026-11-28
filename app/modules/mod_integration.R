@@ -669,7 +669,8 @@ setup_integration <- function(input, output, session, rv) {
           risk_free_rate = input$risk_free_rate,
           discount_rate = input$discount_rate,
           growth_rate = input$growth_rate,
-          market_passthrough = input$market_passthrough,
+          market_passthrough_power = input$market_passthrough_power,
+          market_passthrough_primary = input$market_passthrough_primary,
           carbon_price_model = input$carbon_price_model
         ),
         data_summary = list(

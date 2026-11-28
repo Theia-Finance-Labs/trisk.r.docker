@@ -69,7 +69,7 @@ test_that("compute_el_columns adds expected columns", {
   expect_true("expected_loss_shock" %in% names(result))
   expect_true("expected_loss_difference" %in% names(result))
   expect_true("net_present_value_difference" %in% names(result))
-  expect_true("crispy_perc_value_change" %in% names(result))
+  expect_true("trisk_perc_value_change" %in% names(result))
 })
 
 test_that("compute_el_columns handles zero NPV baseline", {
@@ -82,7 +82,7 @@ test_that("compute_el_columns handles zero NPV baseline", {
     net_present_value_shock = -100000
   )
   result <- compute_el_columns(df)
-  expect_true(is.na(result$crispy_perc_value_change))
+  expect_true(is.na(result$trisk_perc_value_change))
 })
 
 test_that("dataset_template returns correct columns for portfolio", {
@@ -133,4 +133,42 @@ test_that("audit_dataset detects invalid ISO-2 codes in portfolio", {
   )
   result <- audit_dataset(df, "portfolio")
   expect_true(any(result$issues$issue_type == "invalid_iso2"))
+})
+
+# ---- trisk.model 2.7.0 alignment ----
+
+test_that("config_defaults matches trisk.model 2.7.0 run_trisk_model defaults", {
+  defs <- config_defaults()
+  expect_equal(defs$risk_free_rate, 0.045)
+  expect_equal(defs$discount_rate, 0.09)
+  expect_equal(defs$growth_rate, 0.03)
+  expect_equal(defs$market_passthrough_power, 0.6)
+  expect_equal(defs$market_passthrough_primary, 0.9)
+  expect_false("market_passthrough" %in% names(defs))
+})
+
+test_that("compute_el_columns follows the Basel decomposition (EAD gross of LGD)", {
+  df <- data.frame(
+    exposure_value_usd = 1000000, loss_given_default = 0.45,
+    pd_baseline = 0.02, pd_shock = 0.05,
+    net_present_value_baseline = 500000, net_present_value_shock = 400000
+  )
+  result <- compute_el_columns(df)
+  expect_equal(result$exposure_at_default, 1000000)
+  expect_equal(result$lgd_weighted_exposure, 450000)
+  expect_equal(result$expected_loss_baseline, -(1000000 * 0.45 * 0.02))
+  expect_equal(result$expected_loss_shock, -(1000000 * 0.45 * 0.05))
+  expect_equal(result$expected_loss_difference, -(1000000 * 0.45 * 0.03))
+})
+
+test_that("compute_el_columns uses trisk_* NPV column names", {
+  df <- data.frame(
+    exposure_value_usd = 1000000, loss_given_default = 0.45,
+    pd_baseline = 0.02, pd_shock = 0.05,
+    net_present_value_baseline = 500000, net_present_value_shock = 400000
+  )
+  result <- compute_el_columns(df)
+  expect_equal(result$trisk_perc_value_change, -0.2)
+  expect_equal(result$trisk_value_loss, -200000)
+  expect_false(any(grepl("^crispy_", names(result))))
 })

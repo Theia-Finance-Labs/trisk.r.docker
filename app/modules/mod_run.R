@@ -95,7 +95,8 @@ setup_run <- function(input, output, session, rv, log_message) {
       "\nRisk-Free Rate:", input$risk_free_rate,
       "\nDiscount Rate:", input$discount_rate,
       "\nGrowth Rate:", input$growth_rate,
-      "\nMarket Passthrough:", input$market_passthrough,
+      "\nCarbon Tax Passthrough (Power):", input$market_passthrough_power,
+      "\nCarbon Tax Passthrough (Primary):", input$market_passthrough_primary,
       "\nCarbon Price Model:", input$carbon_price_model
     )
   })
@@ -193,7 +194,8 @@ setup_run <- function(input, output, session, rv, log_message) {
         discount_rate = input$discount_rate,
         growth_rate = input$growth_rate,
         carbon_price_model = input$carbon_price_model,
-        market_passthrough = input$market_passthrough
+        market_passthrough_power = input$market_passthrough_power,
+        market_passthrough_primary = input$market_passthrough_primary
       )
 
       history_entry <- list(
@@ -281,7 +283,8 @@ setup_run <- function(input, output, session, rv, log_message) {
         log_message(paste("  Risk-free rate:", input$risk_free_rate))
         log_message(paste("  Discount rate:", input$discount_rate))
         log_message(paste("  Growth rate:", input$growth_rate))
-        log_message(paste("  Market passthrough:", input$market_passthrough))
+        log_message(paste("  Carbon tax passthrough (Power / Primary):",
+                          input$market_passthrough_power, "/", input$market_passthrough_primary))
         log_message(paste("  Carbon price model:", input$carbon_price_model))
 
         incProgress(0.2, detail = "Preparing data...")
@@ -411,7 +414,8 @@ setup_run <- function(input, output, session, rv, log_message) {
                 risk_free_rate = input$risk_free_rate,
                 discount_rate = input$discount_rate,
                 growth_rate = input$growth_rate,
-                market_passthrough = input$market_passthrough
+                market_passthrough_power = input$market_passthrough_power,
+                market_passthrough_primary = input$market_passthrough_primary
               )
 
               result_df <- extract_result_df(raw_results)
@@ -470,7 +474,7 @@ setup_run <- function(input, output, session, rv, log_message) {
         }
         if (isTRUE(as.logical(Sys.getenv("TRISK_DEBUG_LOG", "false")))) {
           log_message(paste("  Debug - Result columns:", paste(names(rv$results), collapse = ", ")))
-          if ("crispy_perc_value_change" %in% names(rv$results)) {
+          if ("trisk_perc_value_change" %in% names(rv$results)) {
             log_message(paste("  Debug - Avg PD shock:", smart_round(mean(rv$results$pd_shock, na.rm = TRUE) * 100), "%"))
           }
           if ("pd_shock" %in% names(rv$results)) {
@@ -697,9 +701,13 @@ setup_run <- function(input, output, session, rv, log_message) {
           updateSliderInput(session, "growth_rate", value = cfg$growth_rate)
           updateNumericInput(session, "growth_rate_num", value = cfg$growth_rate)
         }
-        if (!is.null(cfg$market_passthrough)) {
-          updateSliderInput(session, "market_passthrough", value = cfg$market_passthrough)
-          updateNumericInput(session, "market_passthrough_num", value = cfg$market_passthrough)
+        if (!is.null(cfg$market_passthrough_power)) {
+          updateSliderInput(session, "market_passthrough_power", value = cfg$market_passthrough_power)
+          updateNumericInput(session, "market_passthrough_power_num", value = cfg$market_passthrough_power)
+        }
+        if (!is.null(cfg$market_passthrough_primary)) {
+          updateSliderInput(session, "market_passthrough_primary", value = cfg$market_passthrough_primary)
+          updateNumericInput(session, "market_passthrough_primary_num", value = cfg$market_passthrough_primary)
         }
         if (!is.null(cfg$carbon_price_model)) {
           updateRadioButtons(session, "carbon_price_model", selected = cfg$carbon_price_model)

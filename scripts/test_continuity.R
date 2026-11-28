@@ -48,7 +48,7 @@ cat("Trajectories:", nrow(result$company_trajectories), "rows\n")
 # Basic sanity checks
 stopifnot(nrow(result$npv_results) > 0)
 stopifnot(nrow(result$pd_results) > 0)
-stopifnot("crispy_perc_value_change" %in% names(result$npv_results))
+stopifnot("trisk_perc_value_change" %in% names(result$npv_results))
 stopifnot("pd_baseline" %in% names(result$pd_results))
 stopifnot("pd_shock" %in% names(result$pd_results))
 

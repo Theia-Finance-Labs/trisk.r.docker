@@ -153,7 +153,7 @@ COLUMN_DEFS <- list(
   EL_Shock = "Expected loss under shock (EAD x PD_shock)",
   EL_Change = "Change in expected loss (shock minus baseline)",
   EL_Change_Pct = "Relative change in expected loss (%)",
-  crispy_perc_value_change = "NPV percentage change under shock scenario",
+  trisk_perc_value_change = "NPV percentage change under shock scenario",
   net_present_value_baseline = "Net present value under baseline",
   net_present_value_shock = "Net present value under shock"
 )
@@ -196,10 +196,12 @@ OUTPUT_DIR <- "/data/output"
 #' Used by UI for initial values and by Reset button
 config_defaults <- function() {
   list(
-    risk_free_rate     = 0.02,
-    discount_rate      = 0.07,
+    # Aligned with trisk.model 2.7.0 run_trisk_model() defaults
+    risk_free_rate     = 0.045,
+    discount_rate      = 0.09,
     growth_rate        = 0.03,
-    market_passthrough = 0,
+    market_passthrough_power   = 0.6,
+    market_passthrough_primary = 0.9,
     carbon_price_model = "no_carbon_tax",
     shock_years        = c(2025, 2030, 2035)
   )
@@ -1036,23 +1038,25 @@ get_scenarios_by_type <- function(scenarios_df, type = NULL) {
 #' This is needed because run_trisk_on_portfolio() does NOT compute these columns
 compute_el_columns <- function(df) {
   if (all(c("exposure_value_usd", "loss_given_default", "pd_baseline", "pd_shock") %in% names(df))) {
-    df$exposure_at_default <- df$exposure_value_usd * df$loss_given_default
-    df$expected_loss_baseline <- -(df$exposure_at_default * df$pd_baseline)
-    df$expected_loss_shock <- -(df$exposure_at_default * df$pd_shock)
-    df$expected_loss_difference <- -(df$exposure_at_default * (df$pd_shock - df$pd_baseline))
+    # Basel decomposition (as trisk.analysis): EAD is gross of LGD, EL = EAD x LGD x PD
+    df$exposure_at_default <- df$exposure_value_usd
+    df$lgd_weighted_exposure <- df$exposure_at_default * df$loss_given_default
+    df$expected_loss_baseline <- -(df$lgd_weighted_exposure * df$pd_baseline)
+    df$expected_loss_shock <- -(df$lgd_weighted_exposure * df$pd_shock)
+    df$expected_loss_difference <- -(df$lgd_weighted_exposure * (df$pd_shock - df$pd_baseline))
   }
   if (all(c("net_present_value_baseline", "net_present_value_shock") %in% names(df))) {
     df$net_present_value_difference <- df$net_present_value_shock - df$net_present_value_baseline
-    if (!"crispy_perc_value_change" %in% names(df)) {
-      df$crispy_perc_value_change <- ifelse(
+    if (!"trisk_perc_value_change" %in% names(df)) {
+      df$trisk_perc_value_change <- ifelse(
         df$net_present_value_baseline != 0,
         df$net_present_value_difference / df$net_present_value_baseline,
         NA_real_
       )
     }
-    if (!"crispy_value_loss" %in% names(df) && "exposure_value_usd" %in% names(df) &&
-        "crispy_perc_value_change" %in% names(df)) {
-      df$crispy_value_loss <- df$crispy_perc_value_change * df$exposure_value_usd
+    if (!"trisk_value_loss" %in% names(df) && "exposure_value_usd" %in% names(df) &&
+        "trisk_perc_value_change" %in% names(df)) {
+      df$trisk_value_loss <- df$trisk_perc_value_change * df$exposure_value_usd
     }
   }
   return(df)
@@ -1088,12 +1092,12 @@ EXPORT_COLUMNS <- c(
   "target_scenario", "baseline_scenario", "shock_year",
   "scenario_geography",
   # Exposure
-  "exposure_value_usd", "loss_given_default", "exposure_at_default", "weight",
+  "exposure_value_usd", "loss_given_default", "exposure_at_default", "lgd_weighted_exposure", "weight",
   # PD metrics
   "pd_baseline", "pd_shock",
   # NPV metrics
   "net_present_value_baseline", "net_present_value_shock",
-  "net_present_value_difference", "crispy_perc_value_change", "crispy_value_loss",
+  "net_present_value_difference", "trisk_perc_value_change", "trisk_value_loss",
   # EL metrics
   "expected_loss_baseline", "expected_loss_shock", "expected_loss_difference",
   # Attribution

@@ -316,12 +316,19 @@ ui <- dashboardPage(
               ),
               helpText("Terminal growth rate of profits beyond the final year in the DCF."),
               fluidRow(
-                column(8, sliderInput("market_passthrough", "Market Passthrough",
-                          min = 0, max = 1, value = config_defaults()$market_passthrough, step = 0.01)),
-                column(4, numericInput("market_passthrough_num", "Exact value",
-                          value = config_defaults()$market_passthrough, min = 0, max = 1, step = 0.01))
+                column(8, sliderInput("market_passthrough_power", "Carbon Tax Passthrough: Power",
+                          min = 0, max = 1, value = config_defaults()$market_passthrough_power, step = 0.01)),
+                column(4, numericInput("market_passthrough_power_num", "Exact value",
+                          value = config_defaults()$market_passthrough_power, min = 0, max = 1, step = 0.01))
               ),
-              helpText("Firm's ability to pass carbon tax costs onto the consumer (0 = none, 1 = full)."),
+              helpText("Share of the carbon tax that Power sector firms pass to consumers (0 = none, 1 = full). Applies only when the carbon tax is enabled."),
+              fluidRow(
+                column(8, sliderInput("market_passthrough_primary", "Carbon Tax Passthrough: Primary Sectors",
+                          min = 0, max = 1, value = config_defaults()$market_passthrough_primary, step = 0.01)),
+                column(4, numericInput("market_passthrough_primary_num", "Exact value",
+                          value = config_defaults()$market_passthrough_primary, min = 0, max = 1, step = 0.01))
+              ),
+              helpText("Share of the carbon tax that all non-Power sectors (e.g. Oil & Gas, Coal) pass to consumers (0 = none, 1 = full)."),
               hr(),
               h5("Carbon Price Model", class = "font-heading fw-600"),
               radioButtons("carbon_price_model", NULL,
@@ -972,7 +979,8 @@ ui <- dashboardPage(
               tags$tr(tags$td("risk_free_rate"), tags$td("Risk-free interest rate used in DCF discounting.")),
               tags$tr(tags$td("discount_rate"), tags$td("Discount rate of dividends per year in the DCF model.")),
               tags$tr(tags$td("growth_rate"), tags$td("Terminal growth rate of profits beyond the final year in the DCF.")),
-              tags$tr(tags$td("market_passthrough"), tags$td("Firm's ability to pass carbon tax costs to consumers (0 = none, 1 = full).")),
+              tags$tr(tags$td("market_passthrough_power"), tags$td("Share of the carbon tax passed to consumers in the Power sector (0 = none, 1 = full).")),
+              tags$tr(tags$td("market_passthrough_primary"), tags$td("Share of the carbon tax passed to consumers in all non-Power sectors (0 = none, 1 = full).")),
               tags$tr(tags$td("carbon_price_model"), tags$td("Whether to apply scenario-based carbon tax ('carbon_tax' or 'no_carbon_tax').")),
               tags$tr(tags$td("div_netprofit_prop_coef"), tags$td("Coefficient determining how strongly future dividends propagate to company value."))
             ),
@@ -992,10 +1000,11 @@ ui <- dashboardPage(
             hr(),
             h4("Expected Loss Results"),
             tags$table(class = "def-table",
-              tags$tr(tags$td("exposure_at_default (EAD)"), tags$td("exposure_value_usd x loss_given_default.")),
-              tags$tr(tags$td("expected_loss_baseline"), tags$td("-(EAD x pd_baseline). Expected loss under baseline scenario.")),
-              tags$tr(tags$td("expected_loss_shock"), tags$td("-(EAD x pd_shock). Expected loss under shock scenario.")),
-              tags$tr(tags$td("expected_loss_difference"), tags$td("-(EAD x (pd_shock - pd_baseline)). Change in expected loss.")),
+              tags$tr(tags$td("exposure_at_default (EAD)"), tags$td("exposure_value_usd. Gross exposure before the LGD haircut.")),
+              tags$tr(tags$td("lgd_weighted_exposure"), tags$td("EAD x loss_given_default.")),
+              tags$tr(tags$td("expected_loss_baseline"), tags$td("-(EAD x LGD x pd_baseline). Expected loss under baseline scenario.")),
+              tags$tr(tags$td("expected_loss_shock"), tags$td("-(EAD x LGD x pd_shock). Expected loss under shock scenario.")),
+              tags$tr(tags$td("expected_loss_difference"), tags$td("-(EAD x LGD x (pd_shock - pd_baseline)). Change in expected loss.")),
               tags$tr(tags$td("EL_Change"), tags$td("expected_loss_shock - expected_loss_baseline.")),
               tags$tr(tags$td("EL_Change_Pct"), tags$td("Percentage change in EL: (EL_shock - EL_baseline) / EL_baseline x 100."))
             ),

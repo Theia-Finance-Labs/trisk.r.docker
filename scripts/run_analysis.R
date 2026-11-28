@@ -34,14 +34,16 @@ option_list <- list(
               help = "Scenario geography [default: Global]"),
   make_option(c("--shock-year"), type = "integer", default = 2030,
               help = "Shock year [default: 2030]"),
-  make_option(c("--risk-free-rate"), type = "double", default = 0.02,
-              help = "Risk-free rate [default: 0.02]"),
-  make_option(c("--discount-rate"), type = "double", default = 0.07,
-              help = "Discount rate [default: 0.07]"),
+  make_option(c("--risk-free-rate"), type = "double", default = 0.045,
+              help = "Risk-free rate [default: 0.045]"),
+  make_option(c("--discount-rate"), type = "double", default = 0.09,
+              help = "Discount rate [default: 0.09]"),
   make_option(c("--growth-rate"), type = "double", default = 0.03,
               help = "Terminal growth rate [default: 0.03]"),
-  make_option(c("--market-passthrough"), type = "double", default = 0,
-              help = "Market passthrough [default: 0]"),
+  make_option(c("--market-passthrough-power"), type = "double", default = 0.6,
+              help = "Carbon tax passthrough, Power sector [default: 0.6]"),
+  make_option(c("--market-passthrough-primary"), type = "double", default = 0.9,
+              help = "Carbon tax passthrough, non-Power sectors [default: 0.9]"),
   make_option(c("--format"), type = "character", default = "csv",
               help = "Output format: csv or json [default: csv]"),
   make_option(c("-v", "--verbose"), action = "store_true", default = FALSE,
@@ -123,7 +125,8 @@ tryCatch({
     risk_free_rate = args$`risk-free-rate`,
     discount_rate = args$`discount-rate`,
     growth_rate = args$`growth-rate`,
-    market_passthrough = args$`market-passthrough`
+    market_passthrough_power = args$`market-passthrough-power`,
+    market_passthrough_primary = args$`market-passthrough-primary`
   )
   
   # Create output directory if needed

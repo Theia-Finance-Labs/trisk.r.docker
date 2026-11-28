@@ -69,14 +69,14 @@ cat("Result:", nrow(result), "rows,", ncol(result), "columns\n")
 cat("Columns:", paste(names(result), collapse = ", "), "\n\n")
 
 # Validate expected columns for trisk.analysis plot functions
-# pipeline_crispy_npv_change_plot expects: crispy_perc_value_change, sector, technology
-# pipeline_crispy_exposure_change_plot expects: exposure_at_default or similar
-# pipeline_crispy_expected_loss_plot expects: expected_loss_baseline, expected_loss_shock
-# pipeline_crispy_pd_term_plot expects: pd_baseline, pd_shock, term
+# pipeline_trisk_npv_change_plot expects: trisk_perc_value_change, sector, technology
+# pipeline_trisk_exposure_change_plot expects: exposure_at_default or similar
+# pipeline_trisk_expected_loss_plot expects: expected_loss_baseline, expected_loss_shock
+# pipeline_trisk_pd_term_plot expects: pd_baseline, pd_shock, term
 
 expected_columns <- c(
   "company_id", "sector", "technology",
-  "crispy_perc_value_change",
+  "trisk_perc_value_change",
   "net_present_value_baseline", "net_present_value_shock",
   "pd_baseline", "pd_shock",
   "exposure_value_usd", "term", "loss_given_default"
@@ -111,31 +111,31 @@ if ("expected_loss_shock" %in% names(result)) {
 cat("\n--- Plot function tests ---\n")
 
 tryCatch({
-  p <- pipeline_crispy_npv_change_plot(result)
-  cat("  pipeline_crispy_npv_change_plot(): OK\n")
+  p <- pipeline_trisk_npv_change_plot(result)
+  cat("  pipeline_trisk_npv_change_plot(): OK\n")
 }, error = function(e) {
-  cat("  pipeline_crispy_npv_change_plot(): FAILED -", e$message, "\n")
+  cat("  pipeline_trisk_npv_change_plot(): FAILED -", e$message, "\n")
 })
 
 tryCatch({
-  p <- pipeline_crispy_exposure_change_plot(result)
-  cat("  pipeline_crispy_exposure_change_plot(): OK\n")
+  p <- pipeline_trisk_exposure_change_plot(result)
+  cat("  pipeline_trisk_exposure_change_plot(): OK\n")
 }, error = function(e) {
-  cat("  pipeline_crispy_exposure_change_plot(): FAILED -", e$message, "\n")
+  cat("  pipeline_trisk_exposure_change_plot(): FAILED -", e$message, "\n")
 })
 
 tryCatch({
-  p <- pipeline_crispy_expected_loss_plot(result)
-  cat("  pipeline_crispy_expected_loss_plot(): OK\n")
+  p <- pipeline_trisk_expected_loss_plot(result)
+  cat("  pipeline_trisk_expected_loss_plot(): OK\n")
 }, error = function(e) {
-  cat("  pipeline_crispy_expected_loss_plot(): FAILED -", e$message, "\n")
+  cat("  pipeline_trisk_expected_loss_plot(): FAILED -", e$message, "\n")
 })
 
 tryCatch({
-  p <- pipeline_crispy_pd_term_plot(result)
-  cat("  pipeline_crispy_pd_term_plot(): OK\n")
+  p <- pipeline_trisk_pd_term_plot(result)
+  cat("  pipeline_trisk_pd_term_plot(): OK\n")
 }, error = function(e) {
-  cat("  pipeline_crispy_pd_term_plot(): FAILED -", e$message, "\n")
+  cat("  pipeline_trisk_pd_term_plot(): FAILED -", e$message, "\n")
 })
 
 cat("\n--- Sample output ---\n")

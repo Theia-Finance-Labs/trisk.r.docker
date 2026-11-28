@@ -228,7 +228,8 @@ setup_sensitivity <- function(input, output, session, rv) {
               risk_free_rate = input$risk_free_rate,
               discount_rate = input$discount_rate,
               growth_rate = input$growth_rate,
-              market_passthrough = input$market_passthrough
+              market_passthrough_power = input$market_passthrough_power,
+              market_passthrough_primary = input$market_passthrough_primary
             )
 
             result_df <- extract_result_df(raw)
@@ -251,7 +252,7 @@ setup_sensitivity <- function(input, output, session, rv) {
         primary_code <- config$primary
         has_exposure <- "exposure_value_usd" %in% names(rv$sensitivity_results)
         has_el_diff  <- "expected_loss_difference" %in% names(rv$sensitivity_results)
-        has_npv      <- "crispy_perc_value_change" %in% names(rv$sensitivity_results)
+        has_npv      <- "trisk_perc_value_change" %in% names(rv$sensitivity_results)
 
         rv$sensitivity_summary <- rv$sensitivity_results %>%
           dplyr::mutate(
@@ -271,7 +272,7 @@ setup_sensitivity <- function(input, output, session, rv) {
             total_el_change = if (has_el_diff)
               sum(.data$expected_loss_difference, na.rm = TRUE) else NA_real_,
             avg_npv_change = if (has_npv)
-              mean(.data$crispy_perc_value_change, na.rm = TRUE) * 100 else NA_real_,
+              mean(.data$trisk_perc_value_change, na.rm = TRUE) * 100 else NA_real_,
             n_companies = dplyr::n_distinct(.data$company_id),
             is_primary = .data$sensitivity_scenario[1] == primary_code,
             .groups = "drop"

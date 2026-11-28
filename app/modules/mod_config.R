@@ -235,16 +235,29 @@ setup_config <- function(input, output, session, rv) {
     }
   })
 
-  observeEvent(input$market_passthrough, {
-    if (!isTRUE(all.equal(input$market_passthrough, input$market_passthrough_num))) {
-      updateNumericInput(session, "market_passthrough_num", value = input$market_passthrough)
+  observeEvent(input$market_passthrough_power, {
+    if (!isTRUE(all.equal(input$market_passthrough_power, input$market_passthrough_power_num))) {
+      updateNumericInput(session, "market_passthrough_power_num", value = input$market_passthrough_power)
     }
   })
-  observeEvent(input$market_passthrough_num, {
-    val <- input$market_passthrough_num
+  observeEvent(input$market_passthrough_power_num, {
+    val <- input$market_passthrough_power_num
     if (!is.null(val) && !is.na(val) && val >= 0 && val <= 1) {
-      if (!isTRUE(all.equal(val, input$market_passthrough))) {
-        updateSliderInput(session, "market_passthrough", value = val)
+      if (!isTRUE(all.equal(val, input$market_passthrough_power))) {
+        updateSliderInput(session, "market_passthrough_power", value = val)
+      }
+    }
+  })
+  observeEvent(input$market_passthrough_primary, {
+    if (!isTRUE(all.equal(input$market_passthrough_primary, input$market_passthrough_primary_num))) {
+      updateNumericInput(session, "market_passthrough_primary_num", value = input$market_passthrough_primary)
+    }
+  })
+  observeEvent(input$market_passthrough_primary_num, {
+    val <- input$market_passthrough_primary_num
+    if (!is.null(val) && !is.na(val) && val >= 0 && val <= 1) {
+      if (!isTRUE(all.equal(val, input$market_passthrough_primary))) {
+        updateSliderInput(session, "market_passthrough_primary", value = val)
       }
     }
   })
@@ -258,8 +271,10 @@ setup_config <- function(input, output, session, rv) {
     updateNumericInput(session, "discount_rate_num", value = defs$discount_rate)
     updateSliderInput(session, "growth_rate", value = defs$growth_rate)
     updateNumericInput(session, "growth_rate_num", value = defs$growth_rate)
-    updateSliderInput(session, "market_passthrough", value = defs$market_passthrough)
-    updateNumericInput(session, "market_passthrough_num", value = defs$market_passthrough)
+    updateSliderInput(session, "market_passthrough_power", value = defs$market_passthrough_power)
+    updateNumericInput(session, "market_passthrough_power_num", value = defs$market_passthrough_power)
+    updateSliderInput(session, "market_passthrough_primary", value = defs$market_passthrough_primary)
+    updateNumericInput(session, "market_passthrough_primary_num", value = defs$market_passthrough_primary)
     updateRadioButtons(session, "carbon_price_model", selected = defs$carbon_price_model)
     updateSelectizeInput(session, "shock_years", selected = defs$shock_years)
     showNotification("All parameters reset to defaults.", type = "message", duration = 3)

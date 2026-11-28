@@ -40,8 +40,8 @@ setup_results_scenarios <- function(input, output, session, rv) {
         avg_pd_shock = mean(pd_shock, na.rm = TRUE),
         max_pd_shock = max(pd_shock, na.rm = TRUE),
         avg_pd_change = mean(pd_shock - pd_baseline, na.rm = TRUE),
-        avg_npv_change = if ("crispy_perc_value_change" %in% names(scd))
-          mean(crispy_perc_value_change, na.rm = TRUE) else NA_real_,
+        avg_npv_change = if ("trisk_perc_value_change" %in% names(scd))
+          mean(trisk_perc_value_change, na.rm = TRUE) else NA_real_,
         total_el_shock = if ("expected_loss_shock" %in% names(scd))
           sum(expected_loss_shock, na.rm = TRUE) else NA_real_,
         total_el_change = if ("expected_loss_difference" %in% names(scd))
